@@ -4,7 +4,8 @@ echo "⚙️  INITIALIZING EPHEMERAL SANDBOX"
 echo "=============================================="
 
 echo "⏳ Syncing system clock (NTP)..."
-ntpd -q -p pool.ntp.org
+# The -d -q -n flags force Alpine's ntpd to run in the foreground, print debug info, step the clock, and exit
+ntpd -d -q -n -p pool.ntp.org
 
 echo "📦 Installing Python dependencies..."
 cd /mnt/assets
