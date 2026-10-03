@@ -10,7 +10,15 @@
 
 launch_vm
 .scratch/
-vm-assets/
+set-up/vm-assets/alpine-root/*
+set-up/vm-assets/alpine.iso
+set-up/vm-assets/Image
+set-up/m-assets/initramfs-virt
+set-up/vm-assets/initramfs.cpio.gz
+set-up/vm-assets/qwen1.5b.gguf
+set-up/vm-assets/agent_harness.sh 
+set-up/vm-assets/vmlinuz-uncompressed
+set-upvm-assets/vmlinuz-virt.gz 
 # Test binary, built with `go test -c`
 *.test
 
@@ -33,3 +41,4 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+vm-assets/alpine-root/
