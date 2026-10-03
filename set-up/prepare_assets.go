@@ -95,6 +95,18 @@ func main() {
 		}
 	}
 
+	// 4. LLAMA 3.2 3B GGUF MODEL (Planner)
+	llamaDest := filepath.Join(assetsDir, "llama-3.2-3b.gguf")
+	if fi, err := os.Stat(llamaDest); err == nil && fi.Size() > 0 {
+		fmt.Println("✔ Llama 3.2 3B GGUF Model already exists.")
+	} else {
+		llamaURL := "https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF/resolve/main/Llama-3.2-3B-Instruct-Q4_K_M.gguf"
+		fmt.Printf("\n📥 Downloading Llama 3.2 3B GGUF...\n")
+		if err := fetchAndVerifyGGUF(llamaURL, llamaDest); err != nil {
+			log.Fatalf("❌ Llama download failed: %v", err)
+		}
+	}
+
 	fmt.Println("\n✨ All MicroVM assets prepared successfully!")
 }
 
