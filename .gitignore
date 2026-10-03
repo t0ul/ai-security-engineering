@@ -7,7 +7,7 @@
 *.dll
 *.so
 *.dylib
-
+.DS_Store
 launch_vm
 .scratch/
 set-up/vm-assets/alpine-root/*
