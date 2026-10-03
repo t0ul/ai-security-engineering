@@ -1,12 +1,10 @@
 import os
 import platform
-import subprocess
 import requests
-
-# need to run: ntpd -q -p pool.ntp.org to sync system clock from year 2022 to year 2026
+from datetime import datetime
 
 print("==============================================")
-print("🛡️  MICROVM PYTHON SECURITY ISOLATION TESTS")
+print("🛡️️  MICROVM PYTHON SECURITY ISOLATION TESTS")
 print("==============================================")
 
 # Test 1: Kernel Identity Verification
@@ -30,51 +28,57 @@ else:
     print("✔ PASS: No host credentials detected in execution space.")
 
 print("\n==============================================")
-print("🧠 AUTONOMOUS AGENT LLM INVOCATION")
+print("🧠 AUTONOMOUS AGENT LLM INVOCATION (BLOG WORKFLOW)")
 print("==============================================")
 
-url = "http://192.168.64.1:11434/v1/chat/completions"
+# Dummy terminal history simulating ~/.zsh_history extraction
+dummy_zsh_history = """
+cd ~/projects/ai-security
+git status
+nmap -sV 10.0.0.5
+curl -I https://huggingface.co
+python3 launch_vm.py
+"""
+
+# Routing to Llama-3.2-3B (Planner Agent) on port 11435
+url = "http://192.168.64.1:11435/v1/chat/completions"
+
 payload = {
     "messages": [
         {
             "role": "system",
-            "content": "You are a code execution agent. Output strictly raw terminal commands. Do NOT use markdown code blocks. Do NOT use backticks."
+            "content": "You are a technical blogging assistant. Summarize the provided terminal command history into a short, structured Markdown blog post. Include a title, a brief summary of the activity, and format the raw commands within a markdown code block."
         },
         {
             "role": "user",
-            "content": "Write a bash command to echo 'Hello from the Python isolated AI agent!' and print the current date."
+            "content": f"Here is the recent command history:\n{dummy_zsh_history}"
         }
     ],
-    "temperature": 0.1
+    "temperature": 0.2
 }
 
 print(f"Sending reasoning request to Host Control Plane ({url})...")
 
 try:
     # 1. Fetch LLM response via NAT Gateway
-    response = requests.post(url, json=payload, timeout=15)
+    response = requests.post(url, json=payload, timeout=30)
     response.raise_for_status()
     data = response.json()
     
-    # 2. Extract strictly the text content
-    command = data['choices'][0]['message']['content'].strip()
+    # 2. Extract the blog content
+    blog_content = data['choices'][0]['message']['content'].strip()
     
-    # 3. Clean markdown if the SLM hallucinates formatting
-    command = command.replace("```bash", "").replace("```sh", "").replace("```", "").strip()
+    print("\n🔥 LLM Generated Blog Post:")
+    print(blog_content)
     
-    print("\n🔥 LLM Generated Command:")
-    print(command)
-    print("\n▶️  Executing untrusted command inside Sandbox...")
+    # 3. Write structured markdown blog entry inside the Sandbox
+    timestamp = datetime.now().strftime('%Y-%m-%d')
+    blog_filename = f"blog_entry_{timestamp}.md"
     
-    # 4. Execute safely in the Linux sandbox
-    result = subprocess.run(command, shell=True, capture_output=True, text=True)
-    
-    print("\n--- Output ---")
-    print(result.stdout)
-    
-    if result.stderr:
-        print("--- Errors ---")
-        print(result.stderr)
+    with open(blog_filename, "w") as f:
+        f.write(blog_content)
+        
+    print(f"\n▶️  Successfully wrote structured markdown to {blog_filename} inside Sandbox.")
         
 except Exception as e:
     print(f"\n❌ Execution Failed: {e}")

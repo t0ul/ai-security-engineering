@@ -18,7 +18,8 @@ set-up/vm-assets/initramfs.cpio.gz
 set-up/vm-assets/qwen1.5b.gguf
 set-up/vm-assets/agent_harness.sh 
 set-up/vm-assets/vmlinuz-uncompressed
-set-upvm-assets/vmlinuz-virt.gz 
+set-up/vm-assets/vmlinuz-virt.gz 
+set-up/vm-assets/llama-3.2-3b.gguf
 # Test binary, built with `go test -c`
 *.test
 
