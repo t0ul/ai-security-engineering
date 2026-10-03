@@ -8,6 +8,9 @@
 *.so
 *.dylib
 
+launch_vm
+.scratch/
+vm-assets/
 # Test binary, built with `go test -c`
 *.test
 
