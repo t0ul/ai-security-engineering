@@ -86,8 +86,8 @@ func main() {
 					if strings.Contains(streamStr, "#") {
 						time.Sleep(300 * time.Millisecond)
 						
-						// Injects HTTP repos to bypass the SSL clock/certificate errors
-						setupCmd := "ip link set eth0 up && udhcpc -i eth0 && mkdir -p /mnt/assets && mount -t virtiofs assets /mnt/assets && cp -a /mnt/assets/alpine-root /alpine && mkdir -p /alpine/mnt/assets && mount -o bind /mnt/assets /alpine/mnt/assets && mount -t proc none /alpine/proc && mount -t sysfs none /alpine/sys && mount -o bind /dev /alpine/dev && rm -f /alpine/etc/resolv.conf && cp /etc/resolv.conf /alpine/etc/resolv.conf && echo 'http://dl-cdn.alpinelinux.org/alpine/v3.20/main' > /alpine/etc/apk/repositories && echo 'http://dl-cdn.alpinelinux.org/alpine/v3.20/community' >> /alpine/etc/apk/repositories && chroot /alpine /bin/sh -c 'apk update && apk add python3 py3-pip' && clear && echo '🚀 Python Sandbox Ready.' && chroot /alpine /bin/sh\n"
+						// Appended: sh /mnt/assets/sandbox_init.sh
+						setupCmd := "ip link set eth0 up && udhcpc -i eth0 && mkdir -p /mnt/assets && mount -t virtiofs assets /mnt/assets && cp -a /mnt/assets/alpine-root /alpine && mkdir -p /alpine/mnt/assets && mount -o bind /mnt/assets /alpine/mnt/assets && mount -t proc none /alpine/proc && mount -t sysfs none /alpine/sys && mount -o bind /dev /alpine/dev && rm -f /alpine/etc/resolv.conf && cp /etc/resolv.conf /alpine/etc/resolv.conf && echo 'http://dl-cdn.alpinelinux.org/alpine/v3.20/main' > /alpine/etc/apk/repositories && echo 'http://dl-cdn.alpinelinux.org/alpine/v3.20/community' >> /alpine/etc/apk/repositories && chroot /alpine /bin/sh -c 'apk update && apk add python3 py3-pip && sh /mnt/assets/sandbox_init.sh' && echo '\n🚀 Interactive Shell Ready.' && chroot /alpine /bin/sh\n"
 						vmWriter.Write([]byte(setupCmd))
 						
 						go io.Copy(vmWriter, os.Stdin)
