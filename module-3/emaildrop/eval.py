@@ -20,13 +20,20 @@ def titles_match(a: str, b: str) -> bool:
     return na == nb or na in nb or nb in na
 
 
-def score(label_path):
+def score(label_path, use_tool=False):
     label = json.load(open(label_path, encoding="utf-8"))
     src = os.path.join(os.path.dirname(os.path.abspath(__file__)), label["source_email"])
     gold = label["events"]
-    pred = extract_events(open(src, encoding="utf-8").read(),
-                          source=label["source_email"],
-                          default_year=label.get("default_year", 2026))
+    text = open(src, encoding="utf-8").read()
+    if use_tool:
+        # score the actual tool output (honours EXTRACT_MODE: auto|llm|regex)
+        from tools.event_extractor import EVENT_EXTRACTOR
+        res = EVENT_EXTRACTOR.run(text, {"source": label["source_email"],
+                                         "default_year": label.get("default_year", 2026)})
+        pred = res.events
+    else:
+        pred = extract_events(text, source=label["source_email"],
+                              default_year=label.get("default_year", 2026))
 
     matched, used = [], set()
     for g in gold:
@@ -67,5 +74,6 @@ def score(label_path):
 if __name__ == "__main__":
     lp = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
         os.path.dirname(os.path.abspath(__file__)), "labels", "3.json")
-    f1 = score(lp)
+    use_tool = "--tool" in sys.argv
+    f1 = score(lp, use_tool=use_tool)
     sys.exit(0 if f1 == 1.0 else 1)

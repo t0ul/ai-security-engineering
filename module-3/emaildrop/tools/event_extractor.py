@@ -14,6 +14,86 @@ from schema import Event
 from dateparse import extract_datetime, _RE_MONTHDAY
 from tools.base import Tool, Capability, ToolResult, register
 from icswriter import write_ics
+import json
+import urllib.request
+
+GATEWAY_URL = os.environ.get("GATEWAY_URL", "http://localhost:4000/v1/chat/completions")
+PLANNER_MODEL = os.environ.get("PLANNER_MODEL", "planner")
+EXTRACT_MODE = os.environ.get("EXTRACT_MODE", "auto")  # auto | llm | regex
+
+EXTRACTION_PROMPT = (
+    "You extract calendar events from a school newsletter.\n"
+    "Return ONLY a JSON array. Each item: "
+    '{"title": "<short event name>", "when": "<the date/time EXACTLY as written, '
+    'including the weekday if present>", "where": "<location if stated, else empty>"}.\n'
+    "Include every dated, actionable event: meetings, drills, days off / half days, "
+    "deadlines, trainings, visits, performances.\n"
+    "Do NOT include references to PAST events, routine daily arrival/dismissal times, "
+    "or general informational dates.\n"
+    "Copy each date/time phrase verbatim from the text; never compute or reformat a date."
+)
+
+
+def _parse_candidates(content):
+    i, j = content.find("["), content.rfind("]")
+    if i == -1 or j == -1:
+        return []
+    try:
+        arr = json.loads(content[i:j + 1])
+    except Exception:
+        return []
+    out = []
+    for it in arr:
+        if isinstance(it, dict) and it.get("when"):
+            out.append({"title": str(it.get("title", "")).strip(), "phrase": str(it["when"]).strip(), "location": str(it.get("where", "")).strip()})
+    return out
+
+
+def llm_propose(email_text, timeout=90):
+    """Ask the planner model for (title, when) candidates. The LLM proposes spans;
+    dateparse decides the actual date, so the model cannot hallucinate a wrong date."""
+    payload = {
+        "model": PLANNER_MODEL, "temperature": 0.1, "max_tokens": 900,
+        "messages": [
+            {"role": "system", "content": EXTRACTION_PROMPT},
+            {"role": "user", "content": email_text[:12000]},
+        ],
+    }
+    req = urllib.request.Request(GATEWAY_URL, data=json.dumps(payload).encode("utf-8"),
+                                 headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        data = json.loads(r.read().decode("utf-8"))
+    return _parse_candidates(data["choices"][0]["message"]["content"])
+
+
+def candidates_to_events(cands, source=None, default_year=2026):
+    """Validate LLM-proposed phrases deterministically; merge by date."""
+    groups = {}
+    for c in cands:
+        dt = extract_datetime(c.get("phrase", ""), default_year)
+        if not dt:
+            continue
+        k = dt["start"][:10]
+        g = groups.setdefault(k, {"titles": [], "dts": [], "warns": set(), "locs": []})
+        if c.get("title"):
+            g["titles"].append(c["title"])
+        if c.get("location"):
+            g["locs"].append(c["location"])
+        g["dts"].append(dt)
+        for w in dt["warnings"]:
+            g["warns"].add(w)
+    events = []
+    for k, g in sorted(groups.items()):
+        timed = [d for d in g["dts"] if not d["all_day"]]
+        chosen = timed[0] if timed else g["dts"][0]
+        title = min(g["titles"], key=len) if g["titles"] else "(untitled)"
+        warns = sorted(w for w in g["warns"] if not w.startswith("assumed_year"))
+        conf = round(0.85 - (0.3 if warns else 0.0), 2)
+        events.append(Event(title=title, start=chosen["start"], end=chosen["end"],
+                            all_day=chosen["all_day"], location=(g["locs"][0] if g["locs"] else None),
+                            source_email=source, confidence=conf, warnings=warns))
+    return events
+
 
 _VENUES = ["gymnatorium", "cafeteria", "library", "auditorium", "art room",
            "school building", "gym", "yard", "room 205"]
@@ -104,9 +184,23 @@ class EventExtractor(Tool):
     def run(self, email_text: str, ctx: dict) -> ToolResult:
         source = ctx.get("source")
         year = ctx.get("default_year", 2026)
-        events = extract_events(email_text, source=source, default_year=year)
-        ics, removed = write_ics(events)
+        mode = ctx.get("mode") or EXTRACT_MODE
         warnings = []
+        events = []
+        used = "regex"
+        if mode in ("auto", "llm"):
+            try:
+                cands = llm_propose(email_text)
+                if cands:
+                    events = candidates_to_events(cands, source=source, default_year=year)
+                    used = "llm"
+            except Exception as e:  # gateway down / bad response
+                warnings.append(f"llm proposer unavailable ({e}); regex fallback")
+        if not events and mode != "llm":
+            events = extract_events(email_text, source=source, default_year=year)
+            used = "regex"
+        warnings.insert(0, f"extractor_mode={used}")
+        ics, removed = write_ics(events)
         if removed:
             warnings.append(f"sanitizer removed {removed} link(s) from event fields")
         for ev in events:

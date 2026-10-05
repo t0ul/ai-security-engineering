@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "source_email": "samples/1.txt",
+  "default_year": 2026,
+  "note": "Ground truth for the weekly newsletter. Events a parent would calendar (meetings, drills, days off/half days, trainings). Drill duplicates across the 'this week' and 'upcoming drills' sections are merged by date; multi-event days (Title I + PTA on 10/15) are a known merge limitation.",
+  "events": [
+    {"title": "Back to School Night", "start": "2026-09-29T17:30:00", "end": "2026-09-29T20:00:00", "all_day": false, "location": "School Building"},
+    {"title": "Soft Lockdown Drill", "start": "2026-09-30T10:22:00", "end": null, "all_day": false, "location": null},
+    {"title": "Evacuation Drill", "start": "2026-10-01T10:08:00", "end": null, "all_day": false, "location": null},
+    {"title": "Volunteer Training (Lunch/Recess)", "start": "2026-10-09T08:45:00", "end": null, "all_day": false, "location": null},
+    {"title": "Italian Heritage/Indigenous Peoples' Day (No School)", "start": "2026-10-12", "end": null, "all_day": true, "location": null},
+    {"title": "Evacuation Drill", "start": "2026-10-14T13:51:00", "end": null, "all_day": false, "location": null},
+    {"title": "Annual Title I Meeting", "start": "2026-10-15T08:30:00", "end": null, "all_day": false, "location": null},
+    {"title": "Evacuation Drill", "start": "2026-10-26T14:03:00", "end": null, "all_day": false, "location": null},
+    {"title": "Election Day (Remote Instruction)", "start": "2026-11-03", "end": null, "all_day": true, "location": null},
+    {"title": "Parent Teacher Conferences (11:30 AM Dismissal)", "start": "2026-11-05T11:30:00", "end": null, "all_day": false, "location": null},
+    {"title": "Evacuation Drill", "start": "2026-11-06T22:27:00", "end": null, "all_day": false, "location": null},
+    {"title": "Veterans Day (No School)", "start": "2026-11-11", "end": null, "all_day": true, "location": null},
+    {"title": "Soft Lockdown Drill", "start": "2026-11-13T13:58:00", "end": null, "all_day": false, "location": null}
+  ]
+}
