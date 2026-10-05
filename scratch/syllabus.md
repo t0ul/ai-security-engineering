@@ -262,12 +262,13 @@ Phase 2 — Control Plane & Privacy (IN PROGRESS)
  └── [ ] Threat model (M0) written up
 
 Phase 3 — Multi-tool core (vertical slice)
- ├── [ ] Lock event schema + seed ground-truth labels for 1-2 emails (M11)
- ├── [ ] Watched drop-folder + long-running watcher.py agent (trace_id per file)
- ├── [ ] Tool plugin interface (contract: input, output schema, capability, labels)
- ├── [ ] Tool #1 Event→.ics: extraction + deterministic date validation (M9) + inert .ics + field sanitizer (M5)
- ├── [ ] HITL accept gate → Apple Calendar (M6)
- └── [ ] Tool #2 Action-items / deadlines, read-only (M9)
+ ├── [x] Lock event schema + seed ground-truth labels (3.txt, 1.txt) (M11)
+ ├── [x] Watched drop-folder + long-running watcher.py agent (trace_id per file)
+ ├── [x] Tool plugin interface (contract: input, output schema, capability, labels)
+ ├── [x] Tool #1 Event→.ics: LLM proposer + deterministic date validation (M9) + inert .ics + field sanitizer (M5)
+ ├── [x] HITL accept gate → Apple Calendar (.ics double-click)
+ └── [ ] Tool #2 Action-items / deadlines, read-only (M9)   ← next
+ # tool #1 eval: F1 1.00 on 3.txt; 0.87 on 1.txt with local 3B (precision 1.00)
 
 Phase 4 — Agentic hardening
  ├── [ ] Injection + system-prompt-leakage labs on real emails (M4)
