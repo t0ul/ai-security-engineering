@@ -42,6 +42,16 @@ def process_email(path, outbox_dir=None, tool_names=None, default_year=2026):
     with open(path, encoding="utf-8", errors="replace") as f:
         text = f.read()
 
+    # Module 4: neutralize indirect prompt injection in the untrusted email body,
+    # and record what was found (the audit trail is the detection surface).
+    try:
+        from injection_guard import guard
+        text, findings = guard(text)
+        if findings:
+            audit.emit(trace_id, "injection_guard", "detected", indicators=findings)
+    except Exception as e:  # never let the guard crash the pipeline
+        audit.emit(trace_id, "injection_guard", "error", error=str(e))
+
     registry = all_tools()
     names = tool_names or ["event_extractor"]
     ctx = {"source": source, "default_year": default_year}
