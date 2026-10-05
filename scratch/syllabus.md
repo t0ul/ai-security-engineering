@@ -291,6 +291,35 @@ Phase 6 — Productionization
 
 ---
 
+## Attack Coverage (ADD) — Module-3 ledger
+
+Attack-Driven Development means every defense ships with a red-team PoC that proves
+the weakness. Honest status for the email-to-calendar build:
+
+**Proven (PoC exists):**
+- Host compromise → MicroVM isolation (`poc_host_compromise.py`)
+- Forced PII/secret leak → Presidio (`poc_pii_leak.py`)
+- Sponge / logic DoS → circuit breaker (`poc_sponge_attack.py`)
+- Markdown/URL image exfil → sanitizer (`poc_url_exfiltration.py`, blog-era)
+
+**Inline-tested only (no standalone PoC yet):**
+- Log injection / audit tampering → hash-chain + control-char defang (telemetry self-test)
+- `.ics` field URL exfil + RFC-5545 line injection → ics sanitizer
+- Oversized-input ingestion DoS → watcher size guard
+- Capability violation (read-only tool tries to write) → process_email enforcement
+
+**MISSING — ADD backlog (defense built or planned, attack not demonstrated):**
+- **Email indirect prompt injection** (signature attack for an email-ingesting agent):
+  a newsletter with hidden instructions that add a bogus event or exfiltrate. Defense
+  is M4 (not yet built) — top priority.
+- **SSRF / web-search → local-server** tracking-pixel exfil lab (M5).
+- **Human-agent trust exploitation (ASI09):** a persuasive event description that
+  manipulates the human into accepting a malicious `.ics`.
+- **Data-integrity poisoning (M9):** a crafted wrong weekday/date or cross-email
+  conflict that lands a wrong event on the calendar.
+- **Folder-flood ingestion DoS** (many files) beyond the per-cycle cap.
+- **Confused deputy:** untrusted email content coercing a tool into over-broad action.
+
 ## References
 
 - OWASP Top 10 for LLM Applications (2025): https://genai.owasp.org/llm-top-10/
