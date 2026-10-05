@@ -30,7 +30,11 @@ EXTRACTION_PROMPT = (
     "deadlines, trainings, visits, performances.\n"
     "Do NOT include references to PAST events, routine daily arrival/dismissal times, "
     "or general informational dates.\n"
-    "Copy each date/time phrase verbatim from the text; never compute or reformat a date."
+    "Copy each date/time phrase verbatim from the text; never compute or reformat a date.\n"
+    "ALWAYS include no-school days, half days, and holidays even with NO time — they are "
+    "all-day events and are the easiest to miss. Examples:\n"
+    '  "Monday, October 12th- Italian Heritage Day" -> {"title": "Italian Heritage Day (No School)", "when": "Monday, October 12th", "where": ""}\n'
+    '  "volunteer training session on Friday, October 9th at 8:45 AM" -> {"title": "Volunteer Training", "when": "Friday, October 9th at 8:45 AM", "where": ""}'
 )
 
 
@@ -177,6 +181,52 @@ def extract_events(text: str, source=None, default_year: int = 2026):
     return events
 
 
+
+_DAYOFF_HDR = re.compile(r"(?i)(days off|no school|half[\s-]?day|school closed|holiday)")
+
+
+def extract_days_off(text, source=None, default_year=2026):
+    """
+    Deterministic, PRECISE pass for the 'days off / half days' section — NYC DOE
+    closures rarely match federal holidays, so these high-value all-day events
+    must never be dropped. Scoped to the section so it adds no prose false-positives.
+    """
+    lines = text.splitlines()
+    events = []
+    i, n = 0, len(lines)
+    while i < n:
+        if _DAYOFF_HDR.search(lines[i]) and not _RE_MONTHDAY.search(lines[i]):
+            j, blanks = i + 1, 0
+            while j < n:
+                ln = lines[j].strip()
+                if not ln:
+                    blanks += 1
+                    if blanks >= 3:
+                        break
+                    j += 1
+                    continue
+                md = _RE_MONTHDAY.search(ln)
+                if not md:
+                    break  # first non-date, non-blank line ends the block
+                blanks = 0
+                dt = extract_datetime(ln, default_year)
+                trailer = ln[md.end():]
+                m = re.match(r"^[\s\-\u2013\u2014:]*(.+)$", trailer)
+                title = _clean_title(m.group(1)) if m else ""
+                title = re.split(r"\.\s", title)[0].strip()  # first clause only
+                if dt and title:
+                    warns = [w for w in dt["warnings"] if not w.startswith("assumed_year")]
+                    events.append(Event(title=title, start=dt["start"], end=dt["end"],
+                                        all_day=dt["all_day"], source_email=source,
+                                        confidence=0.8, warnings=warns))
+                j += 1
+            i = j
+        else:
+            i += 1
+    return events
+
+
+
 class EventExtractor(Tool):
     name = "event_extractor"
     capability = Capability.WRITE_ICS
@@ -200,6 +250,18 @@ class EventExtractor(Tool):
             events = extract_events(email_text, source=source, default_year=year)
             used = "regex"
         warnings.insert(0, f"extractor_mode={used}")
+        # Guarantee the high-value days-off / half-days (NYC closures) even if the
+        # LLM skipped them; union by date so precision is preserved.
+        have = {e.start[:10] for e in events}
+        added = 0
+        for e in extract_days_off(email_text, source=source, default_year=year):
+            if e.start[:10] not in have:
+                events.append(e)
+                have.add(e.start[:10])
+                added += 1
+        events.sort(key=lambda e: e.start)
+        if added:
+            warnings.append(f"days-off safety-net added {added} event(s)")
         ics, removed = write_ics(events)
         if removed:
             warnings.append(f"sanitizer removed {removed} link(s) from event fields")
