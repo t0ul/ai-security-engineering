@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "source_email": "samples/3.txt",
+  "default_year": 2026,
+  "note": "Hand-labeled ground truth (the 'Save the Dates' events). Used to calibrate extraction and regression-test.",
+  "events": [
+    {"title": "PTA Meeting", "start": "2026-09-24T08:30:00", "end": null, "all_day": false, "location": "Gymnatorium"},
+    {"title": "Back-to-School Night", "start": "2026-09-29T17:30:00", "end": "2026-09-29T20:00:00", "all_day": false, "location": "School Building"},
+    {"title": "Multicultural Potluck", "start": "2026-10-23T17:30:00", "end": "2026-10-23T19:00:00", "all_day": false, "location": "School Cafeteria"}
+  ]
+}
