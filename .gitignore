@@ -12,6 +12,7 @@
 .DS_Store
 launch_vm
 .scratch/
+__pycache__/
 set-up/vm-assets/alpine-root/*
 set-up/vm-assets/alpine.iso
 set-up/vm-assets/Image
