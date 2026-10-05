@@ -10,6 +10,7 @@
 .venv*
 .venv
 .DS_Store
+.cache
 launch_vm
 .scratch/
 __pycache__/
