@@ -16,8 +16,12 @@ def norm(t: str) -> str:
 
 
 def titles_match(a: str, b: str) -> bool:
-    na, nb = norm(a), norm(b)
-    return na == nb or na in nb or nb in na
+    na, nb = set(norm(a).split()), set(norm(b).split())
+    if not na or not nb:
+        return False
+    if na <= nb or nb <= na:          # one is a subset of the other
+        return True
+    return len(na & nb) >= 0.6 * min(len(na), len(nb))   # strong token overlap
 
 
 def score(label_path, use_tool=False):

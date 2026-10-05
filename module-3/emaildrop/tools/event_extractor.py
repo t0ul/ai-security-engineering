@@ -252,16 +252,14 @@ class EventExtractor(Tool):
         warnings.insert(0, f"extractor_mode={used}")
         # Guarantee the high-value days-off / half-days (NYC closures) even if the
         # LLM skipped them; union by date so precision is preserved.
-        have = {e.start[:10] for e in events}
-        added = 0
-        for e in extract_days_off(email_text, source=source, default_year=year):
-            if e.start[:10] not in have:
-                events.append(e)
-                have.add(e.start[:10])
-                added += 1
-        events.sort(key=lambda e: e.start)
-        if added:
-            warnings.append(f"days-off safety-net added {added} event(s)")
+        net = extract_days_off(email_text, source=source, default_year=year)
+        if net:
+            # The net is the trusted, section-scoped source for closures: it wins on
+            # its own dates (clean titles) and replaces any LLM duplicate there.
+            net_dates = {e.start[:10] for e in net}
+            events = [e for e in events if e.start[:10] not in net_dates] + net
+            events.sort(key=lambda e: e.start)
+            warnings.append(f"days-off net authoritative on {len(net_dates)} date(s)")
         ics, removed = write_ics(events)
         if removed:
             warnings.append(f"sanitizer removed {removed} link(s) from event fields")
