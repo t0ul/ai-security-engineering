@@ -17,6 +17,8 @@ __pycache__/
 set-up/vm-assets/alpine-root/*
 set-up/vm-assets/alpine.iso
 set-up/vm-assets/Image
+set-up/vm-assets/vmlinuz-virt.gz
+set-up/vm-assets/initramfs-virt
 set-up/m-assets/initramfs-virt
 set-up/vm-assets/initramfs.cpio.gz
 set-up/vm-assets/qwen1.5b.gguf
@@ -47,3 +49,7 @@ go.work.sum
 # .idea/
 # .vscode/
 vm-assets/alpine-root/
+set-up/vm-assets/vmlinuz*
+set-up/vm-assets/initramfs*
+set-up/vm-assets/*.iso
+set-up/vm-assets/*.gguf
