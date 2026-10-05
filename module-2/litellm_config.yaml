@@ -1,0 +1,11 @@
+model_list:
+  - model_name: planner
+    litellm_params:
+      model: openai/local  # Uses standard OpenAI format for the local endpoint
+      api_base: http://localhost:11435/v1
+      api_key: sk-dummy
+  - model_name: coder
+    litellm_params:
+      model: openai/local
+      api_base: http://localhost:11436/v1
+      api_key: sk-dummy
