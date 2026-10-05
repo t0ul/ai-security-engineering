@@ -1,0 +1,120 @@
+"""
+Tool #1 — Event extractor (capability: WRITE_ICS).
+
+propose candidates (deterministic here; the LLM planner is the production
+proposer) -> validate/normalize dates (dateparse, incl. weekday integrity) ->
+merge mentions by date -> inert .ics.
+"""
+import re
+import sys
+import os
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from schema import Event
+from dateparse import extract_datetime, _RE_MONTHDAY
+from tools.base import Tool, Capability, ToolResult, register
+from icswriter import write_ics
+
+_VENUES = ["gymnatorium", "cafeteria", "library", "auditorium", "art room",
+           "school building", "gym", "yard", "room 205"]
+_COLON = re.compile(r"(?i)^[\s\u25cf\u25cb\u2022*\-\u2013\u2014]*([A-Za-z][^:]{2,60}?):\s*(.+)$")
+_WD = re.compile(r"(?i)\b(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\b")
+_STOP = re.compile(r"(?i)\b(on|for|our in person|please also mark your calendars for|we will|join us for|beloved community event)\b")
+
+
+def _clean_title(t: str) -> str:
+    t = t.strip(" \t\u25cf\u25cb\u2022*-\u2013\u2014:")
+    t = _STOP.sub("", t)
+    t = re.sub(r"\s{2,}", " ", t).strip(" -:,")
+    return t
+
+
+def _venue_near(lines, idx):
+    for j in (idx, idx + 1, idx + 2):
+        if 0 <= j < len(lines):
+            low = lines[j].lower()
+            for v in _VENUES:
+                if v in low:
+                    return lines[j].strip(" \t\u25cf\u25cb\u2022*-\u2013\u2014").strip()[:60]
+    return None
+
+
+def propose_candidates(text: str):
+    lines = text.splitlines()
+    cands = []
+    for i, line in enumerate(lines):
+        if not _RE_MONTHDAY.search(line):
+            continue
+        m = _COLON.match(line)
+        if m and _RE_MONTHDAY.search(m.group(2)):
+            cands.append({"title": _clean_title(m.group(1)), "phrase": m.group(2),
+                          "strong": True, "line": line, "idx": i})
+        else:
+            marks = [x.start() for x in (_WD.search(line), _RE_MONTHDAY.search(line)) if x]
+            title = _clean_title(line[:min(marks)]) if marks else ""
+            cands.append({"title": title, "phrase": line, "strong": False,
+                          "line": line, "idx": i})
+    return cands, lines
+
+
+def extract_events(text: str, source=None, default_year: int = 2026):
+    cands, lines = propose_candidates(text)
+    groups = {}
+    for c in cands:
+        dt = extract_datetime(c["phrase"], default_year)
+        if not dt:
+            continue
+        k = dt["start"][:10]
+        g = groups.setdefault(k, {"dts": [], "titles": [], "warns": set(), "loc": None})
+        g["dts"].append(dt)
+        if c["title"]:
+            g["titles"].append((c["strong"], len(c["title"]), c["title"]))
+        for w in dt["warnings"]:
+            g["warns"].add(w)
+        if not g["loc"]:
+            g["loc"] = _venue_near(lines, c["idx"])
+
+    events = []
+    for k, g in sorted(groups.items()):
+        if not g["titles"]:
+            continue
+        timed = [d for d in g["dts"] if not d["all_day"]]
+        chosen = timed[0] if timed else g["dts"][0]
+        g["titles"].sort(key=lambda t: (not t[0], t[1]))  # strong first, then shortest
+        strong_group = any(t[0] for t in g["titles"])
+        title = g["titles"][0][2]
+        # Reject date *references* in prose (e.g. "refer to the email sent on September 18"):
+        # a weak, sentence-like title is almost never an event name.
+        if not strong_group and (len(title.split()) >= 7 or ". " in title):
+            continue
+        warns = sorted(w for w in g["warns"] if not w.startswith("assumed_year"))
+        conf = 0.9 if any(t[0] for t in g["titles"]) else 0.6
+        if warns:
+            conf = round(conf - 0.3, 2)
+        events.append(Event(title=title, start=chosen["start"], end=chosen["end"],
+                            all_day=chosen["all_day"], location=g["loc"],
+                            source_email=source, confidence=conf, warnings=warns))
+    return events
+
+
+class EventExtractor(Tool):
+    name = "event_extractor"
+    capability = Capability.WRITE_ICS
+
+    def run(self, email_text: str, ctx: dict) -> ToolResult:
+        source = ctx.get("source")
+        year = ctx.get("default_year", 2026)
+        events = extract_events(email_text, source=source, default_year=year)
+        ics, removed = write_ics(events)
+        warnings = []
+        if removed:
+            warnings.append(f"sanitizer removed {removed} link(s) from event fields")
+        for ev in events:
+            if ev.warnings:
+                warnings.append(f"{ev.title}: {'; '.join(ev.warnings)}")
+        return ToolResult(
+            tool="event_extractor", capability=Capability.WRITE_ICS,
+            events=events, artifacts={"events.ics": ics}, warnings=warnings)
+
+
+EVENT_EXTRACTOR = register(EventExtractor())  # register an INSTANCE

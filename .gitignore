@@ -12,7 +12,7 @@
 .DS_Store
 .cache
 launch_vm
-.scratch/
+scratch/
 __pycache__/
 set-up/vm-assets/alpine-root/*
 set-up/vm-assets/alpine.iso
@@ -53,3 +53,23 @@ set-up/vm-assets/vmlinuz*
 set-up/vm-assets/initramfs*
 set-up/vm-assets/*.iso
 set-up/vm-assets/*.gguf
+
+# telemetry / audit logs
+logs/
+*/control_plane/logs/
+audit.jsonl
+
+# --- email-to-calendar agent ---
+# real (private) newsletters — NEVER commit; anonymized copies live in samples/
+e-mails/
+# watcher runtime dirs: keep the folders, ignore their contents
+module-3/emaildrop/inbox/*
+module-3/emaildrop/outbox/*
+module-3/emaildrop/processed/*
+module-3/emaildrop/logs/*
+!module-3/emaildrop/**/.gitkeep
+
+# scratch: track only the plan-of-record
+scratch/*
+!scratch/syllabus.md
+!scratch/tagging-schema.md
