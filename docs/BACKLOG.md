@@ -30,8 +30,8 @@ Reconciles the skeleton draft (`scratch/skeleton-draft.md`) and the syllabus
 | M16 | network/credential containment (egress allowlist, DNS pinning, block link-local/RFC1918, SSRF→IMDS) | ✅ `netpolicy` (arg-schema hardening + no-ambient-creds still open) |
 | M17 | AppSec/supply-chain of the harness (SAST/DAST/SCA, SLSA, AISBOM, signed images) | ⬜ **SKIPPED (operator's call)** |
 | M18 | IR playbooks + **layered kill switch** + AIDR + degraded mode + PIR→CI | 🟡 layered kill switch ✅ (controlplane/safety); IR playbooks + AIDR + degraded + PIR→CI pending |
-| M19 | MLOps/data/privacy (provenance, promotion gates, DSAR, post-fine-tune regression, RLHF integrity) | ⬜ |
-| M20 | memory lifecycle + output authenticity (C2PA) + AI gateway product + **MCP gateway** | ⬜ |
+| M19 | MLOps/data/privacy | 🟡 `registry` promotion gates + DSAR erasure (`memory.Erase`); dataset provenance / post-fine-tune / RLHF tracked |
+| M20 | memory lifecycle + output authenticity + MCP gateway | 🟡 `memory` TTL/scope/erasure + untrusted-recall neutralize; MCP gateway ✅ (gustoms); C2PA output-authenticity tracked |
 | Capstone II | operator console GUI | 🟡 HTTP backbone + served page (cmd/gridge); Wails wrapper pending |
 
 ## Specific gaps the operator flagged
