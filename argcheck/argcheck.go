@@ -75,6 +75,17 @@ func Validate(schema Schema, args map[string]any) (map[string]any, error) {
 	return out, nil
 }
 
+// CheckToken reports whether s is safe to pass as a single element of an argv
+// array: it rejects shell metacharacters so the value can never break out into
+// shell interpretation. Use it for positional argv tokens that have no name in a
+// Schema (for example a sandbox-exec command's arguments).
+func CheckToken(s string) error {
+	if reShellMeta.MatchString(s) {
+		return fmt.Errorf("%w: %q", ErrShellMeta, s)
+	}
+	return nil
+}
+
 // ConfinePath joins p under base and verifies the result stays within base
 // (defeats ../ traversal and absolute-path escape).
 func ConfinePath(base, p string) (string, error) {

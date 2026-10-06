@@ -60,7 +60,7 @@ There is no web app and no email API (hey.com exposes none). Instead a **long-ru
                        Apple Calendar (user clicks Accept)
 ```
 
-The MicroVM is the **execution substrate for tools that *run* things** — shell/browse/RCE — not for every tool. **Honest wiring status:** the MicroVM is real and wired into the CaMeL control-plane loop (`controlplane.Orchestrator` → `Interpreter.ExecuteInSandbox` → vsock → `cmd/detonationd`), which detonates the planner-chosen command inside the VM. The **email→calendar agent does NOT use the VM**: its only tool is extraction (parse + one gateway LLM call), which is a non-executing operation correctly defended on the host by `agent/guard` (indirect-injection neutralization) + spotlighting + the output sanitizer — a VM there would be theater. The **open gap** (tracked): the one executing agent tool we have, MCP `web_fetch`, currently runs in the host-side MCP server; to fully realize "executing tools run in the sandbox" it should detonate inside the VM via the same `Interpreter`/`detonationd` path. See `set-up/launch_vm.go` (vsock bridge, stays Go) and `sandbox/` built as `cmd/detonationd` — a stdlib-only Go static binary serving `{command,trace_id}`→`{output,trace_id}` over AF_VSOCK, bridged to host loopback.
+The MicroVM is the **execution substrate for tools that *run* things** — shell/browse/RCE — not for every tool. **Wiring status (code-verified):** the chamber is **egress-denied by construction** — `cmd/launchvm` attaches *no* network device, so a detonated command has no interface, route, or DNS and cannot beacon or exfiltrate; `vsock` is the one and only channel in. Commands are gated by an **allowlist** (`controlplane.Policy`: permitted `argv[0]` + `argcheck` on every argument + a secondary signature tripwire), not a bypassable blocklist, and are detonated as an **argument array with no shell**, so an argument can never be re-interpreted as a command. Inside the guest the daemon runs **non-root** and each detonation executes in a **fresh temp dir removed afterwards** (ephemeral isolation). The chamber is exposed to the whole agent as a **governed MCP tool** — `controlplane.SandboxExecTool` (`sandbox_exec`) reachable through the gustoms gateway (allowlist + manifest pin + per-call authZ) — so any agent runs untrusted code through the one isolation boundary, not on the host (`cmd/mcpdemo` exercises it end to end). The **email→calendar agent still does NOT use the VM** and should not: its only tool is extraction (parse + one gateway LLM call), a non-executing operation correctly defended on the host by `agent/guard` (indirect-injection neutralization) + spotlighting + the output sanitizer — a VM there would be theater. **`web_fetch` stays host-side on purpose:** the chamber has no egress, so the fetch itself runs behind `netpolicy` (the single egress authority: allowlist + dial-pinning + no-IMDS); risky *processing* of fetched bytes is what belongs in the chamber via `sandbox_exec`. See `cmd/launchvm` (vsock bridge, Go) and `sandbox/` built as `cmd/detonationd` — a stdlib-only Go static binary serving `{argv,trace_id}`→`{output,trace_id}` over AF_VSOCK, bridged to host loopback.
 
 Likewise **dual-LLM CaMeL** (P-LLM planner / quarantined Q-LLM coder) is real but lives in the control-plane loop, not in the single-shot email extractor (which uses one model); dual-LLM earns its place when untrusted *tool output* loops back to be formatted, which extraction does not do.
 
@@ -278,7 +278,7 @@ data poisoning, insider operator, etc.). Governance map expands here beyond OWAS
 ## Module 16 — Network & Credential Containment (Defeat the Lethal Trifecta)
 **Goal:** assume the model is compromised; a hijacked agent still can't call out, reach metadata, grab creds, or pivot.
 **Covers:** default-deny egress allowlist; DNS-rebinding defense + block link-local/RFC1918/localhost; SSRF → cloud-metadata (IMDSv1/v2, hop-limit); no ambient credentials (short-lived, scoped, per-call tokens); tool-argument injection (strict schemas, arg-arrays not shell strings, canonicalized/confined paths); deterministic authorization outside the model.
-**Correction:** replaces the current `controlplane.Interpreter` forbidden-signature **blocklist** (`ForbiddenSignatures`) with schema + allowlist + arg-array execution — blocklists are bypassable.
+**Correction (landed):** the `controlplane.Interpreter` forbidden-signature **blocklist** (`ForbiddenSignatures`) is demoted to a secondary tripwire; the primary gate is now `controlplane.Policy` — an `argv[0]` **allowlist** + `argcheck` on each argument + **arg-array (no-shell) execution**. Blocklists are bypassable (they missed `rm --recursive /` and base64-obfuscated payloads); the allowlist refuses those (ADD: `redteam.AllowlistBypass`, ASR 100%→0%).
 **Red Team:** a fetch/browse tool coerced to hit 169.254.169.254 to steal instance creds; path traversal / command injection in tool args; post-injection exfil to an attacker URL.
 **Blue Team:** the *combination* — egress allowlist + DNS pinning + no ambient creds + arg schemas — that neutralizes post-injection exfil even with a compromised model.
 **Status:** ⏳ Pending (new) — highest-leverage containment
@@ -406,7 +406,7 @@ Phase 5 — Assurance & Capstone
 
 Phase 6 — Productionization
  ├── [ ] Reproducible one-command provisioning + config/secrets hygiene (M13)
- ├── [ ] MicroVM as the production agent tool-execution runtime (M13)
+ ├── [~] MicroVM as the production agent tool-execution runtime (M13) — egress-denied chamber + allowlist/argcheck + non-root + ephemeral + `sandbox_exec` MCP tool landed & host-tested; live VM boot re-verify pending (`launchvm` + codesign on the Mac)
  └── [ ] Deployment checklist + a reader can run it themselves (M13)
 
 Phase 7 — Operate & Govern
@@ -443,7 +443,7 @@ status for the email-to-calendar build:
 - Kill-switch bypass → `controlplane.Safety` block-tools level (M18)
 
 **Inline-tested (unit tests, standalone ASR case pending):**
-- Host compromise → MicroVM isolation (sandbox vsock daemon; forbidden-signature policy gate blocks `rm -rf`/`nc -e`/`mkfifo`/`> /dev/tcp`)
+- Host compromise → egress-denied MicroVM isolation (sandbox vsock daemon, no network device; allowlist policy gate + argcheck on arg-arrays, non-root, ephemeral per-detonation; blocklist kept only as a secondary tripwire)
 - Log injection / audit tampering → gledger hash-chain + control-char defang (chain-verify test)
 - `.ics` field URL exfil + RFC-5545 line injection → ics sanitizer
 - Capability violation (read-only tool tries to write) → pipeline enforcement test

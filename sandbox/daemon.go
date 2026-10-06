@@ -5,9 +5,13 @@
 // needs no IP route back to the host, so a compromised command can only run here
 // and return bytes — it cannot reach the governance layer.
 //
-// Protocol (matches controlplane.Interpreter.ExecuteInSandbox):
+// Protocol (matches controlplane.Interpreter): the hardened path sends an argv
+// array run with no shell; a legacy command string (`sh -c`) is kept for
+// host-side development. Each detonation runs in a fresh temp dir removed
+// afterwards (ephemeral isolation).
 //
-//	POST / {"command":"<sh>","trace_id":"<id>"} -> 200 {"output":"<stdout>","trace_id":"<id>"}
+//	POST / {"argv":["uname","-a"],"trace_id":"<id>"} -> 200 {"output":"<stdout>","trace_id":"<id>"}
+//	POST / {"command":"<sh>","trace_id":"<id>"}      -> 200 {"output":"<stdout>","trace_id":"<id>"}
 //
 // The command runner and the hand-rolled HTTP framing are OS-independent and
 // unit-tested on any platform; only the AF_VSOCK listener is Linux-only (see
@@ -24,6 +28,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -36,10 +41,13 @@ const DefaultPort = 5000
 // DefaultTimeout bounds one command so a runaway cannot hang the chamber.
 const DefaultTimeout = 20 * time.Second
 
-// Request is the inbound detonation command.
+// Request is the inbound detonation command. The hardened control plane sends
+// Argv (an argument array run with NO shell); Command (a legacy `sh -c` string)
+// is kept for host-side development and manual testing. Argv takes precedence.
 type Request struct {
-	Command string `json:"command"`
-	TraceID string `json:"trace_id"`
+	Command string   `json:"command,omitempty"`
+	Argv    []string `json:"argv,omitempty"`
+	TraceID string   `json:"trace_id"`
 }
 
 // Response is the detonation result.
@@ -66,30 +74,60 @@ func (d *Daemon) timeout() time.Duration {
 	return DefaultTimeout
 }
 
-// Execute logs the request and runs the command, returning the protocol response.
+// Execute logs the request and runs the command, returning the protocol
+// response. Argv (no-shell array) is preferred; Command (`sh -c`) is the legacy
+// fallback.
 func (d *Daemon) Execute(req Request) Response {
 	if d.Log != nil {
-		cmd := req.Command
-		if len(cmd) > 500 {
-			cmd = cmd[:500]
+		logged := req.Command
+		if len(req.Argv) > 0 {
+			logged = strings.Join(req.Argv, " ")
 		}
-		d.Log(req.TraceID, cmd)
+		if len(logged) > 500 {
+			logged = logged[:500]
+		}
+		d.Log(req.TraceID, logged)
 	}
-	out := "[detonation-daemon] no command provided"
-	if req.Command != "" {
-		out = d.RunCommand(req.Command)
+	switch {
+	case len(req.Argv) > 0:
+		return Response{Output: d.RunArgv(req.Argv), TraceID: req.TraceID}
+	case req.Command != "":
+		return Response{Output: d.RunCommand(req.Command), TraceID: req.TraceID}
+	default:
+		return Response{Output: "[detonation-daemon] no command provided", TraceID: req.TraceID}
 	}
-	return Response{Output: out, TraceID: req.TraceID}
 }
 
-// RunCommand runs command via `sh -c`, capturing stdout and stderr, bounded by
-// the timeout. A non-zero exit is normal and returns whatever was captured; a
-// timeout or a failure to start is reported as a daemon message.
+// RunArgv runs an argument array directly — exec(argv[0], argv[1:]) with NO
+// shell — so an argument can never be re-interpreted as a command. This is the
+// hardened detonation path. Output handling matches RunCommand.
+func (d *Daemon) RunArgv(argv []string) string {
+	if len(argv) == 0 {
+		return "[detonation-daemon] no command provided"
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), d.timeout())
+	defer cancel()
+	return d.capture(ctx, exec.CommandContext(ctx, argv[0], argv[1:]...))
+}
+
+// RunCommand runs command via `sh -c` (legacy host-dev path), capturing stdout
+// and stderr, bounded by the timeout.
 func (d *Daemon) RunCommand(command string) string {
 	ctx, cancel := context.WithTimeout(context.Background(), d.timeout())
 	defer cancel()
+	return d.capture(ctx, exec.CommandContext(ctx, "sh", "-c", command))
+}
 
-	cmd := exec.CommandContext(ctx, "sh", "-c", command)
+// capture runs cmd in a fresh, private temp working directory that is removed
+// afterwards, so one detonation cannot observe another's files (ephemeral
+// per-detonation isolation). It captures stdout+stderr, bounded by the timeout.
+// A non-zero exit is normal and returns whatever was captured; a timeout or a
+// failure to start is reported as a daemon message.
+func (d *Daemon) capture(ctx context.Context, cmd *exec.Cmd) string {
+	if dir, err := os.MkdirTemp("", "detonation-"); err == nil {
+		cmd.Dir = dir
+		defer os.RemoveAll(dir)
+	}
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -99,7 +137,7 @@ func (d *Daemon) RunCommand(command string) string {
 		return fmt.Sprintf("[detonation-daemon] command timed out after %ds", int(d.timeout().Seconds()))
 	}
 	// A non-zero exit (ExitError) is expected; anything else means the command
-	// could not be started (e.g. no shell) and is surfaced to the caller.
+	// could not be started (e.g. no such binary) and is surfaced to the caller.
 	var exitErr *exec.ExitError
 	if err != nil && !errors.As(err, &exitErr) {
 		return fmt.Sprintf("[detonation-daemon] execution error: %v", err)

@@ -7,15 +7,19 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 
+	"github.com/t0ul/ai-security-engineering/controlplane"
 	"github.com/t0ul/ai-security-engineering/mcp"
 	"github.com/t0ul/ai-security-engineering/netpolicy"
+	"github.com/t0ul/ai-security-engineering/sandbox"
 	"github.com/t0ul/gledger"
 	"github.com/t0ul/gustoms"
 )
@@ -49,11 +53,25 @@ func run() error {
 			return net.LookupIP(host)
 		},
 	}
-	mcpSrv := httptest.NewServer(mcp.NewServer(mcp.WebFetchTool(policy, 0)))
+	// Stand-in detonation chamber: the real sandbox.Daemon reached over HTTP,
+	// exactly as the vsock bridge exposes the in-VM daemon. In production this URL
+	// is the launchvm bridge (127.0.0.1:5000) backed by the egress-denied MicroVM;
+	// here it runs the same daemon in-process so the demo needs no VM. The
+	// interpreter's allowlist + argcheck gate every command before it is sent.
+	daemon := sandbox.NewDaemon()
+	deton := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req sandbox.Request
+		json.NewDecoder(r.Body).Decode(&req)
+		json.NewEncoder(w).Encode(daemon.Execute(req))
+	}))
+	defer deton.Close()
+	interp := &controlplane.Interpreter{MicroVMURL: deton.URL, Audit: audit, HTTP: deton.Client()}
+
+	mcpSrv := httptest.NewServer(mcp.NewServer(mcp.WebFetchTool(policy, 0), controlplane.SandboxExecTool(interp)))
 	defer mcpSrv.Close()
 
 	gw := gustoms.New(
-		gustoms.WithServer(gustoms.Server{Name: "search", Client: &mcp.HTTPClient{URL: mcpSrv.URL}, AllowedTools: []string{"web_fetch"}}),
+		gustoms.WithServer(gustoms.Server{Name: "search", Client: &mcp.HTTPClient{URL: mcpSrv.URL}, AllowedTools: []string{"web_fetch", "sandbox_exec"}}),
 		gustoms.WithAuthorizer(func(caller, _, _ string) bool { return caller == "agent" }),
 		gustoms.WithAuditor(audit),
 	)
@@ -87,6 +105,28 @@ func run() error {
 	call("agent", "rogue", "web_fetch", target.URL)
 	fmt.Println("7) unauthorized caller:")
 	call("attacker", "search", "web_fetch", target.URL)
+
+	// The detonation chamber reached as a governed MCP tool: same gateway, same
+	// audit; the interpreter's allowlist + argcheck gate each command.
+	callArgv := func(argv ...string) {
+		anyv := make([]any, len(argv))
+		for i, a := range argv {
+			anyv[i] = a
+		}
+		label := "agent -> search/sandbox_exec [" + strings.Join(argv, " ") + "]"
+		out, err := gw.Call(context.Background(), gledger.NewTraceID(), "agent", "search", "sandbox_exec", map[string]any{"argv": anyv})
+		if err != nil {
+			fmt.Printf("  GATEWAY-BLOCKED  %s\n                   %v\n", label, err)
+			return
+		}
+		fmt.Printf("  %s\n           %v\n", label, out)
+	}
+	fmt.Println("8) detonate an allow-listed command in the egress-denied MicroVM:")
+	callArgv("uname", "-a")
+	fmt.Println("9) non-allow-listed command (allowlist refuses before detonation):")
+	callArgv("rm", "--recursive", "/")
+	fmt.Println("10) shell-metacharacter argument (argcheck refuses before detonation):")
+	callArgv("ls", "x; echo PWNED")
 
 	ok, n := audit.Verify()
 	fmt.Printf("\naudit: chain_ok=%t records=%d\n", ok, n)

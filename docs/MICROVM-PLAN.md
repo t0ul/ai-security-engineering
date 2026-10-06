@@ -4,6 +4,27 @@ Durable plan (written before a context compaction). Goal: make the Apple `vz`
 MicroVM a **genuine detonation chamber** and the **real execution substrate for
 executing agent tools**, not just a demo. Grounded in a code-verified review.
 
+## Status (2026-10-06) — all slices landed; full suite green on the Mac
+- **P1 egress-deny** ✅ `cmd/launchvm` attaches no network device; `bringUpCmd`
+  drops `udhcpc`/`ip link`/`apk`/resolv.conf; `sandbox_init.sh` drops the NTP
+  sync. Guest has no interface/route/DNS.
+- **P4 allowlist** ✅ `controlplane.Policy` (argv[0] allowlist + `argcheck` on
+  args + blocklist tripwire) is the primary gate; `ForbiddenSignatures` demoted
+  to secondary. ADD `redteam.AllowlistBypass` 100%→0%.
+- **P2 route executing tool through the VM** ✅ `controlplane.SandboxExecTool`
+  (`sandbox_exec`) runs argv in the VM via `Interpreter.ExecuteArgv`; wired
+  through the gustoms gateway in `cmd/mcpdemo`. Daemon speaks `{argv}` (no shell)
+  with legacy `{command}` kept for host dev. (web_fetch stays host-side behind
+  netpolicy by design — the chamber has no egress.)
+- **P3 ephemeral** ✅ `sandbox.Daemon.capture` runs each detonation in a fresh
+  temp dir removed afterwards.
+- **P5 non-root** ✅ `sandbox_init.sh` runs `detonationd` as user `sandbox`.
+- **P6 docs** ✅ syllabus, BACKLOG, this plan truthed up.
+
+**Remaining = t's step only:** re-boot the VM (`launchvm` + codesign) and
+confirm the acceptance checks below live (no-egress curl fails, `uname` works,
+`id` shows non-root). No host-side Go work left.
+
 ## Rhythm (unchanged)
 Claude writes Go into the connected folders. **t runs `go test`, all `git`, and
 anything that boots the VM (`launchvm`) on the Mac.** `go 1.27.1`, `go mod tidy`,

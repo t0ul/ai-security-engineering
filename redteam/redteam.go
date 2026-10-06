@@ -180,6 +180,7 @@ func Cases() []Case {
 		OutputForgery(), ModelSupplyChain(),
 		ArgInjection(), AmbientCredTheft(), CanaryExfil(), ApprovalForgery(),
 		AIDRUncontained(), DatasetPoisoning(), MultiAgentCollusion(),
+		AllowlistBypass(),
 	}
 }
 

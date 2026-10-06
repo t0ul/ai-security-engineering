@@ -81,17 +81,14 @@ func main() {
 	fsConfig.SetDirectoryShare(dirShare)
 	config.SetDirectorySharingDevicesVirtualMachineConfiguration([]vz.DirectorySharingDeviceConfiguration{fsConfig})
 
-	nat, err := vz.NewNATNetworkDeviceAttachment()
-	if err != nil {
-		log.Fatalf("launchvm: nat: %v", err)
-	}
-	netConfig, err := vz.NewVirtioNetworkDeviceConfiguration(nat)
-	if err != nil {
-		log.Fatalf("launchvm: net config: %v", err)
-	}
-	config.SetNetworkDevicesVirtualMachineConfiguration([]*vz.VirtioNetworkDeviceConfiguration{netConfig})
+	// NO network device is attached on purpose: the detonation chamber is
+	// egress-denied. A command detonated inside the guest has no interface, no
+	// route, and no DNS, so it cannot beacon or exfiltrate. Any network a tool
+	// legitimately needs goes out through the host netpolicy proxy (allowlist +
+	// dial-pinned + no-IMDS), never the guest's own stack. vsock below is the one
+	// and only channel in or out.
 
-	// virtio-vsock: the ONLY inbound channel into the detonation chamber.
+	// virtio-vsock: the ONLY channel into the detonation chamber.
 	vsockConfig, err := vz.NewVirtioSocketDeviceConfiguration()
 	if err != nil {
 		log.Fatalf("launchvm: vsock config: %v", err)
@@ -167,11 +164,13 @@ func driveConsole(hostReader io.Reader, vmWriter io.Writer) {
 	}
 }
 
-// bringUpCmd configures networking, mounts the shared assets, chroots into
-// Alpine, and runs sandbox_init.sh — which launches the static Go detonationd
-// (no apk/python needed) and exec's the interactive shell. The daemon binary is
-// cross-compiled into the shared assets dir by prepareassets.
-const bringUpCmd = "ip link set eth0 up && udhcpc -i eth0 && mkdir -p /mnt/assets && mount -t virtiofs assets /mnt/assets && cp -a /mnt/assets/alpine-root /alpine && mkdir -p /alpine/mnt/assets && mount -o bind /mnt/assets /alpine/mnt/assets && mount -t proc none /alpine/proc && mount -t sysfs none /alpine/sys && mount -o bind /dev /alpine/dev && rm -f /alpine/etc/resolv.conf && cp /etc/resolv.conf /alpine/etc/resolv.conf && chroot /alpine /bin/sh /mnt/assets/sandbox_init.sh\n"
+// bringUpCmd mounts the shared assets, chroots into Alpine, and runs
+// sandbox_init.sh — which launches the static Go detonationd and exec's the
+// interactive shell. The daemon binary is cross-compiled into the shared assets
+// dir by prepareassets. No networking is brought up (no `ip link`/`udhcpc`) and
+// no `apk`/DNS is configured: the chamber is egress-denied by construction, and
+// since Python is gone the guest needs nothing from the internet.
+const bringUpCmd = "mkdir -p /mnt/assets && mount -t virtiofs assets /mnt/assets && cp -a /mnt/assets/alpine-root /alpine && mkdir -p /alpine/mnt/assets && mount -o bind /mnt/assets /alpine/mnt/assets && mount -t proc none /alpine/proc && mount -t sysfs none /alpine/sys && mount -o bind /dev /alpine/dev && chroot /alpine /bin/sh /mnt/assets/sandbox_init.sh\n"
 
 // startVsockBridge accepts TCP on host loopback and pipes each connection to the
 // guest's vsock listener, exposing a plain 127.0.0.1:5000 endpoint backed by the

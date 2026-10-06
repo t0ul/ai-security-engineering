@@ -20,14 +20,14 @@ Reconciles the skeleton draft (`scratch/skeleton-draft.md`) and the syllabus
 | M10 | supply chain / model artifacts | ✅ `assets.CheckModelFormat` (reject pickle) + gguf magic/sha + safetensors header verify; dep-SCA tracked |
 | M11 | eval harness + red-team automation (gorauder ASR) | ✅ |
 | M12 | full-chain capstone | ✅ `cmd/scorecard` (15 techniques ASR, CI gate) + `ir`/`cmd/replay` (reconstruct an incident by trace_id from the chain-verified log) |
-| M13 | productionization / deployment | 🟡 runbook + static binaries; checklist + health/degraded modes missing |
+| M13 | productionization / deployment | 🟡 runbook + static binaries; egress-denied MicroVM + allowlist/argcheck + non-root + ephemeral + `sandbox_exec` MCP tool landed (live VM re-boot pending); checklist + health/degraded modes missing |
 
 ## Track II — operate & govern
 | Module | Capability | Status |
 | --- | --- | --- |
 | M14 | governed control plane + operator RBAC | ✅ |
 | M15 | admin audit + versioned rollback | ✅ |
-| M16 | network/credential containment (egress allowlist, DNS pinning, block link-local/RFC1918, SSRF→IMDS) | ✅ `netpolicy` (arg-schema hardening + no-ambient-creds still open) |
+| M16 | network/credential containment (egress allowlist, DNS pinning, block link-local/RFC1918, SSRF→IMDS) | ✅ `netpolicy` + sandbox exec hardened to `argv` allowlist + `argcheck` arg-arrays (no shell strings); no-ambient-creds (captoken) exercised in redteam, live-loop wiring open |
 | M17 | AppSec/supply-chain of the harness (SAST/DAST/SCA, SLSA, AISBOM, signed images) | ⬜ **SKIPPED (operator's call)** |
 | M18 | IR: kill switch + IR replay + AIDR + playbooks + degraded + PIR→CI | 🟡 kill switch ✅, IR replay ✅, AIDR auto-trigger ✅ (`aidr`); IR playbooks + degraded mode + PIR→CI pending |
 | M19 | MLOps/data/privacy | ✅ `registry` promotion gates (+eval-gated via cpstore) · `memory.Erase` DSAR · `dataset` provenance verify at ingest; post-fine-tune/RLHF N/A (no training pipeline) |

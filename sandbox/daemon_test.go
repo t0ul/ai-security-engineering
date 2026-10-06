@@ -39,6 +39,35 @@ func TestRunCommandTimeout(t *testing.T) {
 	}
 }
 
+func TestRunArgvNoShell(t *testing.T) {
+	d := sandbox.NewDaemon()
+	// A single argv element carrying shell metacharacters must be treated as one
+	// literal argument — no shell splits or interprets it.
+	out := d.RunArgv([]string{"echo", "a;b|c&d"})
+	if out != "a;b|c&d" {
+		t.Fatalf("argv not passed literally (shell interpreted it?): %q", out)
+	}
+}
+
+func TestRunArgvEphemeralCwd(t *testing.T) {
+	d := sandbox.NewDaemon()
+	// Each detonation runs in its own fresh temp dir, so two runs never share a
+	// working directory.
+	a := d.RunArgv([]string{"pwd"})
+	b := d.RunArgv([]string{"pwd"})
+	if a == "" || a == b {
+		t.Fatalf("expected distinct per-detonation cwds, got %q and %q", a, b)
+	}
+}
+
+func TestExecutePrefersArgv(t *testing.T) {
+	d := sandbox.NewDaemon()
+	r := d.Execute(sandbox.Request{Argv: []string{"echo", "argv-path"}, Command: "echo command-path", TraceID: "t"})
+	if r.Output != "argv-path" {
+		t.Fatalf("Argv should take precedence over Command, got %q", r.Output)
+	}
+}
+
 func TestExecuteNoCommand(t *testing.T) {
 	d := sandbox.NewDaemon()
 	r := d.Execute(sandbox.Request{TraceID: "t"})
