@@ -103,7 +103,7 @@ Separation is the security story, not just tidiness:
 | --- | --- | --- |
 | macOS system reserved | ~5.0 GB | Host OS, display, background |
 | Local SLM runtime | ~5.5 GB | Dual model (`llama.cpp`): Llama-3.2-3B planner + Qwen-1.5B formatter |
-| MicroVM + vector DB | ~2.5 GB | Apple `vz` MicroVM, ChromaDB, Redis |
+| MicroVM + state | ~2.0 GB | Apple `vz` MicroVM; embedded SQLite (modernc, pure-Go) for RAG corpus + governance inventory |
 | Control plane & tools | ~0.5 GB | Go fleet as static binaries: gouncer, goflage, gumpers, gorauder, gonductor, gledger (no venvs, no interpreter) |
 | **Total** | **~13.5 GB** | Fits 16GB unified memory with headroom; the Go fold-in frees ~1.5 GB vs the Python venvs |
 
@@ -206,8 +206,8 @@ Every item of both 2025 Top 10 lists maps to at least one module.
 ## Module 8 — RAG & Knowledge-Base Security
 **Goal:** Secure retrieval when the corpus is untrusted.
 **Covers:** LLM04, LLM08, ASI06.
-**Red Team:** index the emails in ChromaDB to answer "what's on in October," then poison the index with a malicious document; exploit embedding/retrieval weaknesses; persist a memory/context-poisoning payload across runs.
-**Blue Team:** XML encapsulation of retrieved chunks (`<retrieved_context>`…), ChromaDB metadata RBAC filters, retrieval sanitization, and provenance tags on indexed content.
+**Red Team:** index the processed emails in the SQLite/FTS5 corpus to answer "what's on in October," then poison the index with a malicious document; exploit embedding/retrieval weaknesses; persist a memory/context-poisoning payload across runs.
+**Blue Team:** XML encapsulation of retrieved chunks (`<retrieved_context>`…), SQLite tenant-ACL-as-WHERE (authorization-first retrieval), retrieval sanitization, and provenance tags on indexed content.
 **Status:** ⏳ Pending
 
 ## Module 9 — Data Integrity & Misinformation
