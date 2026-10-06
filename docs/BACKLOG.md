@@ -17,7 +17,7 @@ Reconciles the skeleton draft (`scratch/skeleton-draft.md`) and the syllabus
 | M7 | MCP & A2A security (gustoms) | ✅ gustoms gateway + mcp transport + agent/a2a (wiring a2a into live loop pending) |
 | M8 | RAG / KB security | ✅ `rag` on SQLite FTS5 (pure-Go, no CGO): real query, tenant-ACL-as-WHERE, provenance, sanitized recall; poisoning & tenant-leak ADD cases. Vector/semantic (embeddings via gouncer) + embedding-inversion tracked |
 | M9 | data integrity / misinformation | 🟡 weekday-integrity dateparse; cross-source conflict + confidence scoring missing |
-| M10 | supply chain / model artifacts | 🟡 verifymodel (gguf magic+sha); .safetensors mandate + dep SCA missing |
+| M10 | supply chain / model artifacts | ✅ `assets.CheckModelFormat` (reject pickle) + gguf magic/sha + safetensors header verify; dep-SCA tracked |
 | M11 | eval harness + red-team automation (gorauder ASR) | ✅ |
 | M12 | full-chain capstone | ✅ `cmd/scorecard` — 13 techniques ASR before→after, non-zero exit on regression (CI gate) |
 | M13 | productionization / deployment | 🟡 runbook + static binaries; checklist + health/degraded modes missing |
@@ -31,7 +31,7 @@ Reconciles the skeleton draft (`scratch/skeleton-draft.md`) and the syllabus
 | M17 | AppSec/supply-chain of the harness (SAST/DAST/SCA, SLSA, AISBOM, signed images) | ⬜ **SKIPPED (operator's call)** |
 | M18 | IR playbooks + **layered kill switch** + AIDR + degraded mode + PIR→CI | 🟡 layered kill switch ✅ (controlplane/safety); IR playbooks + AIDR + degraded + PIR→CI pending |
 | M19 | MLOps/data/privacy | 🟡 `registry` promotion gates + DSAR erasure (`memory.Erase`); dataset provenance / post-fine-tune / RLHF tracked |
-| M20 | memory lifecycle + output authenticity + MCP gateway | 🟡 `memory` TTL/scope/erasure + untrusted-recall neutralize; MCP gateway ✅ (gustoms); C2PA output-authenticity tracked |
+| M20 | memory lifecycle + output authenticity + MCP gateway | ✅ `memory` (TTL/scope/erasure/untrusted-recall) + `provenance` (ed25519 content credentials) + MCP gateway (gustoms) |
 | Capstone II | operator console GUI | 🟡 HTTP backbone + served page (cmd/gridge); Wails wrapper pending |
 
 ## Specific gaps the operator flagged

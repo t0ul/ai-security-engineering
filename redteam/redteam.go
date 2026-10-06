@@ -177,6 +177,7 @@ func Cases() []Case {
 		SSRF(), McpRugPull(), A2ASpoof(), KillSwitchBypass(),
 		RAGPoisoning(), RAGTenantLeak(),
 		MemoryPoisoning(), PromotionGateBypass(),
+		OutputForgery(), ModelSupplyChain(),
 	}
 }
 

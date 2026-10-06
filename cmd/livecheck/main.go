@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/t0ul/ai-security-engineering/agent/eval"
+	"github.com/t0ul/ai-security-engineering/cpstore"
 	"github.com/t0ul/ai-security-engineering/internal/modelserve"
 	"github.com/t0ul/gouncer"
 )
@@ -102,6 +103,13 @@ func main() {
 	// 3. Eval gates through the LLM path (extractor -> gouncer -> planner).
 	os.Setenv("EXTRACT_MODE", "llm") // GATEWAY_URL defaults to :4000
 
+	// Persist F1 to the inventory so the promotion gate can read a real score.
+	var inv *cpstore.Store
+	if db, derr := cpstore.Open(filepath.Join("controlplane", "logs", "inventory.db")); derr == nil {
+		inv = db
+		defer inv.Close()
+	}
+
 	allPass := true
 	for _, g := range gates {
 		rep, err := eval.Score(g.label, true)
@@ -109,6 +117,9 @@ func main() {
 			fmt.Printf("ERROR %-40s %v\n", g.label, err)
 			allPass = false
 			continue
+		}
+		if inv != nil {
+			_ = inv.RecordEval(rep.Source, rep.F1)
 		}
 		pass := rep.F1 >= g.min-1e-9
 		if !pass {
