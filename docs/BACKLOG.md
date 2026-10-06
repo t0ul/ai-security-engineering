@@ -29,7 +29,7 @@ Reconciles the skeleton draft (`scratch/skeleton-draft.md`) and the syllabus
 | M15 | admin audit + versioned rollback | ✅ |
 | M16 | network/credential containment (egress allowlist, DNS pinning, block link-local/RFC1918, SSRF→IMDS) | ✅ `netpolicy` (arg-schema hardening + no-ambient-creds still open) |
 | M17 | AppSec/supply-chain of the harness (SAST/DAST/SCA, SLSA, AISBOM, signed images) | ⬜ **SKIPPED (operator's call)** |
-| M18 | IR playbooks + layered kill switch + **IR replay** + AIDR + degraded + PIR→CI | 🟡 kill switch ✅, IR replay ✅ (`ir`/`cmd/replay`); playbooks + AIDR auto-trigger + degraded mode + PIR→CI pending |
+| M18 | IR: kill switch + IR replay + AIDR + playbooks + degraded + PIR→CI | 🟡 kill switch ✅, IR replay ✅, AIDR auto-trigger ✅ (`aidr`); IR playbooks + degraded mode + PIR→CI pending |
 | M19 | MLOps/data/privacy | 🟡 `registry` promotion gates + DSAR erasure (`memory.Erase`); dataset provenance / post-fine-tune / RLHF tracked |
 | M20 | memory lifecycle + output authenticity + MCP gateway | ✅ `memory` (TTL/scope/erasure/untrusted-recall) + `provenance` (ed25519 content credentials) + MCP gateway (gustoms) |
 | Capstone II | operator console GUI | 🟡 HTTP backbone + served page (cmd/gridge); Wails wrapper pending |
@@ -88,7 +88,7 @@ output, one capability, own labels). Demonstrates least-privilege per tool.
 - ✅ Layered kill switch · versioned rollback · **IR replay** (ir/cmd/replay) · model sponge/denial-of-wallet (gouncer limits + MaxBytes) · runaway-loop breaker (gonductor MaxSteps)
 - ✅ SSRF→IMDS · default-deny egress · DNS-pin/block private+link-local (netpolicy) · post-injection-exfil containment
 - ✅ Model registry + promotion gates (+MLOps eval→gate loop) · output authenticity/provenance (ed25519) · memory lifecycle (TTL/scope/erasure) · MCP-as-supply-chain + pinning (gustoms) · MCP gateway · AI gateway (gouncer) · authorization-first retrieval (rag ACL-as-WHERE) · KB poisoning · Dual-LLM/CaMeL · guardrails-in-depth (gumpers) · markdown/URL exfil · trace_id logging · gorauder red-team + scorecard CI gate
-- 🟡 PIR→regression (scorecard gate ✅; PIR *process* ⬜) · privacy/DSAR (memory.Erase ✅; retention/consent/legal-hold ⬜) · agent identity (a2a identity ✅; delegated/attenuated scoped tokens ⬜) · AIDR (kill switch ✅; auto-trigger on trace signals ⬜)
+- 🟡 PIR→regression (scorecard gate ✅; PIR *process* ⬜) · privacy/DSAR (memory.Erase ✅; retention/consent/legal-hold ⬜) · agent identity (a2a identity ✅; delegated/attenuated scoped tokens ⬜) · AIDR ✅ (`aidr` auto-engages kill switch on trace signals)
 - ✅ **Tool-argument injection** — `argcheck` (schema + shell-metachar reject + path confinement)
 - ✅ **No ambient credentials** — `captoken` (signed, scoped, short-lived per-call tokens)
 - ✅ **Canary / honey-token exfil** — gumpers canary rail + ADD case

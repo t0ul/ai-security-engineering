@@ -179,6 +179,7 @@ func Cases() []Case {
 		MemoryPoisoning(), PromotionGateBypass(),
 		OutputForgery(), ModelSupplyChain(),
 		ArgInjection(), AmbientCredTheft(), CanaryExfil(), ApprovalForgery(),
+		AIDRUncontained(),
 	}
 }
 
