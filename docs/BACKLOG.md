@@ -15,7 +15,7 @@ Reconciles the skeleton draft (`scratch/skeleton-draft.md`) and the syllabus
 | M5 | output handling / exfil | 🟡 markdown-image strip + SSRF/web-fetch lab (mcp web_fetch + netpolicy) ✅; hardened sanitizer (`<img>`, reference/autolinks, `js:`/`data:`) still missing |
 | M6 | excessive agency / HITL / circuit breaker | ✅ |
 | M7 | MCP & A2A security (gustoms) | ✅ gustoms gateway + mcp transport + agent/a2a (wiring a2a into live loop pending) |
-| M8 | RAG / KB security | ✅ `rag` on SQLite FTS5 (pure-Go, no CGO): real query, tenant-ACL-as-WHERE, provenance, sanitized recall; poisoning & tenant-leak ADD cases. Vector/semantic (embeddings via gouncer) + embedding-inversion tracked |
+| M8 | RAG / KB security | ✅ `rag` on SQLite: FTS5 lexical + semantic (cosine over embeddings, `HTTPEmbedder`→gouncer), tenant-ACL-as-WHERE on both paths, provenance, sanitized recall; embedding-inversion defended (vectors server-side + ACL); poisoning/tenant-leak ADD |
 | M9 | data integrity / misinformation | 🟡 weekday-integrity dateparse; cross-source conflict + confidence scoring missing |
 | M10 | supply chain / model artifacts | ✅ `assets.CheckModelFormat` (reject pickle) + gguf magic/sha + safetensors header verify; dep-SCA tracked |
 | M11 | eval harness + red-team automation (gorauder ASR) | ✅ |
@@ -93,7 +93,7 @@ output, one capability, own labels). Demonstrates least-privilege per tool.
 - ✅ **No ambient credentials** — `captoken` (signed, scoped, short-lived per-call tokens)
 - ✅ **Canary / honey-token exfil** — gumpers canary rail + ADD case
 - ✅ **Clickjack-resistant approval** — `hitl` (evidence-first, nonce-echo confirm)
-- ⬜ Provider-outage degraded mode (fail-closed fallback) · IR playbooks per incident class
-- ⬜ Dataset provenance/signing · post-fine-tune safety regression · RLHF annotation integrity (M19 remainder)
-- ⬜ Multi-agent poisoning/**collusion** (a2a spoof ✅; collusion ⬜) · embedding inversion (needs vector RAG) · slopsquatting / side-channels / deceptive-model-&-backdoor
+- ✅/N/A Degraded mode — extractor regex-fallback + gouncer fail-closed already cover it; cloud multi-region N/A (local models). IR playbooks descoped (process doc, not code; technical IR = replay+killswitch+AIDR done).
+- ⬜ Dataset provenance/signing (M19). · N/A post-fine-tune regression + RLHF integrity — no training/fine-tune/RLHF pipeline in this project (pre-trained local GGUF only).
+- ⬜ Multi-agent poisoning/**collusion** (a2a spoof ✅; collusion ⬜) · slopsquatting / side-channels / deceptive-model-&-backdoor
 - ⬜ Signed builds / SLSA / AISBOM (M17 — skipped by decision) · M0 threat model (deferred)

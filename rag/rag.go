@@ -43,8 +43,12 @@ type Chunk struct {
 }
 
 // Store is a SQLite-backed FTS5 index. Open with a file path to persist, or
-// ":memory:" for an ephemeral index.
-type Store struct{ db *sql.DB }
+// ":memory:" for an ephemeral index. Set Embed to also index vectors for
+// semantic retrieval (SemanticQuery).
+type Store struct {
+	db    *sql.DB
+	Embed Embedder // optional; when set, Add also stores an embedding
+}
 
 // Open creates/opens the index at path (":memory:" for ephemeral).
 func Open(path string) (*Store, error) {
@@ -55,6 +59,10 @@ func Open(path string) (*Store, error) {
 	// SQLite is single-writer; one connection also keeps a :memory: DB coherent.
 	db.SetMaxOpenConns(1)
 	if _, err := db.Exec(`CREATE VIRTUAL TABLE IF NOT EXISTS docs USING fts5(id UNINDEXED, tenant UNINDEXED, prov UNINDEXED, text)`); err != nil {
+		db.Close()
+		return nil, err
+	}
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS vectors(id TEXT PRIMARY KEY, vec TEXT)`); err != nil {
 		db.Close()
 		return nil, err
 	}
@@ -69,9 +77,11 @@ func (s *Store) Add(d Doc) error {
 	if _, err := s.db.Exec(`DELETE FROM docs WHERE id = ?`, d.ID); err != nil {
 		return err
 	}
-	_, err := s.db.Exec(`INSERT INTO docs(id, tenant, prov, text) VALUES(?,?,?,?)`,
-		d.ID, d.Tenant, string(d.Prov), d.Text)
-	return err
+	if _, err := s.db.Exec(`INSERT INTO docs(id, tenant, prov, text) VALUES(?,?,?,?)`,
+		d.ID, d.Tenant, string(d.Prov), d.Text); err != nil {
+		return err
+	}
+	return s.addVector(d.ID, d.Text)
 }
 
 var reWord = regexp.MustCompile(`[a-zA-Z0-9]+`)
