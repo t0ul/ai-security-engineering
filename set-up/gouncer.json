@@ -1,0 +1,12 @@
+{
+  "addr": ":4000",
+  "path": "/v1/chat/completions",
+  "max_body_bytes": 1048576,
+  "max_concurrent": 8,
+  "rate_per_minute": 120,
+  "upstream_timeout": "120s",
+  "routes": {
+    "planner": { "upstream": "http://127.0.0.1:11435" },
+    "coder": { "upstream": "http://127.0.0.1:11436" }
+  }
+}

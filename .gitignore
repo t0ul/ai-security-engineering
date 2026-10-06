@@ -73,3 +73,4 @@ module-3/emaildrop/logs/*
 scratch/*
 !scratch/syllabus.md
 !scratch/tagging-schema.md
+/launchvm

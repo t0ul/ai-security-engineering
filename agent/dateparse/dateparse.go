@@ -201,3 +201,11 @@ func ExtractDatetime(phrase string, defaultYear int) *Result {
 	}
 	return res
 }
+
+// MonthDayIndex returns the [start,end] byte offsets of the first "Month Day"
+// phrase in s, or nil if none. Byte offsets land on rune boundaries, so slicing
+// s at them yields the same text Python's codepoint indices would.
+func MonthDayIndex(s string) []int { return reMonthDay.FindStringIndex(s) }
+
+// WeekdayIndex returns the [start,end] byte offsets of the first weekday name, or nil.
+func WeekdayIndex(s string) []int { return reWeekday.FindStringIndex(s) }
