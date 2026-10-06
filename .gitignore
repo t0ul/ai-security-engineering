@@ -74,3 +74,6 @@ scratch/*
 !scratch/syllabus.md
 !scratch/tagging-schema.md
 /launchvm
+
+# governed control-plane demo logs
+controlplane/logs/

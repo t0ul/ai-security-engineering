@@ -54,6 +54,9 @@ type Orchestrator struct {
 	// {"planner","coder"}.
 	PlannerModel string
 	CoderModel   string
+	// Killed, when set and returning true, halts the loop before any work — the
+	// governed kill switch (wire it to Governance.Killed). Fail-closed.
+	Killed func() bool
 }
 
 func (o *Orchestrator) plannerModel() string {
@@ -72,6 +75,10 @@ func (o *Orchestrator) coderModel() string {
 
 // Run builds and invokes the graph for one request under traceID.
 func (o *Orchestrator) Run(ctx context.Context, traceID, rawHistory string) (State, error) {
+	if o.Killed != nil && o.Killed() {
+		o.Audit.Emit(traceID, "request", "killswitch_halt", gledger.F{})
+		return State{TraceID: traceID, RawHistory: rawHistory, BlogPlan: haltSentinel, FinalMarkdown: haltMessage}, nil
+	}
 	g := gonductor.New[State]().
 		AddNode("planner", o.planner).
 		AddNode("approval", o.approval).

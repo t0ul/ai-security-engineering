@@ -16,7 +16,7 @@ Mac**. Nothing Python is deleted until the Go passes the eval (Phase 5).
 | gouncer | LLM gateway (LiteLLM) | ✅ shipped |
 | gumpers | guardrails (NeMo) + DetectEcho | ✅ shipped |
 | gorauder | red-team harness (PyRIT) | ✅ shipped |
-| goverlord | governed control plane | ✅ shipped |
+| goverlord | governed control plane | ✅ shipped + wired (controlplane.Governance: RBAC/four-eyes/rollback/kill-switch; cmd/console) |
 | gonductor | orchestrator / CaMeL loop (LangGraph) | ✅ generic state-graph engine (nodes/edges/conditional routing, 2-layer circuit breaker, step hook), tested; drives the course CaMeL loop |
 | gustoms | MCP gateway | ⬜ later (M7) |
 | gridge | operator console (Wails GUI) | ⬜ last (Capstone II) |
@@ -62,5 +62,5 @@ None — repo is zero-Python as of 2026-10-06 (Phase 5 complete). Only non-Go ru
 - VM path de-pythoned ✅: `sandbox_init.sh` rewritten (no pip/python) to launch the static Go `detonationd`; `cmd/launchvm` bring-up drops `apk add python3`; `cmd/prepareassets` now cross-compiles `detonationd` (linux/arm64, CGO off — verified static ELF) into `vm-assets/`. Full chain Go: prepareassets→launchvm→sandbox_init→detonationd(vsock:5000)→bridge→controlplane.Interpreter. Live boot test pending (needs the Mac + a real VM run).
 - F1 gate ✅ cleared live (both labels 1.00 via `cmd/livecheck`). Still unexercised live: the controlplane CaMeL demo + detonationd over the real vsock bridge (needs `launchvm` + the codesign step; eval path does not).
 - Harvest generic redteam seeds into gorauder; add live-LLM target + converters.
-- Wire goverlord governance into the control plane (Track II).
+- Goverlord governance ✅ wired (Track II M14/M15): `controlplane.Governance` puts the agent's operational config under RBAC + four-eyes approval + versioned rollback + fail-closed kill switch, audited to gledger; `Orchestrator.Killed` hook halts the loop when the switch is engaged; `cmd/console` demos the full lifecycle (chain verifies). Remaining Track II: the operator GUI (gridge/Wails, Capstone II).
 - Swap local `replace` directives → version tags for release.
