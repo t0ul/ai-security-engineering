@@ -77,6 +77,26 @@ func TestProcessEmailWritesICSAndAuditsChain(t *testing.T) {
 	}
 }
 
+func TestIndexHookReceivesRawEmail(t *testing.T) {
+	reg := tool.NewRegistry()
+	reg.Register(extractor.New())
+	p, dir, _ := newPipe(t, reg)
+	t.Setenv("EXTRACT_MODE", "regex")
+
+	var indexedSource, indexedText string
+	p.Index = func(_, source, rawText string) error {
+		indexedSource, indexedText = source, rawText
+		return nil
+	}
+	src := writeEmail(t, dir, "3.txt", email)
+	if _, err := p.ProcessEmail(src); err != nil {
+		t.Fatal(err)
+	}
+	if indexedSource != "3.txt" || !strings.Contains(indexedText, "Back to School Night") {
+		t.Fatalf("index hook got source=%q text=%q", indexedSource, indexedText)
+	}
+}
+
 func TestOversizedRejected(t *testing.T) {
 	reg := tool.NewRegistry()
 	reg.Register(extractor.New())

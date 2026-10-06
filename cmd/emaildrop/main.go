@@ -27,6 +27,7 @@ import (
 	"github.com/t0ul/ai-security-engineering/agent/pipeline"
 	"github.com/t0ul/ai-security-engineering/agent/tool"
 	"github.com/t0ul/ai-security-engineering/agent/watcher"
+	"github.com/t0ul/ai-security-engineering/rag"
 	"github.com/t0ul/gledger"
 )
 
@@ -61,6 +62,19 @@ func run() error {
 		return err
 	}
 	pipe := &pipeline.Pipeline{Registry: reg, Audit: audit, OutboxDir: cfg.Outbox, DefaultYear: 2026}
+
+	// Index processed emails into the SQLite RAG corpus (queryable, persistent).
+	// The raw file archived to processed/ stays the source of truth; this index
+	// is rebuildable from it. DROP_DIR/corpus.db.
+	if corpus, cerr := rag.Open(envOr("CORPUS_DB", filepath.Join(cfg.Drop, "corpus.db"))); cerr == nil {
+		defer corpus.Close()
+		pipe.Index = func(traceID, source, rawText string) error {
+			return corpus.Add(rag.Doc{ID: traceID, Tenant: "", Text: rawText, Prov: rag.Untrusted})
+		}
+	} else {
+		fmt.Fprintln(os.Stderr, "emaildrop: corpus index unavailable (emails still processed + archived):", cerr)
+	}
+
 	w := &watcher.Watcher{Pipe: pipe, Cfg: cfg}
 
 	if once {

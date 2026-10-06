@@ -73,6 +73,7 @@ output, one capability, own labels). Demonstrates least-privilege per tool.
   levels none/block-tools/pause/halt; orchestrator consults AllowRequest +
   AllowToolExec (block-tools lets planning run but detonates nothing). (Still
   open: expose levels in the console UI; AIDR auto-trigger.)
+- **Email corpus ✅:** processed emails indexed into the SQLite RAG store (untrusted provenance, trace_id id) via `pipeline.Index`; `processed/` raw copy kept as source-of-truth backup (DB is rebuildable). Unlocks tracked agentic-sec topics: persistent KB/context poisoning across runs (ASI06), retrieval-as-exfil, cross-email integrity (M9 over history), DSAR/retention over the corpus. Reindex-from-disk tool tracked.
 - **Persistence (decided):** SQLite (`modernc.org/sqlite`, pure-Go/no-CGO) is the embedded store wherever search or queryable history is needed — RAG ✅ done (FTS5). Next: the console's governance inventory in SQLite — prompts (versioned+hashed), config_versions+proposals+approvals (four-eyes decisions), mcp_pins, eval_scores, admin_audit. bolt dropped (no query). `memory` has a JSON snapshot (fine, no search); may fold into SQLite for uniformity. gledger stays JSONL (runtime trace ledger); inbox/outbox stays files.
 - **Tracked, as budget holds:** M8 RAG, M9 conflict/confidence (overlaps B#5),
   M10 .safetensors+SCA, M12 capstone, M13 checklist, M19 MLOps/privacy, M20

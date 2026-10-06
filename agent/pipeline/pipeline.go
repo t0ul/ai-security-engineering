@@ -39,6 +39,11 @@ type Pipeline struct {
 	OutboxDir   string
 	ToolNames   []string // defaults to ["event_extractor"]
 	DefaultYear int      // defaults to 2026
+	// Index, if set, persists each email into the retrieval corpus (RAG) as
+	// untrusted provenance. The raw file archived to processed/ stays the source
+	// of truth; the index is rebuildable derived state. Indexing failures are
+	// audited, never fatal.
+	Index func(traceID, source, rawText string) error
 }
 
 // ProcessEmail runs the full pipeline for one file.
@@ -65,6 +70,17 @@ func (p *Pipeline) ProcessEmail(path string) (Summary, error) {
 		return Summary{}, err
 	}
 	text := string(raw)
+
+	// Persist the raw (untrusted) email into the retrieval corpus before any
+	// sanitization — the corpus holds the real content; defense is applied at
+	// retrieval time (rag.Assemble). The on-disk copy remains the backup.
+	if p.Index != nil {
+		if err := p.Index(trace, source, text); err != nil {
+			p.Audit.Emit(trace, "index", "error", gledger.F{"source": source, "error": err.Error()})
+		} else {
+			p.Audit.Emit(trace, "index", "stored", gledger.F{"source": source, "bytes": len(text)})
+		}
+	}
 
 	// M4: neutralize indirect prompt injection in the untrusted body, and record
 	// what was found — the audit trail is the detection surface.
