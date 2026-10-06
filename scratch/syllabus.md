@@ -8,6 +8,8 @@ This syllabus unifies local AI red-teaming, middleware hardening, and multi-agen
 
 ---
 
+> **Two tracks.** Track I (M0–M13) *builds and hardens* the agent. Track II (M14–M20 + Capstone II) *operates and governs* it: the control plane becomes a managed, auditable, roll-back-able product an operator runs through a GUI — because in production the dangerous moments are config changes, incidents, and the compromised operator, not only the model. This is the shift from a hardened agent to an **AI-security platform**.
+
 ## The Meta-Project: Secure Local Email-to-Calendar Agent
 
 A human pastes (or drops) one or more messy real-world emails — e.g. school newsletters full of dates buried in prose — into a watched drop-folder (`emaildrop/inbox/`) that a long-running agent monitors. A **planner** routes the email to one or more narrow, scoped **tools** — event extraction (→ Apple Calendar), action-items/deadlines, digest, and contacts — and the user reviews and accepts the results. The calendar tool (#1) ships first; the rest are drop-ins behind one plugin contract.
@@ -246,6 +248,71 @@ Every item of both 2025 Top 10 lists maps to at least one module.
 
 ---
 
+## Track II — Operate & Govern (the AI-security platform)
+
+Track I secures the agent as code. Track II treats the **control plane as a managed product** and
+adds the operations lifecycle. These modules carry most of the ADD backlog attacks (SSRF/IMDS,
+data poisoning, insider operator, etc.). Governance map expands here beyond OWASP LLM/Agentic to
+**MITRE ATLAS, NIST AI RMF (+ GenAI Profile), ISO 42001, EU AI Act, CSA MAESTRO**, mapped to controls and gated in CI.
+
+## Module 14 — Governed Control Plane & Operator RBAC
+**Goal:** the control plane is a managed product — a versioned inventory of prompts, tool configs, gateway/guardrail policy, model registry, and keys — changed only through governed operations.
+**Covers:** inventory-as-artifacts; operator RBAC (deploy, edit-prompt, flip-policy, break-glass); separation of duties / four-eyes on config changes.
+**Principle:** trust = content + approval, never the name; re-approve on any content change (generalizes MCP poisoning / rug-pulls).
+**Red Team:** a single (or compromised) operator silently swaps a prompt/tool/policy for a malicious one.
+**Blue Team:** RBAC roles, two-person approval on config changes, content-hash-pinned approvals that invalidate on change, break-glass with heightened logging.
+**Status:** ⏳ Pending (new)
+
+## Module 15 — Admin-Action Audit & Versioned Rollback
+**Goal:** every control-plane change attributable and instantly reversible.
+**Covers:** tamper-evident admin-action audit (distinct from the runtime trace log); prompts/models/tool-defs/gateway-policy as versioned artifacts; one-click rollback to a known-good set.
+**Threat:** insider + compromised operator.
+**Red Team:** a bad config change ships — can you prove who, and revert in one move?
+**Blue Team:** hash-chained admin audit (reuse the telemetry spine), every config a versioned artifact, one-click rollback to a pinned known-good bundle.
+**Status:** ⏳ Pending (new)
+
+## Module 16 — Network & Credential Containment (Defeat the Lethal Trifecta)
+**Goal:** assume the model is compromised; a hijacked agent still can't call out, reach metadata, grab creds, or pivot.
+**Covers:** default-deny egress allowlist; DNS-rebinding defense + block link-local/RFC1918/localhost; SSRF → cloud-metadata (IMDSv1/v2, hop-limit); no ambient credentials (short-lived, scoped, per-call tokens); tool-argument injection (strict schemas, arg-arrays not shell strings, canonicalized/confined paths); deterministic authorization outside the model.
+**Correction:** replaces the current `camel_interpreter` forbidden-signature **blocklist** with schema + allowlist + arg-array execution — blocklists are bypassable.
+**Red Team:** a fetch/browse tool coerced to hit 169.254.169.254 to steal instance creds; path traversal / command injection in tool args; post-injection exfil to an attacker URL.
+**Blue Team:** the *combination* — egress allowlist + DNS pinning + no ambient creds + arg schemas — that neutralizes post-injection exfil even with a compromised model.
+**Status:** ⏳ Pending (new) — highest-leverage containment
+
+## Module 17 — AppSec & Supply Chain of the Harness
+**Goal:** secure and verify the artifact you ship, not just the model.
+**Covers:** SAST/DAST/SCA + dependency scanning; signed builds + SLSA provenance + AISBOM; image scanning; slopsquatting (hallucinated package names); verify-signature-at-deploy.
+**Red Team:** a poisoned dependency / squatted package / unsigned image reaches prod.
+**Blue Team:** gated CI, signed images, provenance + AISBOM, deploy-time signature verification.
+**Status:** ⏳ Pending (new; extends M10)
+
+## Module 18 — Incident Response & Resilience
+**Goal:** practiced, not improvised — and graceful failure.
+**Covers:** AI-specific IR playbooks for named incident classes (injection, exfiltration, jailbreak, rogue loop, poisoned data) with first move / roles / comms; **layered kill switch** (revoke identity/tokens → gateway fail-closed → scoped pause-sessions/block-tools/full-halt → AIDR auto-trigger → drain+snapshot); provider-outage degraded mode (fallback model/region, fail-closed on safety); forensics + retention (preserve trace_id + admin audit, legal hold, retention window, chain of custody); blameless PIR → permanent CI regression; game-day tested.
+**Red Team:** trigger each incident class — is the response practiced and the kill switch real?
+**Blue Team:** the playbooks + layered kill switch + AIDR + degraded mode + PIR-to-CI loop.
+**Status:** ⏳ Pending (new)
+
+## Module 19 — MLOps, Data & Privacy Governance
+**Goal:** govern the model/data lifecycle, not just inference.
+**Covers:** dataset provenance + signing + ingestion validation (poisoning/backdoors); post-fine-tune safety regression; RLHF annotation integrity; model registry + MLOps access + promotion gates (dev→stage→prod behind eval gates, signed models); privacy program (training data = personal data, purpose limitation, retention, consent/lawful basis, DSAR/erasure); embedding inversion.
+**Red Team:** poisoned fine-tune data plants a backdoor; a model reaches prod without gates; a DSAR erasure goes unhonored.
+**Blue Team:** signed/validated data provenance, promotion eval gates, privacy controls, post-fine-tune safety regression.
+**Status:** ⏳ Pending (new)
+
+## Module 20 — Memory, Output Authenticity & Gateways-as-Products
+**Goal:** the remaining runtime-governance surfaces.
+**Covers:** memory lifecycle (TTL/expiry, scrubbing, per-user/tenant scoping; recalled memory is untrusted); output authenticity/provenance (watermarking, C2PA content credentials); AI gateway as product (virtual keys, budgets, guardrail hooks, egress DLP, unified logging, fail-closed); MCP gateway (registry allowlist, peer tool authZ at call time, brokered scoped audience-bound tokens); authorization-first retrieval (ACL inside the query); human-automation-bias (evidence-first HITL, clickjacking/UI-redress-resistant approval dialogs).
+**Red Team:** poison persistent memory; forge AI-output provenance; clickjack an approval dialog.
+**Blue Team:** memory TTL/scope/scrub, C2PA signing, gateway DLP/fail-closed, hardened approval UX.
+**Status:** ⏳ Pending (new)
+
+## Capstone II — Security Control-Plane Console (the operator GUI)
+**Goal:** the platform — a web app where a non-technical operator governs everything above by clicking.
+**Backbone-first:** build the governed control plane (M14) + admin audit/rollback (M15) as real, versioned state, then put the GUI on top (wired to live data, not a mockup).
+**The console:** inventory browser (prompts / tools / MCP servers / models / policies / keys as versioned artifacts); sign/approve with four-eyes (approve an MCP server or model promotion; re-approve on content change); flip a guardrail/gateway policy gated by RBAC + SoD; one-click rollback to a known-good set; break-glass with heightened logging; side-by-side tamper-evident admin audit + runtime `trace_id` viewer; the layered kill switch (pause → block tools → halt). Doubles as the live demo of clickjacking-resistant, evidence-first approval UX.
+**Status:** ⏳ Pending (new) — the integrative platform deliverable
+
 ## Implementation Roadmap
 
 ```text
@@ -287,6 +354,18 @@ Phase 6 — Productionization
  ├── [ ] Reproducible one-command provisioning + config/secrets hygiene (M13)
  ├── [ ] MicroVM as the production agent tool-execution runtime (M13)
  └── [ ] Deployment checklist + a reader can run it themselves (M13)
+
+Phase 7 — Operate & Govern
+ ├── [ ] Governed control plane + operator RBAC + four-eyes (M14)
+ ├── [ ] Admin-action audit + versioned rollback (M15)
+ ├── [ ] Network/credential containment: egress allowlist, SSRF/IMDS, no ambient creds, arg schemas (M16)
+ ├── [ ] AppSec/supply chain: SAST/DAST/SCA, SLSA, AISBOM, signed+verified images (M17)
+ ├── [ ] IR playbooks + layered kill switch + AIDR + degraded mode + PIR->CI (M18)
+ ├── [ ] MLOps/data/privacy governance + promotion gates + DSAR (M19)
+ └── [ ] Memory lifecycle, C2PA output provenance, AI+MCP gateways (M20)
+
+Phase 8 — The Platform
+ └── [ ] Security Control-Plane Console (operator GUI) on the M14/M15 backbone (Capstone II)
 ```
 
 ---
