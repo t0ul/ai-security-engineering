@@ -175,6 +175,7 @@ func Cases() []Case {
 	return []Case{
 		Injection(), PromptLeak(), Exfil(), PII(), Sponge(),
 		SSRF(), McpRugPull(), A2ASpoof(), KillSwitchBypass(),
+		RAGPoisoning(), RAGTenantLeak(),
 	}
 }
 

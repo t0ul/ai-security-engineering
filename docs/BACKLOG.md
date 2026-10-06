@@ -15,7 +15,7 @@ Reconciles the skeleton draft (`scratch/skeleton-draft.md`) and the syllabus
 | M5 | output handling / exfil | 🟡 markdown-image strip + SSRF/web-fetch lab (mcp web_fetch + netpolicy) ✅; hardened sanitizer (`<img>`, reference/autolinks, `js:`/`data:`) still missing |
 | M6 | excessive agency / HITL / circuit breaker | ✅ |
 | M7 | MCP & A2A security (gustoms) | ✅ gustoms gateway + mcp transport + agent/a2a (wiring a2a into live loop pending) |
-| M8 | RAG / KB security (retrieval sanitize, tenant ACL, poisoning, embedding inversion) | ⬜ |
+| M8 | RAG / KB security | ✅ `rag` (tenant ACL + retrieval sanitization + provenance; poisoning & tenant-leak ADD cases); embedding-inversion tracked |
 | M9 | data integrity / misinformation | 🟡 weekday-integrity dateparse; cross-source conflict + confidence scoring missing |
 | M10 | supply chain / model artifacts | 🟡 verifymodel (gguf magic+sha); .safetensors mandate + dep SCA missing |
 | M11 | eval harness + red-team automation (gorauder ASR) | ✅ |
