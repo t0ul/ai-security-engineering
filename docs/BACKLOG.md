@@ -19,7 +19,7 @@ Reconciles the skeleton draft (`scratch/skeleton-draft.md`) and the syllabus
 | M9 | data integrity / misinformation | 🟡 weekday-integrity dateparse; cross-source conflict + confidence scoring missing |
 | M10 | supply chain / model artifacts | ✅ `assets.CheckModelFormat` (reject pickle) + gguf magic/sha + safetensors header verify; dep-SCA tracked |
 | M11 | eval harness + red-team automation (gorauder ASR) | ✅ |
-| M12 | full-chain capstone | ✅ `cmd/scorecard` — 13 techniques ASR before→after, non-zero exit on regression (CI gate) |
+| M12 | full-chain capstone | ✅ `cmd/scorecard` (15 techniques ASR, CI gate) + `ir`/`cmd/replay` (reconstruct an incident by trace_id from the chain-verified log) |
 | M13 | productionization / deployment | 🟡 runbook + static binaries; checklist + health/degraded modes missing |
 
 ## Track II — operate & govern
@@ -29,7 +29,7 @@ Reconciles the skeleton draft (`scratch/skeleton-draft.md`) and the syllabus
 | M15 | admin audit + versioned rollback | ✅ |
 | M16 | network/credential containment (egress allowlist, DNS pinning, block link-local/RFC1918, SSRF→IMDS) | ✅ `netpolicy` (arg-schema hardening + no-ambient-creds still open) |
 | M17 | AppSec/supply-chain of the harness (SAST/DAST/SCA, SLSA, AISBOM, signed images) | ⬜ **SKIPPED (operator's call)** |
-| M18 | IR playbooks + **layered kill switch** + AIDR + degraded mode + PIR→CI | 🟡 layered kill switch ✅ (controlplane/safety); IR playbooks + AIDR + degraded + PIR→CI pending |
+| M18 | IR playbooks + layered kill switch + **IR replay** + AIDR + degraded + PIR→CI | 🟡 kill switch ✅, IR replay ✅ (`ir`/`cmd/replay`); playbooks + AIDR auto-trigger + degraded mode + PIR→CI pending |
 | M19 | MLOps/data/privacy | 🟡 `registry` promotion gates + DSAR erasure (`memory.Erase`); dataset provenance / post-fine-tune / RLHF tracked |
 | M20 | memory lifecycle + output authenticity + MCP gateway | ✅ `memory` (TTL/scope/erasure/untrusted-recall) + `provenance` (ed25519 content credentials) + MCP gateway (gustoms) |
 | Capstone II | operator console GUI | 🟡 HTTP backbone + served page (cmd/gridge); Wails wrapper pending |
