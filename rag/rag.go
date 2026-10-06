@@ -1,20 +1,22 @@
-// Package rag is the M8 retrieval layer hardened against an untrusted corpus:
-// per-tenant access control on retrieval (no cross-tenant leakage), provenance
-// tags on every document, and retrieval sanitization — untrusted chunks are
-// injection-neutralized and XML-encapsulated (spotlighting) before they can
-// reach a model, so a poisoned document is data, never instructions.
+// Package rag is the M8 retrieval layer over an embedded SQLite index (pure-Go,
+// no CGO). Retrieval is a real FTS5 full-text query, and the per-tenant access
+// control is a WHERE clause on that query — authorization-first retrieval, so a
+// tenant physically cannot match another tenant's rows. Documents carry a
+// provenance tag; untrusted chunks are injection-neutralized and XML-encapsulated
+// by Assemble before they can reach a model, so a poisoned document is data,
+// never instructions.
 //
-// Matching is deterministic keyword overlap (no embeddings; embedding-inversion
-// and vector weaknesses are tracked separately), keeping the security behavior
-// testable without a model.
+// A vector/semantic path (embeddings via gouncer→llama.cpp, cosine rank) slots
+// in as an additional column + ORDER BY; FTS5 lexical search is the baseline.
 package rag
 
 import (
-	"fmt"
-	"sort"
+	"database/sql"
+	"regexp"
 	"strings"
 
 	"github.com/t0ul/ai-security-engineering/agent/guard"
+	_ "modernc.org/sqlite"
 )
 
 // Provenance marks whether a document's text is trusted or attacker-influenced.
@@ -40,42 +42,80 @@ type Chunk struct {
 	Text  string
 }
 
-// Store is an in-memory corpus.
-type Store struct{ docs []Doc }
+// Store is a SQLite-backed FTS5 index. Open with a file path to persist, or
+// ":memory:" for an ephemeral index.
+type Store struct{ db *sql.DB }
 
-// Add indexes a document.
-func (s *Store) Add(d Doc) { s.docs = append(s.docs, d) }
+// Open creates/opens the index at path (":memory:" for ephemeral).
+func Open(path string) (*Store, error) {
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		return nil, err
+	}
+	// SQLite is single-writer; one connection also keeps a :memory: DB coherent.
+	db.SetMaxOpenConns(1)
+	if _, err := db.Exec(`CREATE VIRTUAL TABLE IF NOT EXISTS docs USING fts5(id UNINDEXED, tenant UNINDEXED, prov UNINDEXED, text)`); err != nil {
+		db.Close()
+		return nil, err
+	}
+	return &Store{db: db}, nil
+}
 
-// Query returns up to k chunks the tenant may see, ranked by keyword overlap.
-// Authorization is enforced here, outside any model: a tenant sees only its own
-// documents and public ones.
-func (s *Store) Query(tenant, query string, k int) []Chunk {
-	q := terms(query)
-	type scored struct {
-		c     Chunk
-		score int
+// Close releases the database.
+func (s *Store) Close() error { return s.db.Close() }
+
+// Add indexes (or replaces) a document by id.
+func (s *Store) Add(d Doc) error {
+	if _, err := s.db.Exec(`DELETE FROM docs WHERE id = ?`, d.ID); err != nil {
+		return err
 	}
-	var hits []scored
-	for _, d := range s.docs {
-		if d.Tenant != "" && d.Tenant != tenant {
-			continue // ACL: not this tenant's document
+	_, err := s.db.Exec(`INSERT INTO docs(id, tenant, prov, text) VALUES(?,?,?,?)`,
+		d.ID, d.Tenant, string(d.Prov), d.Text)
+	return err
+}
+
+var reWord = regexp.MustCompile(`[a-zA-Z0-9]+`)
+
+// matchExpr turns a free-text query into a safe FTS5 MATCH expression: each word
+// quoted and OR-ed, so untrusted query text cannot inject FTS5 operators.
+func matchExpr(query string) string {
+	words := reWord.FindAllString(query, -1)
+	for i, w := range words {
+		words[i] = `"` + w + `"`
+	}
+	return strings.Join(words, " OR ")
+}
+
+// Query returns up to k chunks the tenant may see, ranked by FTS5 relevance. The
+// tenant ACL is part of the query (authorization-first retrieval).
+func (s *Store) Query(tenant, query string, k int) ([]Chunk, error) {
+	expr := matchExpr(query)
+	if expr == "" {
+		return nil, nil
+	}
+	rows, err := s.db.Query(
+		`SELECT id, prov, text FROM docs WHERE docs MATCH ? AND (tenant = ? OR tenant = '') ORDER BY rank LIMIT ?`,
+		expr, tenant, k)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Chunk
+	for rows.Next() {
+		var c Chunk
+		var prov string
+		if err := rows.Scan(&c.DocID, &prov, &c.Text); err != nil {
+			return nil, err
 		}
-		if n := overlap(q, terms(d.Text)); n > 0 {
-			hits = append(hits, scored{Chunk{DocID: d.ID, Prov: d.Prov, Text: d.Text}, n})
-		}
+		c.Prov = Provenance(prov)
+		out = append(out, c)
 	}
-	sort.SliceStable(hits, func(i, j int) bool { return hits[i].score > hits[j].score })
-	out := make([]Chunk, 0, k)
-	for i := 0; i < len(hits) && i < k; i++ {
-		out = append(out, hits[i].c)
-	}
-	return out
+	return out, rows.Err()
 }
 
 // Assemble renders chunks for a prompt. Every chunk is XML-encapsulated with its
-// provenance; untrusted chunks are first run through the injection guard, so
-// hidden instructions in a poisoned document are neutralized before the model
-// ever sees them.
+// provenance; untrusted chunks are injection-neutralized first, so hidden
+// instructions in a poisoned document never reach the model as instructions.
 func Assemble(chunks []Chunk) string {
 	var b strings.Builder
 	for _, c := range chunks {
@@ -83,25 +123,7 @@ func Assemble(chunks []Chunk) string {
 		if c.Prov != Trusted {
 			text, _ = guard.Sanitize(text)
 		}
-		fmt.Fprintf(&b, "<retrieved_context doc=%q provenance=%q>\n%s\n</retrieved_context>\n", c.DocID, string(c.Prov), text)
+		b.WriteString("<retrieved_context doc=\"" + c.DocID + "\" provenance=\"" + string(c.Prov) + "\">\n" + text + "\n</retrieved_context>\n")
 	}
 	return b.String()
-}
-
-func terms(s string) map[string]bool {
-	out := map[string]bool{}
-	for _, w := range strings.Fields(strings.ToLower(s)) {
-		out[strings.Trim(w, ".,:;!?\"'()")] = true
-	}
-	return out
-}
-
-func overlap(a, b map[string]bool) int {
-	n := 0
-	for w := range a {
-		if b[w] {
-			n++
-		}
-	}
-	return n
 }

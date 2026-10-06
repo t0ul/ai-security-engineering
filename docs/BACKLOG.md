@@ -15,11 +15,11 @@ Reconciles the skeleton draft (`scratch/skeleton-draft.md`) and the syllabus
 | M5 | output handling / exfil | 🟡 markdown-image strip + SSRF/web-fetch lab (mcp web_fetch + netpolicy) ✅; hardened sanitizer (`<img>`, reference/autolinks, `js:`/`data:`) still missing |
 | M6 | excessive agency / HITL / circuit breaker | ✅ |
 | M7 | MCP & A2A security (gustoms) | ✅ gustoms gateway + mcp transport + agent/a2a (wiring a2a into live loop pending) |
-| M8 | RAG / KB security | ✅ `rag` (tenant ACL + retrieval sanitization + provenance; poisoning & tenant-leak ADD cases); embedding-inversion tracked |
+| M8 | RAG / KB security | ✅ `rag` on SQLite FTS5 (pure-Go, no CGO): real query, tenant-ACL-as-WHERE, provenance, sanitized recall; poisoning & tenant-leak ADD cases. Vector/semantic (embeddings via gouncer) + embedding-inversion tracked |
 | M9 | data integrity / misinformation | 🟡 weekday-integrity dateparse; cross-source conflict + confidence scoring missing |
 | M10 | supply chain / model artifacts | 🟡 verifymodel (gguf magic+sha); .safetensors mandate + dep SCA missing |
 | M11 | eval harness + red-team automation (gorauder ASR) | ✅ |
-| M12 | full-chain capstone | ⬜ |
+| M12 | full-chain capstone | ✅ `cmd/scorecard` — 13 techniques ASR before→after, non-zero exit on regression (CI gate) |
 | M13 | productionization / deployment | 🟡 runbook + static binaries; checklist + health/degraded modes missing |
 
 ## Track II — operate & govern
@@ -73,6 +73,7 @@ output, one capability, own labels). Demonstrates least-privilege per tool.
   levels none/block-tools/pause/halt; orchestrator consults AllowRequest +
   AllowToolExec (block-tools lets planning run but detonates nothing). (Still
   open: expose levels in the console UI; AIDR auto-trigger.)
+- **Persistence (decided):** SQLite (`modernc.org/sqlite`, pure-Go/no-CGO) is the embedded store wherever search or queryable history is needed — RAG ✅ done (FTS5). Next: the console's governance inventory in SQLite — prompts (versioned+hashed), config_versions+proposals+approvals (four-eyes decisions), mcp_pins, eval_scores, admin_audit. bolt dropped (no query). `memory` has a JSON snapshot (fine, no search); may fold into SQLite for uniformity. gledger stays JSONL (runtime trace ledger); inbox/outbox stays files.
 - **Tracked, as budget holds:** M8 RAG, M9 conflict/confidence (overlaps B#5),
   M10 .safetensors+SCA, M12 capstone, M13 checklist, M19 MLOps/privacy, M20
   memory/C2PA, M0 threat model, Capstone II Wails wrapper, and the agentic items
