@@ -57,6 +57,15 @@ type Orchestrator struct {
 	// Killed, when set and returning true, halts the loop before any work — the
 	// governed kill switch (wire it to Governance.Killed). Fail-closed.
 	Killed func() bool
+	// Safety, when set, is the layered kill switch: it gates whether a request
+	// may start (AllowRequest) and whether tools may execute (AllowToolExec).
+	Safety SafetyGate
+}
+
+// SafetyGate is the layered kill switch the loop consults; *Safety implements it.
+type SafetyGate interface {
+	AllowRequest() bool
+	AllowToolExec() bool
 }
 
 func (o *Orchestrator) plannerModel() string {
@@ -77,6 +86,10 @@ func (o *Orchestrator) coderModel() string {
 func (o *Orchestrator) Run(ctx context.Context, traceID, rawHistory string) (State, error) {
 	if o.Killed != nil && o.Killed() {
 		o.Audit.Emit(traceID, "request", "killswitch_halt", gledger.F{})
+		return State{TraceID: traceID, RawHistory: rawHistory, BlogPlan: haltSentinel, FinalMarkdown: haltMessage}, nil
+	}
+	if o.Safety != nil && !o.Safety.AllowRequest() {
+		o.Audit.Emit(traceID, "request", "safety_halt", gledger.F{})
 		return State{TraceID: traceID, RawHistory: rawHistory, BlogPlan: haltSentinel, FinalMarkdown: haltMessage}, nil
 	}
 	g := gonductor.New[State]().
@@ -147,6 +160,14 @@ func (o *Orchestrator) executor(ctx *gonductor.Context, s State) (State, error) 
 	}
 	o.Audit.Emit(s.TraceID, "executor", "command_selected", gledger.F{"command": command, "source": source})
 	s.ToolCommand = command
+	// Layered kill switch: at LevelBlockTools and above, planning stands but no
+	// side effect runs — the command is never detonated.
+	if o.Safety != nil && !o.Safety.AllowToolExec() {
+		o.Audit.Emit(s.TraceID, "executor", "blocked_by_safety", gledger.F{"command": command})
+		s.ToolOutput = "[execution blocked by safety level]"
+		s.StepCount++
+		return s, nil
+	}
 	s.ToolOutput = o.Interp.ExecuteInSandbox(ctx, s.TraceID, command)
 	s.StepCount++
 	return s, nil

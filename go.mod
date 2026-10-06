@@ -16,6 +16,7 @@ require (
 	github.com/t0ul/gouncer v0.0.0-00010101000000-000000000000
 	github.com/t0ul/goverlord v0.0.0-00010101000000-000000000000
 	github.com/t0ul/gumpers v0.0.0
+	github.com/t0ul/gustoms v0.0.0-00010101000000-000000000000
 	golang.org/x/sys v0.48.0
 	golang.org/x/term v0.46.0
 )
@@ -28,4 +29,5 @@ replace (
 	github.com/t0ul/gouncer => ../fleet/gouncer
 	github.com/t0ul/goverlord => ../fleet/goverlord
 	github.com/t0ul/gumpers => ../fleet/gumpers
+	github.com/t0ul/gustoms => ../fleet/gustoms
 )
