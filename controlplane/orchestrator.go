@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/t0ul/ai-security-engineering/agent/a2a"
 	"github.com/t0ul/gledger"
 	"github.com/t0ul/gonductor"
 )
@@ -35,6 +36,7 @@ type State struct {
 	ToolOutput    string
 	FinalMarkdown string
 	StepCount     int
+	PlanSig       a2a.Message // planner's signature over BlogPlan (A2A hand-off auth)
 }
 
 // Approver is the human-in-the-loop gate. It returns true to proceed to
@@ -60,6 +62,11 @@ type Orchestrator struct {
 	// Safety, when set, is the layered kill switch: it gates whether a request
 	// may start (AllowRequest) and whether tools may execute (AllowToolExec).
 	Safety SafetyGate
+	// Signer/Verifier, when set, authenticate the planner→executor hand-off
+	// (ASI07): the planner signs its plan and the executor refuses to detonate a
+	// plan that does not verify as the trusted planner's, unaltered.
+	Signer   *a2a.Signer
+	Verifier *a2a.Verifier
 }
 
 // SafetyGate is the layered kill switch the loop consults; *Safety implements it.
@@ -127,6 +134,9 @@ func (o *Orchestrator) planner(ctx *gonductor.Context, s State) (State, error) {
 		return s, err
 	}
 	s.BlogPlan = plan
+	if o.Signer != nil {
+		s.PlanSig = o.Signer.Sign(plan) // sign the control-flow hand-off
+	}
 	s.StepCount++
 	o.Audit.Emit(s.TraceID, "planner", "plan_captured", gledger.F{"step_count": s.StepCount})
 	return s, nil
@@ -149,6 +159,16 @@ func (o *Orchestrator) executor(ctx *gonductor.Context, s State) (State, error) 
 		s.ToolOutput = ""
 		s.FinalMarkdown = haltMessage
 		return s, nil
+	}
+	// A2A (ASI07): refuse to act on a plan that is not the trusted planner's,
+	// unaltered. Rejects a forged/tampered control-flow hand-off.
+	if o.Verifier != nil {
+		if err := o.Verifier.Verify(s.PlanSig); err != nil || s.PlanSig.Body != s.BlogPlan {
+			o.Audit.Emit(s.TraceID, "executor", "a2a_reject", gledger.F{"reason": "plan failed inter-agent authentication"})
+			s.ToolOutput = "[rejected: plan failed inter-agent authentication]"
+			s.StepCount++
+			return s, nil
+		}
 	}
 	// CaMeL: the privileged planner chose the command (control flow). Fall back to
 	// a harmless read-only probe if none was emitted.

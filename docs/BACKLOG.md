@@ -66,9 +66,7 @@ output, one capability, own labels). Demonstrates least-privilege per tool.
 - **B — tool roster (tools 2–5).** ✅ DONE: `agent/tools` — action_items,
   digest, contacts (PII-scoped via goflage), conflict_detector; all read-only,
   capability-enforced, tested.
-- **C — A2A security (M7/ASI07).** ✅ DONE: `agent/a2a` — HMAC-signed inter-agent
-  messages, per-agent keys, replay guard; forged/tampered/unknown/replay all
-  rejected. (Still open: wire it into the live gonductor hand-offs.)
+- **C — A2A security (M7/ASI07).** ✅ DONE: `agent/a2a` HMAC-signed messages + **wired into the live loop** (planner signs plan, executor rejects unauthenticated hand-off; tested).
 - **D — layered kill switch (M18 core).** ✅ DONE: `controlplane/safety.go` —
   levels none/block-tools/pause/halt; orchestrator consults AllowRequest +
   AllowToolExec (block-tools lets planning run but detonates nothing). (Still
@@ -88,7 +86,7 @@ output, one capability, own labels). Demonstrates least-privilege per tool.
 - ✅ Layered kill switch · versioned rollback · **IR replay** (ir/cmd/replay) · model sponge/denial-of-wallet (gouncer limits + MaxBytes) · runaway-loop breaker (gonductor MaxSteps)
 - ✅ SSRF→IMDS · default-deny egress · DNS-pin/block private+link-local (netpolicy) · post-injection-exfil containment
 - ✅ Model registry + promotion gates (+MLOps eval→gate loop) · output authenticity/provenance (ed25519) · memory lifecycle (TTL/scope/erasure) · MCP-as-supply-chain + pinning (gustoms) · MCP gateway · AI gateway (gouncer) · authorization-first retrieval (rag ACL-as-WHERE) · KB poisoning · Dual-LLM/CaMeL · guardrails-in-depth (gumpers) · markdown/URL exfil · trace_id logging · gorauder red-team + scorecard CI gate
-- 🟡 PIR→regression (scorecard gate ✅; PIR *process* ⬜) · privacy/DSAR (memory.Erase ✅; retention/consent/legal-hold ⬜) · agent identity (a2a identity ✅; delegated/attenuated scoped tokens ⬜) · AIDR ✅ (`aidr` auto-engages kill switch on trace signals)
+- 🟡 PIR→regression (scorecard gate ✅; PIR *process* ⬜) · privacy/DSAR (memory.Erase ✅; retention/consent/legal-hold ⬜) · agent identity (a2a identity ✅, live hand-off auth ✅; delegated/attenuated token chains ⬜) · AIDR ✅ (`aidr` auto-engages kill switch on trace signals)
 - ✅ **Tool-argument injection** — `argcheck` (schema + shell-metachar reject + path confinement)
 - ✅ **No ambient credentials** — `captoken` (signed, scoped, short-lived per-call tokens)
 - ✅ **Canary / honey-token exfil** — gumpers canary rail + ADD case
