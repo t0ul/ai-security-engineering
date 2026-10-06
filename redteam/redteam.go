@@ -178,6 +178,7 @@ func Cases() []Case {
 		RAGPoisoning(), RAGTenantLeak(),
 		MemoryPoisoning(), PromotionGateBypass(),
 		OutputForgery(), ModelSupplyChain(),
+		ArgInjection(), AmbientCredTheft(), CanaryExfil(), ApprovalForgery(),
 	}
 }
 

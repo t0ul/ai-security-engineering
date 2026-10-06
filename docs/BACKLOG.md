@@ -89,10 +89,10 @@ output, one capability, own labels). Demonstrates least-privilege per tool.
 - ✅ SSRF→IMDS · default-deny egress · DNS-pin/block private+link-local (netpolicy) · post-injection-exfil containment
 - ✅ Model registry + promotion gates (+MLOps eval→gate loop) · output authenticity/provenance (ed25519) · memory lifecycle (TTL/scope/erasure) · MCP-as-supply-chain + pinning (gustoms) · MCP gateway · AI gateway (gouncer) · authorization-first retrieval (rag ACL-as-WHERE) · KB poisoning · Dual-LLM/CaMeL · guardrails-in-depth (gumpers) · markdown/URL exfil · trace_id logging · gorauder red-team + scorecard CI gate
 - 🟡 PIR→regression (scorecard gate ✅; PIR *process* ⬜) · privacy/DSAR (memory.Erase ✅; retention/consent/legal-hold ⬜) · agent identity (a2a identity ✅; delegated/attenuated scoped tokens ⬜) · AIDR (kill switch ✅; auto-trigger on trace signals ⬜)
-- ⬜ **Tool-argument injection** (arg schemas / arg-arrays / path confinement) — *flagged, not built*
-- ⬜ **No ambient credentials** (short-lived per-call scoped tokens) — *flagged*
-- ⬜ **Canary / honey-token exfil test** — *flagged*
-- ⬜ **Clickjack/UI-redress-resistant approval UX** (evidence-first HITL) — *flagged*
+- ✅ **Tool-argument injection** — `argcheck` (schema + shell-metachar reject + path confinement)
+- ✅ **No ambient credentials** — `captoken` (signed, scoped, short-lived per-call tokens)
+- ✅ **Canary / honey-token exfil** — gumpers canary rail + ADD case
+- ✅ **Clickjack-resistant approval** — `hitl` (evidence-first, nonce-echo confirm)
 - ⬜ Provider-outage degraded mode (fail-closed fallback) · IR playbooks per incident class
 - ⬜ Dataset provenance/signing · post-fine-tune safety regression · RLHF annotation integrity (M19 remainder)
 - ⬜ Multi-agent poisoning/**collusion** (a2a spoof ✅; collusion ⬜) · embedding inversion (needs vector RAG) · slopsquatting / side-channels / deceptive-model-&-backdoor
