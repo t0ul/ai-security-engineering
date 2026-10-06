@@ -93,5 +93,5 @@ output, one capability, own labels). Demonstrates least-privilege per tool.
 - ✅ **Clickjack-resistant approval** — `hitl` (evidence-first, nonce-echo confirm)
 - ✅/N/A Degraded mode — extractor regex-fallback + gouncer fail-closed already cover it; cloud multi-region N/A (local models). IR playbooks descoped (process doc, not code; technical IR = replay+killswitch+AIDR done).
 - ⬜ Dataset provenance/signing (M19). · N/A post-fine-tune regression + RLHF integrity — no training/fine-tune/RLHF pipeline in this project (pre-trained local GGUF only).
-- ⬜ Multi-agent poisoning/**collusion** (a2a spoof ✅; collusion ⬜) · slopsquatting / side-channels / deceptive-model-&-backdoor
+- ✅ Multi-agent collusion — `agent/quorum` (M-of-N distinct attestations; a2a spoof ✅ too) · slopsquatting / side-channels / deceptive-model-&-backdoor
 - ⬜ Signed builds / SLSA / AISBOM (M17 — skipped by decision) · M0 threat model (deferred)
