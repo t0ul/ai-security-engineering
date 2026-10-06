@@ -313,6 +313,40 @@ data poisoning, insider operator, etc.). Governance map expands here beyond OWAS
 **The console:** inventory browser (prompts / tools / MCP servers / models / policies / keys as versioned artifacts); sign/approve with four-eyes (approve an MCP server or model promotion; re-approve on content change); flip a guardrail/gateway policy gated by RBAC + SoD; one-click rollback to a known-good set; break-glass with heightened logging; side-by-side tamper-evident admin audit + runtime `trace_id` viewer; the layered kill switch (pause → block tools → halt). Doubles as the live demo of clickjacking-resistant, evidence-first approval UX.
 **Status:** ⏳ Pending (new) — the integrative platform deliverable
 
+## Architecture Decision — Go-Native Security Toolkit ("the fleet")
+
+**Decided 2026-10-06.** The Build & Harden agent (modules 3–4) stays **Python**. The platform and
+reusable security tooling (Track II) are **Go**, shipped as **separate, individually-usable repos**
+under one GitHub org — *not* a monorepo — so each is browsable/star-able and carries the
+"build-your-own beats rigid, overpriced out-of-the-box" narrative. **Model inference is never
+rewritten:** LLM / NER / embeddings stay behind an HTTP or ONNX **served-model boundary**; Go does
+orchestration, rules, and logic; Python/ML stays where it is irreplaceable (**polyglot**).
+
+**Why Go for the tooling layer:** single static, signable binary (supply-chain/attestation win —
+M10/M17); tiny CVE/image surface vs the ~300-dependency / 1.9 GB Python venvs; goroutines beat the
+GIL for gateway/daemon concurrency; strong backward-compatibility; and it is the lingua franca of
+security tooling (Vault, Trivy, cosign, OPA). Go does **not** fix the AI-specific vulnerabilities —
+architecture does — it *deletes operational and supply-chain attack surface*.
+
+**The fleet (9 repos; names checked for notable GitHub collisions 2026-10-06; nautical theme):**
+
+| Repo | Replaces | Role |
+| --- | --- | --- |
+| **Gonductor** | LangGraph | agent orchestrator / state machine |
+| **Gouncer** | LiteLLM | AI gateway — virtual keys, budgets, egress DLP, fail-closed |
+| **Goflage** | Presidio | PII/secret scrubber (regex + checksum + served NER) |
+| **Gumpers** | NeMo Guardrails | guardrails engine (rules + served embeddings + LLM self-check) |
+| **Gorauder** | PyRIT | red-team harness |
+| **Gledger** | — | telemetry (OTel GenAI) + hash-chained admin/runtime audit |
+| **Gustoms** | — | MCP gateway — registry allowlist, peer authZ, scoped tokens |
+| **Goverlord** | — | governance platform — inventory, RBAC, four-eyes, rollback, kill switch |
+| **Gridge** | — | operator console (Wails desktop GUI) |
+
+**Org:** TBD (e.g. `gofleet` / `gopher-armada`). **Build order (quick wins → hard):** Goflage,
+Gouncer, Gledger first (small, pure-Go, no model dependency) → Gumpers, Gorauder → Goverlord + Gridge
+last (platform + GUI, backbone-first). Each repo is a Go module; no network-exposed server unless
+required; models always external.
+
 ## Implementation Roadmap
 
 ```text
