@@ -52,6 +52,15 @@ func TestBlocksPrivateAndLoopback(t *testing.T) {
 	}
 }
 
+func TestBlocksCGNATandMulticast(t *testing.T) {
+	for _, ip := range []string{"100.64.0.1", "198.18.0.5", "224.0.0.1", "255.255.255.255"} {
+		p := netpolicy.Policy{Allow: []string{"h"}, Resolve: fakeDNS(map[string]string{"h": ip})}
+		if err := p.Check("http://h/"); !errors.Is(err, netpolicy.ErrBlockedIP) {
+			t.Errorf("%s must be blocked, got %v", ip, err)
+		}
+	}
+}
+
 func TestDefaultDenyNotAllowlisted(t *testing.T) {
 	p := netpolicy.Policy{Allow: []string{"good.com"}, Resolve: fakeDNS(map[string]string{"evil.com": "93.184.216.34"})}
 	if err := p.Check("https://evil.com/"); !errors.Is(err, netpolicy.ErrNotAllowlisted) {
@@ -104,5 +113,24 @@ func TestDialTimeEnforcement(t *testing.T) {
 	}
 	if _, err := rebind.HTTPClient(2 * time.Second).Get("http://ok.test:" + port + "/"); err == nil {
 		t.Fatal("dial to an internal IP must be refused (rebinding bypass)")
+	}
+}
+
+// TestRedirectToInternalBlocked proves a 302 to an internal host is refused
+// (redirect-based SSRF), using only local servers.
+func TestRedirectToInternalBlocked(t *testing.T) {
+	redir := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "http://metadata.test/latest/", http.StatusFound)
+	}))
+	defer redir.Close()
+	port := strings.TrimPrefix(redir.URL, "http://127.0.0.1:")
+
+	p := netpolicy.Policy{
+		Allow: []string{"ok.test"}, AllowLoopback: true,
+		Resolve: fakeDNS(map[string]string{"ok.test": "127.0.0.1", "metadata.test": "169.254.169.254"}),
+	}
+	// The first hop is allowed; the redirect target (metadata.test / IMDS) is not.
+	if _, err := p.HTTPClient(2 * time.Second).Get("http://ok.test:" + port + "/"); err == nil {
+		t.Fatal("redirect to an internal/non-vetted host must be blocked")
 	}
 }

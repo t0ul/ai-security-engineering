@@ -58,16 +58,22 @@ func (s *Signer) Sign(body string) Message {
 	return Message{From: s.AgentID, Body: body, Nonce: nonce, Sig: mac(s.key, s.AgentID, nonce, body)}
 }
 
+// maxSeenNonces bounds the replay-guard memory. When the live set fills, it
+// rotates to a previous generation (both are still checked), so memory stays
+// bounded at ~2× this on a long-running verifier.
+const maxSeenNonces = 100_000
+
 // Verifier checks messages against the registered agent keys and rejects replays.
 type Verifier struct {
 	mu   sync.Mutex
 	keys map[string][]byte
 	seen map[string]bool
+	old  map[string]bool
 }
 
 // NewVerifier builds a verifier. Register agents with Trust.
 func NewVerifier() *Verifier {
-	return &Verifier{keys: map[string][]byte{}, seen: map[string]bool{}}
+	return &Verifier{keys: map[string][]byte{}, seen: map[string]bool{}, old: map[string]bool{}}
 }
 
 // Trust registers agentID's key so its messages verify.
@@ -93,8 +99,12 @@ func (v *Verifier) Verify(m Message) error {
 		return ErrBadSignature
 	}
 	replayKey := m.From + ":" + m.Nonce
-	if v.seen[replayKey] {
+	if v.seen[replayKey] || v.old[replayKey] {
 		return ErrReplay
+	}
+	if len(v.seen) >= maxSeenNonces {
+		v.old = v.seen // rotate; keep one previous generation
+		v.seen = map[string]bool{}
 	}
 	v.seen[replayKey] = true
 	return nil

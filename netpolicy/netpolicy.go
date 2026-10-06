@@ -104,11 +104,20 @@ func (p Policy) DialContext(ctx context.Context, network, addr string) (net.Conn
 }
 
 // HTTPClient returns an http.Client that can only connect to allow-listed hosts
-// resolving to non-internal IPs — safe against SSRF and DNS rebinding.
+// resolving to non-internal IPs — safe against SSRF and DNS rebinding. Redirects
+// are re-validated per hop (a 302 to an internal host is refused), and the
+// transport dials only vetted IPs, so neither DNS rebinding nor a redirect can
+// steer the request to an internal address.
 func (p Policy) HTTPClient(timeout time.Duration) *http.Client {
 	return &http.Client{
 		Timeout:   timeout,
 		Transport: &http.Transport{DialContext: p.DialContext},
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= 5 {
+				return errors.New("netpolicy: too many redirects")
+			}
+			return p.Check(req.URL.String())
+		},
 	}
 }
 
@@ -129,8 +138,21 @@ func blocked(ip net.IP, allowLoopback bool) bool {
 	if ip.IsLoopback() {
 		return !allowLoopback
 	}
-	return ip.IsLinkLocalUnicast() ||
-		ip.IsLinkLocalMulticast() ||
-		ip.IsPrivate() ||
-		ip.IsUnspecified()
+	if ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsMulticast() ||
+		ip.IsPrivate() || ip.IsUnspecified() {
+		return true
+	}
+	// Ranges Go's helpers don't flag but which must not be egress targets:
+	// CGNAT 100.64.0.0/10, IETF benchmarking 198.18.0.0/15, limited broadcast.
+	if v4 := ip.To4(); v4 != nil {
+		switch {
+		case v4[0] == 100 && v4[1] >= 64 && v4[1] <= 127:
+			return true
+		case v4[0] == 198 && (v4[1] == 18 || v4[1] == 19):
+			return true
+		case v4[0] == 255 && v4[1] == 255 && v4[2] == 255 && v4[3] == 255:
+			return true
+		}
+	}
+	return false
 }

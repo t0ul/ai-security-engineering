@@ -103,3 +103,10 @@ output, one capability, own labels). Demonstrates least-privilege per tool.
 - **F4 argcheck denylist (MED) — MITIGATED.** Deployed as structured per-tool schema in the MCP server (rejects unknown args / type mismatch / metachars) + `ConfinePath`; URLs stay with netpolicy. Note retained: never build shell strings — pass arg arrays.
 - **F6 captoken scope delimiter (LOW) — FIXED.** Scope is hex-encoded in the token; no separator collision.
 - **F5 gustoms TOFU (LOW) — ACCEPTED, documented.** Prefer operator-supplied pins in real deployment. · a2a `seen` nonce map growth — tracked (needs TTL for long-running verifiers).
+
+## Security review round 2 (second pass) — crypto/auth focus
+- **S1 netpolicy IP blocklist gaps (LOW) — FIXED.** `blocked()` now also rejects CGNAT 100.64.0.0/10, IETF-benchmark 198.18.0.0/15, all multicast, and limited broadcast (test added). Redirect hops are re-validated (`CheckRedirect`) + dialed via the vetted-IP transport.
+- **F5 gustoms TOFU — now FIXED** (not just documented): `WithStrictPinning()` refuses an unapproved server until operator `Approve` (test added).
+- **a2a replay memory — FIXED:** two-generation rotation bounds the nonce set (~2×100k).
+- **Reviewed clean:** a2a/captoken use `hmac.Equal` (constant-time); captoken scope hex-encoded + signed; provenance ed25519; gustoms manifest sha256 (public, timing-irrelevant); all SQL (cpstore/rag) parameterized; rag FTS5 MATCH built from `[a-z0-9]`-only quoted terms (no operator injection).
+- **Accepted (defensive, rationale):** hitl/captoken use `!=` on a per-request nonce/scope — not a brute-forceable network secret (local, 96-bit), timing leak negligible. argcheck `Int` truncates JSON floats — validation clarity, not a security issue. provenance marks have no expiry — they attest authorship, not freshness (by design).
