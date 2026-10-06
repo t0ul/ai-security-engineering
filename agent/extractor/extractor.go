@@ -50,6 +50,19 @@ func env(k, d string) string {
 	return d
 }
 
+// extractionLeakRef is the portion of the prompt the output-side leak guard
+// checks against: the instructions only. The few-shot examples are deliberately
+// output-shaped (JSON), so a correct extraction that mirrors an example would
+// otherwise trip the echo detector and drop every candidate (observed on 1.txt's
+// volunteer-training event). A genuine prompt leak still recites the
+// instructions, so detection is preserved.
+var extractionLeakRef = func() string {
+	if i := strings.Index(ExtractionPrompt, "Examples:"); i >= 0 {
+		return ExtractionPrompt[:i]
+	}
+	return ExtractionPrompt
+}()
+
 type candidate struct {
 	Title    string
 	Phrase   string
@@ -126,10 +139,20 @@ func llmPropose(emailText string, timeout time.Duration) ([]candidate, error) {
 	content := data.Choices[0].Message.Content
 	// Output-side guard (LLM07): if the model echoed its own system prompt, do
 	// not propagate it — a leaked prompt must never reach the output.
-	if leaked, _ := guard.DetectPromptLeak(content, ExtractionPrompt); leaked {
+	if leaked, snip := guard.DetectPromptLeak(content, extractionLeakRef); leaked {
+		dbg("llm leak-guard DROPPED all candidates; content=%dB snippet=%q", len(content), snip)
 		return nil, nil
 	}
-	return parseCandidates(content), nil
+	out := parseCandidates(content)
+	dbg("llm content=%dB parsed=%d candidate(s)", len(content), len(out))
+	return out, nil
+}
+
+// dbg writes an extractor diagnostic to stderr when EXTRACT_DEBUG is set.
+func dbg(format string, a ...any) {
+	if os.Getenv("EXTRACT_DEBUG") != "" {
+		fmt.Fprintf(os.Stderr, "[extract] "+format+"\n", a...)
+	}
 }
 
 func candidatesToEvents(cands []candidate, source string, year int) []schema.Event {
@@ -142,6 +165,7 @@ func candidatesToEvents(cands []candidate, source string, year int) []schema.Eve
 	for _, c := range cands {
 		dt := dateparse.ExtractDatetime(c.Phrase, year)
 		if dt == nil {
+			dbg("dateparse MISS: title=%q phrase=%q", c.Title, c.Phrase)
 			continue
 		}
 		k := dateKey(dt.Start)

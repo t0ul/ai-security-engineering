@@ -13,17 +13,13 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"flag"
 	"fmt"
-	"io"
 	"log"
-	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
-	"strconv"
 	"syscall"
 	"time"
 
@@ -47,8 +43,8 @@ func main() {
 
 	sup := &modelserve.Supervisor{
 		Servers: []modelserve.Server{
-			server("planner", *bin, *host, filepath.Join(*dir, *plannerModel), *plannerPort, *plannerCtx),
-			server("coder", *bin, *host, filepath.Join(*dir, *coderModel), *coderPort, *coderCtx),
+			modelserve.LlamaServer("planner", *bin, *host, filepath.Join(*dir, *plannerModel), *plannerPort, *plannerCtx),
+			modelserve.LlamaServer("coder", *bin, *host, filepath.Join(*dir, *coderModel), *coderPort, *coderCtx),
 		},
 	}
 
@@ -60,48 +56,6 @@ func main() {
 		log.Fatalf("modeld: %v", err)
 	}
 	fmt.Println("modeld: stopped.")
-}
-
-func server(name, bin, host, modelPath string, port, ctxSize int) modelserve.Server {
-	return modelserve.Server{
-		Name: name,
-		Bin:  bin,
-		Args: []string{
-			"serve",
-			"-m", modelPath,
-			"--host", host,
-			"--port", strconv.Itoa(port),
-			"--ctx-size", strconv.Itoa(ctxSize),
-		},
-		// HealthURL backs the preflight "already serving?" check; Ready is the
-		// authoritative gate — a real 1-token completion, so "ready" means the
-		// model loaded and actually generated, not just that the socket is open.
-		HealthURL: fmt.Sprintf("http://%s:%d/health", host, port),
-		Ready:     completionReady(host, port),
-	}
-}
-
-// completionReady returns a probe that succeeds only when the server answers a
-// minimal chat completion. llama.cpp returns 503 while the model loads, so this
-// gates on genuine generation readiness.
-func completionReady(host string, port int) func(context.Context) bool {
-	url := fmt.Sprintf("http://%s:%d/v1/chat/completions", host, port)
-	payload := []byte(`{"model":"probe","messages":[{"role":"user","content":"ping"}],"max_tokens":1,"temperature":0}`)
-	client := &http.Client{Timeout: 15 * time.Second}
-	return func(ctx context.Context) bool {
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(payload))
-		if err != nil {
-			return false
-		}
-		req.Header.Set("Content-Type", "application/json")
-		resp, err := client.Do(req)
-		if err != nil {
-			return false
-		}
-		defer resp.Body.Close()
-		_, _ = io.Copy(io.Discard, resp.Body)
-		return resp.StatusCode == http.StatusOK
-	}
 }
 
 func homeDir() string {

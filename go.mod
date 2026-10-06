@@ -13,6 +13,7 @@ require (
 	github.com/t0ul/goflage v0.0.0-00010101000000-000000000000
 	github.com/t0ul/gonductor v0.0.0-00010101000000-000000000000
 	github.com/t0ul/gorauder v0.0.0-00010101000000-000000000000
+	github.com/t0ul/gouncer v0.0.0-00010101000000-000000000000
 	github.com/t0ul/gumpers v0.0.0
 	golang.org/x/sys v0.48.0
 	golang.org/x/term v0.46.0

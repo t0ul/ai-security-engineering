@@ -50,7 +50,7 @@ None — repo is zero-Python as of 2026-10-06 (Phase 5 complete). Only non-Go ru
 ## Definition of done
 - ✅ Zero `.py` in the repo.
 - ✅ `go test ./...` green **repo-wide** — dup-`main` resolved (set-up mains → cmd/ sharing internal/assets; scratch snapshots build-tagged); every package ok.
-- 🟡 eval F1 ≥ Python — regex path 3.txt=1.00; LLM path 1.txt ≥0.87 gate needs llama.cpp + gouncer up (live run pending).
+- ✅ eval F1 ≥ Python — **live run cleared both gates**: 3.txt F1=1.00, 1.txt F1=1.00 (13/13, P=R=1.00), well past the ≥0.87 target. Root-caused a regression where the output-side prompt-leak guard false-positived on the prompt's own few-shot example (JSON-shaped) and dropped all 1.txt candidates; fixed by scoping the leak reference to the instructions only (`extractionLeakRef`, excludes the Examples block). `cmd/livecheck` runs the whole gate with one command (starts models ready-gated, gouncer in-process, scores both labels); it auto-reclaims the model/gateway ports (`modelserve.ReclaimPort`) so it is re-runnable without manual pkill.
 - ✅ redteam ASR drops to ~0 behind controls — 8/8 → 0/8 across 5 techniques.
 - ✅ syllabus rewritten (v3).
 - ⬜ fleet importable by version tags (swap `replace => ../fleet/*` at the very end).
@@ -60,7 +60,7 @@ None — repo is zero-Python as of 2026-10-06 (Phase 5 complete). Only non-Go ru
 - LLM automation ✅: `internal/modelserve` supervisor + `cmd/modeld` launch both llama.cpp servers (planner :11435, coder :11436), health-gate, prefixed logs, clean shutdown. **Verified live on the Mac — both models load & serve from one command.** Hardened after a double-run exposed a false-ready: now refuses to start over an already-serving port and aborts if a child exits during startup. Readiness is a pluggable probe — `modeld` gates on a real 1-token completion (llama returns 503 while loading), so "ready" means the model actually generated, not just that the socket is open. All tested. Replaces the two hand-run `llama serve` shells.
 - Live-run wiring ✅: `docs/RUNBOOK.md` (ordered 3-terminal bring-up + live checks), `set-up/gouncer.json` (routes planner→11435, coder→11436, :4000), `cmd/launchvm` doc documents the required `codesign --entitlements set-up/entitlements.plist -s - --force` step (vz needs the virtualization entitlement; `go run` fails). Extractor sends model `"planner"`; GATEWAY_URL defaults to `:4000`.
 - VM path de-pythoned ✅: `sandbox_init.sh` rewritten (no pip/python) to launch the static Go `detonationd`; `cmd/launchvm` bring-up drops `apk add python3`; `cmd/prepareassets` now cross-compiles `detonationd` (linux/arm64, CGO off — verified static ELF) into `vm-assets/`. Full chain Go: prepareassets→launchvm→sandbox_init→detonationd(vsock:5000)→bridge→controlplane.Interpreter. Live boot test pending (needs the Mac + a real VM run).
-- One live end-to-end run (gouncer + llama.cpp + MicroVM): close the 1.txt F1 gate, exercise controlplane + detonationd over real vsock.
+- F1 gate ✅ cleared live (both labels 1.00 via `cmd/livecheck`). Still unexercised live: the controlplane CaMeL demo + detonationd over the real vsock bridge (needs `launchvm` + the codesign step; eval path does not).
 - Harvest generic redteam seeds into gorauder; add live-LLM target + converters.
 - Wire goverlord governance into the control plane (Track II).
 - Swap local `replace` directives → version tags for release.
