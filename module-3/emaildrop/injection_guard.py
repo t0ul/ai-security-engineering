@@ -23,6 +23,8 @@ _MARKERS = [
     (re.compile(r"(?i)you\s+(must|are\s+required\s+to|should|need\s+to)\s+(add|include|output|send|verify|wire)"), "imperative-inject"),
     (re.compile(r"(?i)do\s+not\s+(mention|reveal|tell|disclose)"), "concealment"),
     (re.compile(r"(?i)disregard\s+(the\s+)?(above|previous|prior)"), "disregard"),
+    (re.compile(r"(?i)(reveal|print|repeat|show|output|dump|disclose|give me)\s+(your|the)\s+(system\s+|original\s+)?(prompt|instructions|message|rules|configuration|system\s+message)"), "prompt-extraction"),
+    (re.compile(r"(?i)what\s+(are|were)\s+your\s+(system\s+)?(instructions|prompt|rules)"), "prompt-extraction"),
 ]
 
 _BLOCK = "[blocked: injected instruction removed]"
@@ -63,3 +65,23 @@ def guard(text):
             out.append(lines[i])
             i += 1
     return "\n".join(out), sorted(set(findings))
+
+
+def _shingles(text, n=6):
+    toks = re.sub(r"[^a-z0-9 ]+", " ", text.lower()).split()
+    return {" ".join(toks[i:i + n]) for i in range(max(0, len(toks) - n + 1))}
+
+
+def detect_prompt_leak(output_text, secret_prompt, n=6):
+    """
+    Output-side defense (LLM07): did the model echo its own system prompt?
+    Returns (leaked: bool, overlapping_snippet). Uses n-word shingle overlap so
+    paraphrase-free verbatim leaks are caught regardless of surrounding text.
+    """
+    if not output_text or not secret_prompt:
+        return False, ""
+    out = _shingles(output_text, n)
+    for sh in _shingles(secret_prompt, n):
+        if sh in out:
+            return True, sh
+    return False, ""

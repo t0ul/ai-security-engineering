@@ -72,7 +72,14 @@ def llm_propose(email_text, timeout=90):
                                  headers={"Content-Type": "application/json"})
     with urllib.request.urlopen(req, timeout=timeout) as r:
         data = json.loads(r.read().decode("utf-8"))
-    return _parse_candidates(data["choices"][0]["message"]["content"])
+    content = data["choices"][0]["message"]["content"]
+    # Output-side guard (LLM07): if the model echoed its own system prompt,
+    # refuse to propagate it — a leaked prompt must never reach the output.
+    from injection_guard import detect_prompt_leak
+    leaked, _snip = detect_prompt_leak(content, EXTRACTION_PROMPT)
+    if leaked:
+        return []
+    return _parse_candidates(content)
 
 
 def candidates_to_events(cands, source=None, default_year=2026):
