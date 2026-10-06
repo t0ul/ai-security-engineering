@@ -435,6 +435,10 @@ status for the email-to-calendar build:
 - Markdown/URL image exfil → `controlplane.SanitizeMarkdown`
 - Forced PII/secret leak → `goflage.Scrub`
 - Sponge / oversized-input DoS → `pipeline.MaxBytes` cap
+- SSRF → cloud-metadata (IMDS) → `netpolicy` egress guard (M16)
+- MCP tool rug-pull → `gustoms` manifest pin (M7)
+- Inter-agent (A2A) spoof → `agent/a2a` signature verify (ASI07)
+- Kill-switch bypass → `controlplane.Safety` block-tools level (M18)
 
 **Inline-tested (unit tests, standalone ASR case pending):**
 - Host compromise → MicroVM isolation (sandbox vsock daemon; forbidden-signature policy gate blocks `rm -rf`/`nc -e`/`mkfifo`/`> /dev/tcp`)

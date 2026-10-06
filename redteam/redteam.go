@@ -169,9 +169,13 @@ func Sponge() Case {
 	}
 }
 
-// Cases returns every technique case.
+// Cases returns every technique case: the agent-layer defenses plus the
+// platform-layer controls (SSRF/M16, MCP rug-pull, A2A spoof, kill switch).
 func Cases() []Case {
-	return []Case{Injection(), PromptLeak(), Exfil(), PII(), Sponge()}
+	return []Case{
+		Injection(), PromptLeak(), Exfil(), PII(), Sponge(),
+		SSRF(), McpRugPull(), A2ASpoof(), KillSwitchBypass(),
+	}
 }
 
 // AllSeeds flattens the seed corpus, for harvesting into the gorauder library.
