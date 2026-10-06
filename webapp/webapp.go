@@ -17,6 +17,8 @@ import (
 // Server serves the dashboard and its API.
 type Server struct {
 	AuditPath string // gledger log to read incidents from
+	OutboxDir string // accepted .ics artifacts to render + offer for download
+	InboxPath string // where the user drops .txt emails (shown in the UI)
 }
 
 // Handler returns the app routes.
@@ -25,6 +27,13 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/scorecard", s.scorecard)
 	mux.HandleFunc("/api/incidents", s.incidents)
 	mux.HandleFunc("/api/incident", s.incident)
+	mux.HandleFunc("/api/events", s.events)
+	if s.InboxPath != "" {
+		mux.HandleFunc("/api/drop", s.drop)
+	}
+	if s.OutboxDir != "" {
+		mux.Handle("/ics/", http.StripPrefix("/ics/", http.FileServer(http.Dir(s.OutboxDir))))
+	}
 	mux.HandleFunc("/", s.index)
 	return mux
 }

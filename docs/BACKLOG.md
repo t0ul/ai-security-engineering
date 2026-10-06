@@ -118,3 +118,12 @@ output, one capability, own labels). Demonstrates least-privilege per tool.
 - ✅ `docs/UX.md` — product/UX design plan (screens, principles, reminders answer, roadmap).
 - AISBOM verdict: full M17 SLSA/attestation NOT needed (single-user laptop binary). A lean build manifest (models from registry + Go deps from build info + prompt hashes from cpstore) is cheap+useful — optional `cmd/sbom`, not built yet.
 - Still open (UX): Drop + Events/Calendar render tab (Accept→.ics with reminder), Governance tab merge into the web app, month view.
+
+## Round 4 — owner UX + SBOM
+- ✅ Calendar tab in the web app: renders accepted `.ics` events (title/when/where, 🔔 reminder), **Accept .ics** downloads from `/ics/`. API `/api/events` parses outbox. Run: `go run ./cmd/webapp -outbox outbox`.
+- ✅ `cmd/sbom` — lean AI build manifest (Go modules + model file sizes/[-hash] + prompt SHA-256).
+
+## Round 5 — UI drop + honest sandbox status
+- ✅ Drop in the UI: drag/choose/paste a .txt in the Calendar tab -> `/api/drop` writes to inbox -> watcher extracts -> events render. e2e verified.
+- 🔎 MicroVM/CaMeL honesty (checked in code): MicroVM + dual-LLM are REAL but power the `cmd/controlplane` CaMeL command-execution loop, NOT the email agent (single-LLM, host-run extraction, guarded). Syllabus corrected to say so.
+- ⬜ **Open gap (tracked):** route the executing MCP tool (`web_fetch`) through `Interpreter.ExecuteInSandbox`/`detonationd` so executing tools actually run in the VM. Needs `launchvm` up to test.

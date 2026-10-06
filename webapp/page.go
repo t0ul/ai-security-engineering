@@ -18,16 +18,33 @@ const dashboardHTML = `<!doctype html>
   .pill{font-size:12px;padding:2px 8px;border-radius:999px} .pass{background:color-mix(in srgb,var(--ok) 18%,transparent);color:var(--ok)}
   .fail{background:color-mix(in srgb,var(--bad) 18%,transparent);color:var(--bad)}
   .trace{font-family:ui-monospace,Menlo,monospace;cursor:pointer;color:var(--accent)} pre{white-space:pre-wrap;font-size:13px;margin:0}
+  .ev{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--line)}
+  .ev:last-child{border-bottom:0} .ev b{font-size:15px} .bell{margin-right:4px} a.go{text-decoration:none;display:inline-block}
+  .dz{border:2px dashed var(--line);border-radius:12px;padding:16px;margin:10px 0;transition:border-color .15s} .dz.over{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 7%,transparent)}
+  .link{color:var(--accent);cursor:pointer} textarea{font:inherit;background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:8px;width:100%}
   .hide{display:none}
 </style></head><body>
 <header><h1>🗓️ Agent Console</h1>
   <nav>
-    <button data-tab="security" class="active">Security</button>
+    <button data-tab="calendar" class="active">Calendar</button>
+    <button data-tab="security">Security</button>
     <button data-tab="incidents">Incidents</button>
   </nav>
 </header>
 <main>
-  <section id="security">
+  <section id="calendar">
+    <div class="card">
+      <strong>Calendar</strong> <span class="mut">— events the agent extracted; accept downloads the signed .ics (with a reminder)</span>
+      <p class="mut" id="inbox"></p>
+      <div class="dz" id="dropzone">
+        Drag a <b>.txt</b> email here, or <label class="link">choose a file<input id="file" type="file" accept=".txt" hidden></label>, or paste below.
+        <div style="margin-top:8px"><textarea id="paste" rows="3" placeholder="paste email text…"></textarea></div>
+        <div style="margin-top:8px"><button class="go" onclick="dropText()">Process email</button> <span id="dropmsg" class="mut"></span></div>
+      </div>
+      <div id="events"></div>
+    </div>
+  </section>
+  <section id="security" class="hide">
     <div class="card">
       <strong>Security scorecard</strong>
       <p class="mut">Run the full red-team suite against the live controls. Every attack should drop to 0%.</p>
@@ -46,12 +63,38 @@ const dashboardHTML = `<!doctype html>
 </main>
 <script>
 const $=s=>document.querySelector(s);
+const TABS=['calendar','security','incidents'];
+const esc=s=>{const d=document.createElement('div');d.textContent=s||'';return d.innerHTML;};
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
   document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('active',x===b));
-  $('#security').classList.toggle('hide',b.dataset.tab!=='security');
-  $('#incidents').classList.toggle('hide',b.dataset.tab!=='incidents');
+  TABS.forEach(t=>$('#'+t).classList.toggle('hide',t!==b.dataset.tab));
   if(b.dataset.tab==='incidents') loadIncidents();
+  if(b.dataset.tab==='calendar') loadEvents();
 });
+async function loadEvents(){
+  const d=await (await fetch('/api/events')).json();
+  if(d.inbox) $('#inbox').innerHTML='📥 Drop <b>.txt</b> emails here: <code>'+esc(d.inbox)+'</code>';
+  const c=$('#events'); c.innerHTML='';
+  if(!(d.events||[]).length){c.innerHTML='<p class="mut">no events yet — drop a .txt email in the inbox folder above</p>';return;}
+  d.events.forEach(e=>{const div=document.createElement('div');div.className='ev';
+    const when=e.all_day?(e.start+' · all day'):(e.start+(e.end?(' – '+e.end.slice(11)):''));
+    div.innerHTML='<div><b>'+esc(e.title)+'</b><br><span class="mut">'+esc(when)+(e.location?(' · '+esc(e.location)):'')+'</span></div>'+
+      '<div>'+(e.has_reminder?'<span class="bell">🔔</span>':'')+'<a class="go" href="/ics/'+encodeURIComponent(e.file)+'" download>Accept .ics</a></div>';
+    c.appendChild(div);});
+}
+const dz=$('#dropzone');
+dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('over');});
+dz.addEventListener('dragleave',()=>dz.classList.remove('over'));
+dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('over');if(e.dataTransfer.files[0])upload(e.dataTransfer.files[0]);});
+$('#file').addEventListener('change',e=>{if(e.target.files[0])upload(e.target.files[0]);});
+async function upload(f){const fd=new FormData();fd.append('email',f);await postDrop(fd,f.name);}
+async function dropText(){const t=$('#paste').value;if(!t.trim())return;const fd=new FormData();fd.append('text',t);await postDrop(fd,'pasted email');$('#paste').value='';}
+async function postDrop(fd,label){$('#dropmsg').textContent='processing '+label+'…';
+  const r=await fetch('/api/drop',{method:'POST',body:fd});
+  if(!r.ok){$('#dropmsg').textContent='error: '+(await r.text());return;}
+  $('#dropmsg').textContent='queued — events appear shortly';
+  setTimeout(loadEvents,2500);setTimeout(loadEvents,5000);}
+loadEvents();
 async function runScorecard(){
   $('#verdict').textContent=' running…';
   const d=await (await fetch('/api/scorecard')).json();

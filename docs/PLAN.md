@@ -64,3 +64,6 @@ None — repo is zero-Python as of 2026-10-06 (Phase 5 complete). Only non-Go ru
 - Harvest generic redteam seeds into gorauder; add live-LLM target + converters.
 - Goverlord governance ✅ wired (Track II M14/M15): `controlplane.Governance` puts the agent's operational config under RBAC + four-eyes approval + versioned rollback + fail-closed kill switch, audited to gledger; `Orchestrator.Killed` hook halts the loop when the switch is engaged; `cmd/console` demos the full lifecycle (chain verifies). Operator console backbone ✅: `controlplane.ConsoleServer` serves the governed plane as a JSON API + a live wired-to-state HTML console (`cmd/gridge`), goverlord enforced server-side, errors mapped to HTTP status (403/409/422/…), tested with httptest. Remaining Track II: the Wails desktop wrapper (fleet gridge repo) over this same API — Capstone II.
 - Swap local `replace` directives → version tags for release.
+
+## Next major work: MicroVM hardening
+See `docs/MICROVM-PLAN.md` — make the MicroVM a real egress-denied, ephemeral detonation chamber and route executing agent tools through it. Verified gaps: guest has NAT internet (HIGH), persistent reused guest, web_fetch runs on host, blocklist policy, root in guest. Ordered: P1 egress-deny → P4 allowlist → P2 sandbox-tool/web_fetch → P3 ephemeral → P5 non-root → P6 docs.
