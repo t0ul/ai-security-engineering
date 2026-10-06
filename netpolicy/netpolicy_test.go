@@ -3,7 +3,11 @@ package netpolicy_test
 import (
 	"errors"
 	"net"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/t0ul/ai-security-engineering/netpolicy"
 )
@@ -67,5 +71,38 @@ func TestBlocksDNSRebinding(t *testing.T) {
 	p := netpolicy.Policy{Allow: []string{"good.test"}, Resolve: fakeDNS(map[string]string{"good.test": "10.1.2.3"})}
 	if err := p.Check("https://good.test/"); !errors.Is(err, netpolicy.ErrBlockedIP) {
 		t.Fatalf("allowlisted host resolving internal must be blocked (rebinding), got %v", err)
+	}
+}
+
+// TestDialTimeEnforcement proves the authoritative control: the HTTP client
+// dials only the IP the policy vetted at connect time, against a LOCAL test
+// server (never the public internet).
+func TestDialTimeEnforcement(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Write([]byte("ok"))
+	}))
+	defer srv.Close()
+	// srv.URL is http://127.0.0.1:PORT; address the allow-listed name on that port.
+	port := strings.TrimPrefix(srv.URL, "http://127.0.0.1:")
+
+	// Allowed: "ok.test" resolves to the loopback test server -> connects.
+	allow := netpolicy.Policy{
+		Allow: []string{"ok.test"}, AllowLoopback: true,
+		Resolve: fakeDNS(map[string]string{"ok.test": "127.0.0.1"}),
+	}
+	resp, err := allow.HTTPClient(2 * time.Second).Get("http://ok.test:" + port + "/")
+	if err != nil {
+		t.Fatalf("allow-listed loopback target should connect: %v", err)
+	}
+	resp.Body.Close()
+
+	// Rebinding: an allow-listed name resolving to an internal IP is refused at
+	// dial — the connection is never made.
+	rebind := netpolicy.Policy{
+		Allow:   []string{"ok.test"},
+		Resolve: fakeDNS(map[string]string{"ok.test": "10.0.0.9"}),
+	}
+	if _, err := rebind.HTTPClient(2 * time.Second).Get("http://ok.test:" + port + "/"); err == nil {
+		t.Fatal("dial to an internal IP must be refused (rebinding bypass)")
 	}
 }

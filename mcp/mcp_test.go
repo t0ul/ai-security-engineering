@@ -8,10 +8,30 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/t0ul/ai-security-engineering/argcheck"
 	"github.com/t0ul/ai-security-engineering/mcp"
 	"github.com/t0ul/ai-security-engineering/netpolicy"
 	"github.com/t0ul/gustoms"
 )
+
+func TestToolSchemaRejectsBadArgs(t *testing.T) {
+	srv := httptest.NewServer(mcp.NewServer(mcp.Tool{
+		Name:    "calc",
+		Schema:  argcheck.Schema{"n": argcheck.Int},
+		Handler: func(context.Context, map[string]any) (any, error) { return "ran", nil },
+	}))
+	t.Cleanup(srv.Close)
+	c := &mcp.HTTPClient{URL: srv.URL}
+	if _, err := c.CallTool(context.Background(), "calc", map[string]any{"n": 3}); err != nil {
+		t.Fatalf("valid args should pass: %v", err)
+	}
+	if _, err := c.CallTool(context.Background(), "calc", map[string]any{"n": "x; rm -rf /"}); err == nil {
+		t.Fatal("type-mismatch / shell-meta arg must be rejected by the server schema")
+	}
+	if _, err := c.CallTool(context.Background(), "calc", map[string]any{"evil": 1}); err == nil {
+		t.Fatal("unknown arg must be rejected by the server schema")
+	}
+}
 
 // gatewayOver wires an MCP web_fetch server behind gustoms and returns the
 // gateway plus the allowed target server's URL.
@@ -34,7 +54,7 @@ func gatewayOver(t *testing.T) (*gustoms.Gateway, string) {
 			}
 		},
 	}
-	mcpSrv := httptest.NewServer(mcp.NewServer(mcp.WebFetchTool(policy, nil, 0)))
+	mcpSrv := httptest.NewServer(mcp.NewServer(mcp.WebFetchTool(policy, 0)))
 	t.Cleanup(mcpSrv.Close)
 
 	gw := gustoms.New(gustoms.WithServer(gustoms.Server{

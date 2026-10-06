@@ -9,11 +9,14 @@
 package netpolicy
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
+	"net/http"
 	"net/url"
 	"strings"
+	"time"
 )
 
 var (
@@ -70,6 +73,43 @@ func (p Policy) Check(rawURL string) error {
 		}
 	}
 	return nil
+}
+
+// DialContext resolves the host once, validates every candidate IP, and connects
+// only to a vetted one. Because the same resolution both validates and dials,
+// there is no window for DNS rebinding between a check and the connection — this
+// is the authoritative egress enforcement (Check is a fast pre-filter).
+func (p Policy) DialContext(ctx context.Context, network, addr string) (net.Conn, error) {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return nil, err
+	}
+	if !p.hostAllowed(host) {
+		return nil, fmt.Errorf("%w: %q", ErrNotAllowlisted, host)
+	}
+	ips, err := p.resolve()(host)
+	if err != nil {
+		return nil, fmt.Errorf("netpolicy: resolve %q: %w", host, err)
+	}
+	var d net.Dialer
+	for _, ip := range ips {
+		if blocked(ip, p.AllowLoopback) {
+			continue
+		}
+		if conn, derr := d.DialContext(ctx, network, net.JoinHostPort(ip.String(), port)); derr == nil {
+			return conn, nil
+		}
+	}
+	return nil, fmt.Errorf("%w: %q", ErrBlockedIP, host)
+}
+
+// HTTPClient returns an http.Client that can only connect to allow-listed hosts
+// resolving to non-internal IPs — safe against SSRF and DNS rebinding.
+func (p Policy) HTTPClient(timeout time.Duration) *http.Client {
+	return &http.Client{
+		Timeout:   timeout,
+		Transport: &http.Transport{DialContext: p.DialContext},
+	}
 }
 
 func (p Policy) hostAllowed(host string) bool {

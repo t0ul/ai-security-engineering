@@ -16,7 +16,10 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/t0ul/ai-security-engineering/aidr"
 	"github.com/t0ul/ai-security-engineering/controlplane"
+	"github.com/t0ul/ai-security-engineering/hitl"
+	"github.com/t0ul/ai-security-engineering/ir"
 	"github.com/t0ul/gledger"
 )
 
@@ -58,7 +61,8 @@ func run() error {
 		return finish(audit, trace)
 	}
 
-	orch := &controlplane.Orchestrator{LLM: llm, Interp: interp, Audit: audit, Approve: interactiveApprove}
+	safety := controlplane.NewSafety(audit)
+	orch := &controlplane.Orchestrator{LLM: llm, Interp: interp, Audit: audit, Approve: interactiveApprove, Safety: safety}
 	final, err := orch.Run(ctx, trace, safe)
 	if err != nil {
 		audit.Emit(trace, "request", "error", gledger.F{"error": err.Error()})
@@ -68,16 +72,45 @@ func run() error {
 
 	fmt.Println("\n== final agent output (Q-LLM) ==")
 	fmt.Println(final.FinalMarkdown)
+
+	// AIDR: replay the trace through the detection rules; a dangerous signal
+	// auto-engages the layered kill switch for the next request.
+	runAIDR(auditPath, trace, safety)
 	return finish(audit, trace)
 }
 
-func interactiveApprove(_ controlplane.State) bool {
-	fmt.Print("Approve plan? (y/N): ")
+// runAIDR scans one request's trace and auto-contains on a detected signal.
+func runAIDR(auditPath, trace string, safety *controlplane.Safety) {
+	events, err := ir.Load(auditPath)
+	if err != nil {
+		return
+	}
+	engine := aidr.New(func(l controlplane.KillLevel, reason string) {
+		safety.Set("aidr", l)
+		fmt.Printf("[AIDR] %s -> kill level %s\n", reason, l)
+	})
+	if lvl := engine.Scan(ir.Timeline(events, trace)); lvl > controlplane.LevelNone {
+		fmt.Printf("[AIDR] auto-contained at %s (tool exec allowed=%v)\n", lvl, safety.AllowToolExec())
+	}
+}
+
+// interactiveApprove is an evidence-first, clickjack-resistant HITL gate: the
+// operator must review the plan and echo a shown confirmation code, so a blind
+// or redressed click cannot approve (hitl).
+func interactiveApprove(s controlplane.State) bool {
+	req := hitl.NewRequest("approve plan", s.BlogPlan)
+	fmt.Printf("\n--- EVIDENCE (review before approving) ---\n%s\n", s.BlogPlan)
+	fmt.Printf("To approve, type the confirmation code then 'y': %s\nconfirm> ", req.Nonce())
 	sc := bufio.NewScanner(os.Stdin)
 	if !sc.Scan() {
 		return false
 	}
-	return strings.EqualFold(strings.TrimSpace(sc.Text()), "y")
+	parts := strings.Fields(sc.Text())
+	if len(parts) < 2 {
+		return false
+	}
+	ok, err := req.Confirm(parts[0], strings.EqualFold(parts[1], "y"))
+	return ok && err == nil
 }
 
 func finish(audit *gledger.AuditLog, trace string) error {

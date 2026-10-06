@@ -9,12 +9,14 @@
 package pipeline
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/t0ul/ai-security-engineering/agent/guard"
 	"github.com/t0ul/ai-security-engineering/agent/tool"
+	"github.com/t0ul/ai-security-engineering/provenance"
 	"github.com/t0ul/gledger"
 )
 
@@ -44,6 +46,10 @@ type Pipeline struct {
 	// of truth; the index is rebuildable derived state. Indexing failures are
 	// audited, never fatal.
 	Index func(traceID, source, rawText string) error
+	// Signer, if set, writes a provenance content credential (<artifact>.sig)
+	// next to each emitted artifact, so a consumer can verify the agent produced
+	// it unaltered (M20 output authenticity).
+	Signer *provenance.Signer
 }
 
 // ProcessEmail runs the full pipeline for one file.
@@ -130,6 +136,13 @@ func (p *Pipeline) ProcessEmail(path string) (Summary, error) {
 			summary.Artifacts = append(summary.Artifacts, outPath)
 			p.Audit.Emit(trace, name, "artifact_written",
 				gledger.F{"file": filepath.Base(outPath), "bytes": len(content)})
+
+			if p.Signer != nil {
+				mark, _ := json.Marshal(p.Signer.Sign([]byte(content)))
+				if err := os.WriteFile(outPath+".sig", mark, 0o644); err == nil {
+					p.Audit.Emit(trace, name, "artifact_signed", gledger.F{"file": filepath.Base(outPath) + ".sig"})
+				}
+			}
 		}
 
 		summary.Events += len(res.Events)

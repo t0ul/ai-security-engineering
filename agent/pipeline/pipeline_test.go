@@ -1,6 +1,7 @@
 package pipeline_test
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,6 +10,7 @@ import (
 	"github.com/t0ul/ai-security-engineering/agent/extractor"
 	"github.com/t0ul/ai-security-engineering/agent/pipeline"
 	"github.com/t0ul/ai-security-engineering/agent/tool"
+	"github.com/t0ul/ai-security-engineering/provenance"
 	"github.com/t0ul/gledger"
 )
 
@@ -94,6 +96,36 @@ func TestIndexHookReceivesRawEmail(t *testing.T) {
 	}
 	if indexedSource != "3.txt" || !strings.Contains(indexedText, "Back to School Night") {
 		t.Fatalf("index hook got source=%q text=%q", indexedSource, indexedText)
+	}
+}
+
+func TestArtifactSignedAndVerifies(t *testing.T) {
+	reg := tool.NewRegistry()
+	reg.Register(extractor.New())
+	p, dir, _ := newPipe(t, reg)
+	t.Setenv("EXTRACT_MODE", "regex")
+	signer, pub, err := provenance.NewSigner("agent")
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.Signer = signer
+
+	src := writeEmail(t, dir, "3.txt", email)
+	sum, err := p.ProcessEmail(src)
+	if err != nil || len(sum.Artifacts) == 0 {
+		t.Fatalf("expected an artifact: %v err=%v", sum.Artifacts, err)
+	}
+	sigBytes, err := os.ReadFile(sum.Artifacts[0] + ".sig")
+	if err != nil {
+		t.Fatalf("no signature sidecar written: %v", err)
+	}
+	var mark provenance.Mark
+	if err := json.Unmarshal(sigBytes, &mark); err != nil {
+		t.Fatal(err)
+	}
+	content, _ := os.ReadFile(sum.Artifacts[0])
+	if err := provenance.NewVerifier().Trust("agent", pub).Verify(content, mark); err != nil {
+		t.Fatalf("emitted artifact signature must verify: %v", err)
 	}
 }
 

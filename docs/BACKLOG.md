@@ -32,7 +32,7 @@ Reconciles the skeleton draft (`scratch/skeleton-draft.md`) and the syllabus
 | M18 | IR: kill switch + IR replay + AIDR + playbooks + degraded + PIR→CI | 🟡 kill switch ✅, IR replay ✅, AIDR auto-trigger ✅ (`aidr`); IR playbooks + degraded mode + PIR→CI pending |
 | M19 | MLOps/data/privacy | ✅ `registry` promotion gates (+eval-gated via cpstore) · `memory.Erase` DSAR · `dataset` provenance verify at ingest; post-fine-tune/RLHF N/A (no training pipeline) |
 | M20 | memory lifecycle + output authenticity + MCP gateway | ✅ `memory` (TTL/scope/erasure/untrusted-recall) + `provenance` (ed25519 content credentials) + MCP gateway (gustoms) |
-| Capstone II | operator console GUI | 🟡 HTTP backbone + served page (cmd/gridge); Wails wrapper pending |
+| Capstone II | operator console (local web app) | ✅ `controlplane.ConsoleServer` + `cmd/gridge`: served page + JSON API over the governed plane, reused in tests. Wails dropped — local web app reused for tests (decision) |
 
 ## Specific gaps the operator flagged
 - **Layered kill switch** — spec (skeleton §28): revoke tokens → gateway fail-closed → scoped levels (pause-sessions / block-tools / full-halt) → AIDR auto-trigger → drain+snapshot. Today: binary `goverlord.KillSwitch`.
@@ -95,3 +95,11 @@ output, one capability, own labels). Demonstrates least-privilege per tool.
 - ⬜ Dataset provenance/signing (M19). · N/A post-fine-tune regression + RLHF integrity — no training/fine-tune/RLHF pipeline in this project (pre-trained local GGUF only).
 - ✅ Multi-agent collusion — `agent/quorum` (M-of-N distinct attestations; a2a spoof ✅ too) · slopsquatting / side-channels / deceptive-model-&-backdoor
 - ⬜ Signed builds / SLSA / AISBOM (M17 — skipped by decision) · M0 threat model (deferred)
+
+## Security review round 1 — findings & dispositions
+- **F1 netpolicy DNS-rebinding TOCTOU (HIGH) — FIXED.** `Policy.DialContext`/`HTTPClient` resolve once and dial only the vetted IP; `WebFetchTool` uses it. Real dial-time test against a LOCAL httptest server (never public net).
+- **F2 unwired shelf-ware (HIGH) — PARTLY FIXED.** Now wired into live paths: `hitl`→`cmd/controlplane` approval (evidence + nonce echo), `argcheck`→`mcp.Server` per-tool schema, `provenance`→pipeline signs each artifact (`.sig`, verified in test), `aidr`→`cmd/controlplane` scans the request trace and auto-engages the kill switch. Still provided primitives with ADD+unit tests but no *current* live consumer (honest): `captoken` (no tool needs delegated creds yet), `quorum` (single-agent flow), `dataset` (emails are unsigned→untrusted by design), `memory` (cross-run memory not enabled). Not force-wired; ready when their surface exists.
+- **F3 straw-man ADD targets (MED) — ACKNOWLEDGED.** ADD cases are *control-regression gates* (prove the control rejects crafted input), not integrated end-to-end ASR. Integration is separately tested: netpolicy dial (netpolicy_test), argcheck via server (mcp_test), provenance via pipeline (pipeline_test), a2a in the live loop (a2a_loop_test), governance persistence (governance_test).
+- **F4 argcheck denylist (MED) — MITIGATED.** Deployed as structured per-tool schema in the MCP server (rejects unknown args / type mismatch / metachars) + `ConfinePath`; URLs stay with netpolicy. Note retained: never build shell strings — pass arg arrays.
+- **F6 captoken scope delimiter (LOW) — FIXED.** Scope is hex-encoded in the token; no separator collision.
+- **F5 gustoms TOFU (LOW) — ACCEPTED, documented.** Prefer operator-supplied pins in real deployment. · a2a `seen` nonce map growth — tracked (needs TTL for long-running verifiers).

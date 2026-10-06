@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/t0ul/ai-security-engineering/argcheck"
 	"github.com/t0ul/ai-security-engineering/netpolicy"
 	"github.com/t0ul/gustoms"
 )
@@ -25,7 +26,10 @@ import (
 type Tool struct {
 	Name        string
 	Description string
-	Handler     func(ctx context.Context, args map[string]any) (any, error)
+	// Schema, when set, validates arguments (argcheck) before the handler runs —
+	// unknown args, type mismatches, and shell metacharacters are rejected.
+	Schema  argcheck.Schema
+	Handler func(ctx context.Context, args map[string]any) (any, error)
 }
 
 // Server serves a set of tools over JSON-RPC/HTTP.
@@ -81,6 +85,12 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if tool == nil {
 			writeRPC(w, rpcResp{JSONRPC: "2.0", ID: req.ID, Error: &rpcErr{-32601, "no such tool: " + p.Name}})
 			return
+		}
+		if tool.Schema != nil {
+			if _, err := argcheck.Validate(tool.Schema, p.Arguments); err != nil {
+				writeRPC(w, rpcResp{JSONRPC: "2.0", ID: req.ID, Error: &rpcErr{-32602, "invalid arguments: " + err.Error()}})
+				return
+			}
 		}
 		out, err := tool.Handler(r.Context(), p.Arguments)
 		if err != nil {
@@ -183,10 +193,10 @@ func mustRaw(v any) json.RawMessage {
 // WebFetchTool is the demo browse/search primitive: it fetches a URL only after
 // netpolicy clears it (allowlist + no internal/IMDS address), so a compromised
 // caller cannot turn it into an SSRF or credential-theft channel.
-func WebFetchTool(policy netpolicy.Policy, httpc *http.Client, maxBytes int64) Tool {
-	if httpc == nil {
-		httpc = &http.Client{Timeout: 15 * time.Second}
-	}
+func WebFetchTool(policy netpolicy.Policy, maxBytes int64) Tool {
+	// The client dials only IPs the policy vetted at connect time, so even a
+	// rebinding DNS cannot steer the fetch to an internal address.
+	httpc := policy.HTTPClient(15 * time.Second)
 	if maxBytes <= 0 {
 		maxBytes = 64 * 1024
 	}

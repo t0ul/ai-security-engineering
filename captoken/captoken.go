@@ -46,7 +46,8 @@ func (m *Minter) sign(payload string) string {
 
 // Mint returns a token authorizing scope until now+ttl.
 func (m *Minter) Mint(scope string, ttl time.Duration) string {
-	payload := scope + "|" + strconv.FormatInt(m.now().Add(ttl).Unix(), 10) + "|" + nonce()
+	// Hex-encode the scope so it can never collide with the field separators.
+	payload := hex.EncodeToString([]byte(scope)) + "|" + strconv.FormatInt(m.now().Add(ttl).Unix(), 10) + "|" + nonce()
 	return payload + "." + m.sign(payload)
 }
 
@@ -70,7 +71,7 @@ func (m *Minter) Verify(token, requiredScope string) error {
 	if m.now().Unix() > exp {
 		return ErrExpired
 	}
-	if parts[0] != requiredScope {
+	if parts[0] != hex.EncodeToString([]byte(requiredScope)) {
 		return ErrScope
 	}
 	return nil

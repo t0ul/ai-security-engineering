@@ -49,7 +49,7 @@ func run() error {
 			return net.LookupIP(host)
 		},
 	}
-	mcpSrv := httptest.NewServer(mcp.NewServer(mcp.WebFetchTool(policy, nil, 0)))
+	mcpSrv := httptest.NewServer(mcp.NewServer(mcp.WebFetchTool(policy, 0)))
 	defer mcpSrv.Close()
 
 	gw := gustoms.New(
