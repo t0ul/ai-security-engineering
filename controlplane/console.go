@@ -26,6 +26,7 @@ func (s *ConsoleServer) Handler() http.Handler {
 	mux.HandleFunc("/api/reject", s.reject)
 	mux.HandleFunc("/api/rollback", s.rollback)
 	mux.HandleFunc("/api/killswitch", s.killswitch)
+	mux.HandleFunc("/api/history", s.history)
 	mux.HandleFunc("/", s.index)
 	return mux
 }
@@ -119,6 +120,21 @@ func (s *ConsoleServer) killswitch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"killed": s.Gov.Killed()})
+}
+
+// history returns the durable decision log from the inventory (empty when no
+// inventory is attached).
+func (s *ConsoleServer) history(w http.ResponseWriter, r *http.Request) {
+	if s.Gov.Inventory == nil {
+		writeJSON(w, http.StatusOK, map[string]any{"approvals": []any{}})
+		return
+	}
+	ap, err := s.Gov.Inventory.ListApprovals(50)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"approvals": ap})
 }
 
 func (s *ConsoleServer) index(w http.ResponseWriter, r *http.Request) {

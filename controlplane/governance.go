@@ -1,6 +1,9 @@
 package controlplane
 
 import (
+	"fmt"
+
+	"github.com/t0ul/ai-security-engineering/cpstore"
 	"github.com/t0ul/gledger"
 	"github.com/t0ul/goverlord"
 )
@@ -17,6 +20,9 @@ import (
 // the orchestrator to halt the agent loop.
 type Governance struct {
 	cp *goverlord.ControlPlane
+	// Inventory, if set, durably records approvals and admin actions (cpstore),
+	// so decisions survive a restart and the console shows real history.
+	Inventory *cpstore.Store
 }
 
 // Standard role names seeded by NewGovernance.
@@ -54,9 +60,21 @@ func (g *Governance) ProposeConfig(opID, note string, set map[string]any) (propo
 }
 
 // Approve commits a pending proposal (four-eyes: approverID must differ from the
-// proposer and hold the permission).
+// proposer and hold the permission). On success the decision is recorded to the
+// inventory, if one is attached.
 func (g *Governance) Approve(approverID, proposalID string) (bool, error) {
-	return g.cp.Approve(approverID, proposalID)
+	// Capture proposal details before goverlord discards the committed proposal.
+	var pr goverlord.Proposal
+	for _, p := range g.cp.Pending() {
+		if p.ID == proposalID {
+			pr = p
+		}
+	}
+	ok, err := g.cp.Approve(approverID, proposalID)
+	if err == nil && ok && g.Inventory != nil {
+		_ = g.Inventory.RecordApproval(proposalID, pr.By, approverID, string(pr.Perm), pr.Change.Note, g.cp.Version())
+	}
+	return ok, err
 }
 
 // Reject discards a pending proposal.
@@ -68,9 +86,14 @@ func (g *Governance) Reject(approverID, proposalID string) error {
 // version (history is never rewritten).
 func (g *Governance) Rollback(opID string, to int) error { return g.cp.Rollback(opID, to) }
 
-// SetKillSwitch engages or disengages the fail-closed switch.
+// SetKillSwitch engages or disengages the fail-closed switch, recording the
+// admin action to the inventory if one is attached.
 func (g *Governance) SetKillSwitch(opID string, engage bool) error {
-	return g.cp.KillSwitch(opID, engage)
+	err := g.cp.KillSwitch(opID, engage)
+	if err == nil && g.Inventory != nil {
+		_ = g.Inventory.RecordAdmin(opID, "killswitch", fmt.Sprintf("engage=%v", engage))
+	}
+	return err
 }
 
 // Killed reports whether the kill switch is engaged. Pass this as the

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/t0ul/ai-security-engineering/cpstore"
 	"github.com/t0ul/goverlord"
 )
 
@@ -44,6 +45,31 @@ func TestGovernanceFourEyesApproval(t *testing.T) {
 	}
 	if ok, _ := verify(); !ok {
 		t.Error("audit chain should verify")
+	}
+}
+
+func TestApprovalRecordedToInventory(t *testing.T) {
+	inv, err := cpstore.Open(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer inv.Close()
+	g, _ := newGov(t)
+	g.Inventory = inv
+
+	id, _, err := g.ProposeConfig("alice", "upgrade", map[string]any{"planner_model": "v2"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := g.Approve("bob", id); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := inv.ListApprovals(10)
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("expected 1 persisted approval, got %v err=%v", rows, err)
+	}
+	if rows[0].Proposer != "alice" || rows[0].Approver != "bob" {
+		t.Fatalf("approval not recorded correctly: %+v", rows[0])
 	}
 }
 
