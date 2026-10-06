@@ -81,3 +81,19 @@ output, one capability, own labels). Demonstrates least-privilege per tool.
   memory/C2PA, M0 threat model, Capstone II Wails wrapper, and the agentic items
   above. A complete course spans several more sessions; everything is tracked
   here so nothing is lost.
+
+## Skeleton feature coverage (complete audit — nothing silently dropped)
+✅ done · 🟡 partial · ⬜ not built
+- ✅ Control-plane inventory (cpstore) · Operator RBAC (goverlord) · SoD/four-eyes · tamper-evident admin audit (cpstore admin_audit + gledger)
+- ✅ Layered kill switch · versioned rollback · **IR replay** (ir/cmd/replay) · model sponge/denial-of-wallet (gouncer limits + MaxBytes) · runaway-loop breaker (gonductor MaxSteps)
+- ✅ SSRF→IMDS · default-deny egress · DNS-pin/block private+link-local (netpolicy) · post-injection-exfil containment
+- ✅ Model registry + promotion gates (+MLOps eval→gate loop) · output authenticity/provenance (ed25519) · memory lifecycle (TTL/scope/erasure) · MCP-as-supply-chain + pinning (gustoms) · MCP gateway · AI gateway (gouncer) · authorization-first retrieval (rag ACL-as-WHERE) · KB poisoning · Dual-LLM/CaMeL · guardrails-in-depth (gumpers) · markdown/URL exfil · trace_id logging · gorauder red-team + scorecard CI gate
+- 🟡 PIR→regression (scorecard gate ✅; PIR *process* ⬜) · privacy/DSAR (memory.Erase ✅; retention/consent/legal-hold ⬜) · agent identity (a2a identity ✅; delegated/attenuated scoped tokens ⬜) · AIDR (kill switch ✅; auto-trigger on trace signals ⬜)
+- ⬜ **Tool-argument injection** (arg schemas / arg-arrays / path confinement) — *flagged, not built*
+- ⬜ **No ambient credentials** (short-lived per-call scoped tokens) — *flagged*
+- ⬜ **Canary / honey-token exfil test** — *flagged*
+- ⬜ **Clickjack/UI-redress-resistant approval UX** (evidence-first HITL) — *flagged*
+- ⬜ Provider-outage degraded mode (fail-closed fallback) · IR playbooks per incident class
+- ⬜ Dataset provenance/signing · post-fine-tune safety regression · RLHF annotation integrity (M19 remainder)
+- ⬜ Multi-agent poisoning/**collusion** (a2a spoof ✅; collusion ⬜) · embedding inversion (needs vector RAG) · slopsquatting / side-channels / deceptive-model-&-backdoor
+- ⬜ Signed builds / SLSA / AISBOM (M17 — skipped by decision) · M0 threat model (deferred)

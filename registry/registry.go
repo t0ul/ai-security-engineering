@@ -97,6 +97,19 @@ func (r *Registry) Promote(name, version string) error {
 	return nil
 }
 
+// SetEval records a model's eval score (e.g. from the persisted inventory)
+// before a gated promotion reads it.
+func (r *Registry) SetEval(name, version string, f1 float64) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	m, ok := r.models[key(name, version)]
+	if !ok {
+		return ErrUnknown
+	}
+	m.EvalF1 = f1
+	return nil
+}
+
 // Stage reports a model's current stage.
 func (r *Registry) Stage(name, version string) (Stage, bool) {
 	r.mu.Lock()

@@ -57,6 +57,11 @@ const consoleHTML = `<!doctype html>
   <table id="history"><thead><tr><th>v</th><th>by</th><th>note</th></tr></thead><tbody></tbody></table>
 </section>
 
+<section>
+  <strong>Persisted decisions</strong> <span class="mut">(survive restart)</span>
+  <table id="decisions"><thead><tr><th>proposal</th><th>proposer</th><th>approver</th><th>note</th></tr></thead><tbody></tbody></table>
+</section>
+
 <section id="msg" class="mut"></section>
 
 <script>
@@ -80,6 +85,13 @@ async function refresh(){
   document.getElementById('pending').innerHTML = pend ? '<em>pending:</em><br>'+pend : '<span class="mut">no pending proposals</span>';
   const tb = document.querySelector('#history tbody'); tb.innerHTML='';
   (s.history||[]).forEach(v => { const tr=tb.insertRow(); tr.insertCell().textContent=v.N; tr.insertCell().textContent=v.By; tr.insertCell().textContent=v.Note; });
+  try {
+    const h = await api('/api/history');
+    const dt = document.querySelector('#decisions tbody'); dt.innerHTML='';
+    (h.approvals||[]).forEach(a => { const tr=dt.insertRow();
+      tr.insertCell().textContent=(a.ID||'').slice(0,8); tr.insertCell().textContent=a.Proposer;
+      tr.insertCell().textContent=a.Approver; tr.insertCell().textContent=a.Note; });
+  } catch(e) {}
 }
 async function guard(fn){ try{ await fn(); msg('ok'); }catch(e){ msg(e.message, true); } await refresh(); }
 const propose = () => guard(async()=>{ const set={}; set[document.getElementById('ckey').value]=document.getElementById('cval').value;

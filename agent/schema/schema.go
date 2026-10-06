@@ -20,3 +20,14 @@ type Event struct {
 func New(title, start string) Event {
 	return Event{Title: title, Start: start, Confidence: 1.0, Warnings: []string{}}
 }
+
+// ReviewThreshold is the confidence below which an event must be human-verified
+// before it is trusted (M9: don't put a low-confidence or flagged event on the
+// calendar unattended).
+const ReviewThreshold = 0.75
+
+// NeedsReview reports whether a human should verify this event before it is
+// accepted — low confidence or any warning (e.g. a weekday/date mismatch).
+func (e Event) NeedsReview() bool {
+	return e.Confidence < ReviewThreshold || len(e.Warnings) > 0
+}
