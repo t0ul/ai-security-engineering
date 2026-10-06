@@ -12,11 +12,11 @@ Reconciles the skeleton draft (`scratch/skeleton-draft.md`) and the syllabus
 | M2 | gateway (gouncer) + hash-chained audit (gledger) | ✅ |
 | M3 | PII/secret scrub (goflage) | ✅ |
 | M4 | injection + system-prompt leak (gumpers/guard) | ✅ |
-| M5 | output handling / exfil | 🟡 markdown-image strip + SSRF/web-fetch lab (mcp web_fetch + netpolicy) ✅; hardened sanitizer (`<img>`, reference/autolinks, `js:`/`data:`) still missing |
+| M5 | output handling / exfil | ✅ SSRF/web-fetch lab + hardened sanitizer (inline+reference images, raw `<img>`, autolinks, `js:`/`data:`/`vbscript:`/`file:`); .ics field sanitizer + RFC5545 escape |
 | M6 | excessive agency / HITL / circuit breaker | ✅ |
 | M7 | MCP & A2A security (gustoms) | ✅ gustoms gateway + mcp transport + agent/a2a (wiring a2a into live loop pending) |
 | M8 | RAG / KB security | ✅ `rag` on SQLite: FTS5 lexical + semantic (cosine over embeddings, `HTTPEmbedder`→gouncer), tenant-ACL-as-WHERE on both paths, provenance, sanitized recall; embedding-inversion defended (vectors server-side + ACL); poisoning/tenant-leak ADD |
-| M9 | data integrity / misinformation | 🟡 weekday-integrity dateparse; cross-source conflict + confidence scoring missing |
+| M9 | data integrity / misinformation | ✅ weekday-integrity dateparse + cross-email conflict detector (`agent/tools`) + confidence scoring & `Event.NeedsReview()` HITL flag |
 | M10 | supply chain / model artifacts | ✅ `assets.CheckModelFormat` (reject pickle) + gguf magic/sha + safetensors header verify; dep-SCA tracked |
 | M11 | eval harness + red-team automation (gorauder ASR) | ✅ |
 | M12 | full-chain capstone | ✅ `cmd/scorecard` (15 techniques ASR, CI gate) + `ir`/`cmd/replay` (reconstruct an incident by trace_id from the chain-verified log) |
@@ -110,3 +110,11 @@ output, one capability, own labels). Demonstrates least-privilege per tool.
 - **a2a replay memory — FIXED:** two-generation rotation bounds the nonce set (~2×100k).
 - **Reviewed clean:** a2a/captoken use `hmac.Equal` (constant-time); captoken scope hex-encoded + signed; provenance ed25519; gustoms manifest sha256 (public, timing-irrelevant); all SQL (cpstore/rag) parameterized; rag FTS5 MATCH built from `[a-z0-9]`-only quoted terms (no operator injection).
 - **Accepted (defensive, rationale):** hitl/captoken use `!=` on a per-request nonce/scope — not a brute-forceable network secret (local, 96-bit), timing leak negligible. argcheck `Int` truncates JSON floats — validation clarity, not a security issue. provenance marks have no expiry — they attest authorship, not freshness (by design).
+
+## Round 3 — product/UX build
+- ✅ Reminders via `.ics` VALARM (30m before timed / 9am all-day) — native, no infra.
+- ✅ M5 sanitizer hardened (reference images / raw `<img>` / autolinks / active schemes) + test.
+- ✅ Capstone II = local **web app** (`webapp` + `cmd/webapp`): run the security scorecard and browse/replay incidents in-browser; reuses redteam+ir (one binary). Wails dropped.
+- ✅ `docs/UX.md` — product/UX design plan (screens, principles, reminders answer, roadmap).
+- AISBOM verdict: full M17 SLSA/attestation NOT needed (single-user laptop binary). A lean build manifest (models from registry + Go deps from build info + prompt hashes from cpstore) is cheap+useful — optional `cmd/sbom`, not built yet.
+- Still open (UX): Drop + Events/Calendar render tab (Accept→.ics with reminder), Governance tab merge into the web app, month view.

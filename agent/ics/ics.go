@@ -122,6 +122,18 @@ func Write(events []schema.Event, calname string) (string, int, error) {
 			removedTotal += r3
 			lines = append(lines, "DESCRIPTION:"+escape("⚠ "+desc))
 		}
+		// Reminder (inert DISPLAY alarm): 30 min before a timed event, or 9am on
+		// the day for an all-day event. iCalendar-native — no extra infrastructure.
+		trigger := "-PT30M"
+		if ev.AllDay {
+			trigger = "PT9H" // 9 hours after 00:00 = 9am
+		}
+		lines = append(lines,
+			"BEGIN:VALARM",
+			"ACTION:DISPLAY",
+			"DESCRIPTION:"+escape(title),
+			"TRIGGER:"+trigger,
+			"END:VALARM")
 		lines = append(lines, "END:VEVENT")
 	}
 	lines = append(lines, "END:VCALENDAR")

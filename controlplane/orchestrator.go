@@ -22,9 +22,13 @@ const haltSentinel = "EXECUTION_HALTED"
 const haltMessage = "Execution halted by security controls."
 
 var (
-	commandRe     = regexp.MustCompile(`COMMAND:\s*(.+)`)
-	commandLineRe = regexp.MustCompile(`(?im)^\s*COMMAND:.*$`)
-	imageRe       = regexp.MustCompile(`!\[.*?\]\(.*?\)`)
+	commandRe      = regexp.MustCompile(`COMMAND:\s*(.+)`)
+	commandLineRe  = regexp.MustCompile(`(?im)^\s*COMMAND:.*$`)
+	imageRe        = regexp.MustCompile(`!\[.*?\]\(.*?\)`)                                  // inline image
+	refImageRe     = regexp.MustCompile(`!\[[^\]]*\]\[[^\]]*\]`)                            // reference-style image
+	htmlImgRe      = regexp.MustCompile(`(?i)<img\b[^>]*>`)                                 // raw <img>
+	autolinkRe     = regexp.MustCompile(`<(?i:https?|ftp)://[^>\s]+>`)                      // autolink
+	activeSchemeRe = regexp.MustCompile(`(?i)\]\(\s*(?:javascript|data|vbscript|file):[^)]*\)`) // active-scheme link
 )
 
 // State is the CaMeL loop state carried node to node.
@@ -223,7 +227,15 @@ func (o *Orchestrator) coder(ctx *gonductor.Context, s State) (State, error) {
 // NOTE: a single-pass regex, NOT a real HTML/DOM sanitizer. Reference-style
 // images, raw <img>, and autolinks are NOT covered — treat as one layer only.
 func SanitizeMarkdown(md string) (string, int) {
-	stripped := len(imageRe.FindAllString(md, -1))
-	safe := imageRe.ReplaceAllString(md, "[IMAGE BLOCKED BY SANITIZER]")
-	return safe, stripped
+	n := 0
+	strip := func(re *regexp.Regexp, repl string) {
+		n += len(re.FindAllString(md, -1))
+		md = re.ReplaceAllString(md, repl)
+	}
+	strip(imageRe, "[IMAGE BLOCKED BY SANITIZER]")
+	strip(refImageRe, "[IMAGE BLOCKED BY SANITIZER]")
+	strip(htmlImgRe, "[IMG BLOCKED]")
+	strip(autolinkRe, "[LINK BLOCKED]")
+	strip(activeSchemeRe, "](blocked)")
+	return md, n
 }
