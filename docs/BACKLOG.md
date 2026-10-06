@@ -30,7 +30,7 @@ Reconciles the skeleton draft (`scratch/skeleton-draft.md`) and the syllabus
 | M16 | network/credential containment (egress allowlist, DNS pinning, block link-local/RFC1918, SSRF→IMDS) | ✅ `netpolicy` (arg-schema hardening + no-ambient-creds still open) |
 | M17 | AppSec/supply-chain of the harness (SAST/DAST/SCA, SLSA, AISBOM, signed images) | ⬜ **SKIPPED (operator's call)** |
 | M18 | IR: kill switch + IR replay + AIDR + playbooks + degraded + PIR→CI | 🟡 kill switch ✅, IR replay ✅, AIDR auto-trigger ✅ (`aidr`); IR playbooks + degraded mode + PIR→CI pending |
-| M19 | MLOps/data/privacy | 🟡 `registry` promotion gates + DSAR erasure (`memory.Erase`); dataset provenance / post-fine-tune / RLHF tracked |
+| M19 | MLOps/data/privacy | ✅ `registry` promotion gates (+eval-gated via cpstore) · `memory.Erase` DSAR · `dataset` provenance verify at ingest; post-fine-tune/RLHF N/A (no training pipeline) |
 | M20 | memory lifecycle + output authenticity + MCP gateway | ✅ `memory` (TTL/scope/erasure/untrusted-recall) + `provenance` (ed25519 content credentials) + MCP gateway (gustoms) |
 | Capstone II | operator console GUI | 🟡 HTTP backbone + served page (cmd/gridge); Wails wrapper pending |
 
