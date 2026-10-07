@@ -12,7 +12,6 @@
 .DS_Store
 .cache
 launch_vm
-scratch/
 __pycache__/
 set-up/vm-assets/alpine-root/*
 set-up/vm-assets/alpine.iso
@@ -53,6 +52,8 @@ set-up/vm-assets/vmlinuz*
 set-up/vm-assets/initramfs*
 set-up/vm-assets/*.iso
 set-up/vm-assets/*.gguf
+set-up/vm-assets/detonationd
+set-up/vm-assets/vmfetch
 
 # telemetry / audit logs
 logs/
