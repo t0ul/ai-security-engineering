@@ -48,6 +48,7 @@ const dashboardHTML = `<!doctype html>
     <button data-tab="ask">Ask school</button>
     <button data-tab="security">Security</button>
     <button data-tab="prompts">Prompts</button>
+    <button data-tab="sampling">Sampling</button>
     <button data-tab="policies">Policies</button>
     <button data-tab="eval">Eval</button>
     <button data-tab="incidents">Incidents</button>
@@ -163,6 +164,13 @@ const dashboardHTML = `<!doctype html>
     </div>
   </section>
 
+  <section id="sampling" class="hide">
+    <div class="card">
+      <strong>Sampling</strong> <span class="mut">— governed decoding params (M19): temperature / max tokens / seed. A seed makes generations reproducible for eval &amp; forensics. Versioned, hashed, rollback.</span>
+      <div id="samplingList"><span class="mut">loading…</span></div>
+    </div>
+  </section>
+
   <section id="policies" class="hide">
     <div class="card">
       <strong>Policies</strong> <span class="mut">— governed security allowlists (M14/M16): egress hosts, exec argv[0]s. Versioned, hashed, rollback. Deny-by-default (private/IMDS, argcheck) still enforced regardless.</span>
@@ -193,7 +201,7 @@ const dashboardHTML = `<!doctype html>
 const __CAP__="__CAP_TOKEN__";
 (function(){const f=window.fetch.bind(window);window.fetch=(u,o)=>{o=o||{};const s=typeof u==='string'?u:(u&&u.url)||'';if(__CAP__&&(s.indexOf('/api/')===0||s.indexOf('/ics/')===0)){o.headers=Object.assign({},o.headers||{},{'Authorization':'Bearer '+__CAP__});}return f(u,o);};})();
 const $=s=>document.querySelector(s);
-const TABS=['calendar','week','tasks','review','activity','ask','security','prompts','policies','eval','incidents'];
+const TABS=['calendar','week','tasks','review','activity','ask','security','prompts','sampling','policies','eval','incidents'];
 const esc=s=>{const d=document.createElement('div');d.textContent=s||'';return d.innerHTML;};
 const when=e=>e.all_day?((e.due||e.start)+' · all day'):((e.start||e.due)+(e.end?(' – '+e.end.slice(11)):''));
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
@@ -208,6 +216,7 @@ document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
   if(t==='incidents') loadIncidents();
   if(t==='security'){loadKill();loadMCP();}
   if(t==='prompts') loadPrompts();
+  if(t==='sampling') loadSampling();
   if(t==='policies') loadPolicies();
   if(t==='eval') loadEval();
 });
@@ -263,6 +272,23 @@ async function activatePrompt(name){
   await postJSON('/api/prompts/activate',{name:name,text:ta.value});loadPrompts();
 }
 async function resetPrompt(name){await postJSON('/api/prompts/reset',{name:name});loadPrompts();}
+async function loadSampling(){
+  const c=$('#samplingList');if(!c)return;const d=await getJSON('/api/sampling');const ss=d.sampling||[];
+  if(!ss.length){c.innerHTML='<p class="mut">no models registered</p>';return;}
+  c.innerHTML=ss.map(s=>{const cf=s.config||{};const governed=s.version>0;
+    return '<div class="ev"><div><b>'+esc(s.name)+'</b> <span class="pill '+(governed?'pass':'')+'">v'+s.version+'</span> <span class="mut">'+esc(s.hash)+'</span>'+
+      '<div style="margin-top:6px">temp <input id="st_'+esc(s.name)+'" type="number" step="0.1" value="'+(cf.temperature||0)+'" style="width:70px"> '+
+      'max tokens <input id="sm_'+esc(s.name)+'" type="number" value="'+(cf.max_tokens||0)+'" style="width:90px"> '+
+      'seed <input id="ss_'+esc(s.name)+'" type="number" value="'+(cf.seed||0)+'" style="width:90px"></div>'+
+      '<div style="margin-top:6px"><button class="go" onclick="activateSampling(\''+esc(s.name)+'\')">Activate</button>'+
+      (governed?(' <button class="ghost" onclick="resetSampling(\''+esc(s.name)+'\')">Reset to default</button>'):'')+'</div></div></div>';
+  }).join('');
+}
+async function activateSampling(name){
+  const cfg={temperature:parseFloat($('#st_'+name).value)||0,max_tokens:parseInt($('#sm_'+name).value)||0,seed:parseInt($('#ss_'+name).value)||0};
+  await postJSON('/api/sampling/activate',{name:name,config:cfg});loadSampling();
+}
+async function resetSampling(name){await postJSON('/api/sampling/reset',{name:name});loadSampling();}
 async function loadPolicies(){
   const c=$('#policyList');if(!c)return;const d=await getJSON('/api/policies');const ps=d.policies||[];
   if(!ps.length){c.innerHTML='<p class="mut">no policies registered</p>';return;}

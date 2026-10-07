@@ -248,17 +248,35 @@ func main() {
 		"egress": allowHosts,
 		"exec":   controlplane.DefaultAllowedCommands,
 	}
+	// Governed sampling (C5): decoding params as versioned artifacts; the extractor
+	// LLM path reads them. seed>0 → reproducible generations.
+	samplingDefaults := map[string]controlplane.SamplingConfig{
+		"extractor": {Temperature: 0.1, MaxTokens: 900},
+	}
 	var prompts *controlplane.Prompts
 	var policies *controlplane.Policies
+	var sampling *controlplane.Sampling
 	var inv *cpstore.Store
 	if db, ierr := cpstore.Open(filepath.Join(*drop, "inventory.db")); ierr == nil {
 		inv = db
 		defer inv.Close()
 		prompts = controlplane.GovernedPrompts(promptDefaults, inv, audit)
 		policies = controlplane.GovernedPolicies(policyDefaults, inv, audit)
+		sampling = controlplane.GovernedSampling(samplingDefaults, inv, audit)
 	} else {
 		prompts = controlplane.NewPrompts(promptDefaults)
 		policies = controlplane.NewPolicies(policyDefaults)
+		sampling = controlplane.NewSampling(samplingDefaults)
+	}
+	// Activating the "extractor" sampling drives the live LLM decoding params.
+	baseSampOnActivate := sampling.OnActivate
+	sampling.OnActivate = func(sv controlplane.SamplingVersion) {
+		if baseSampOnActivate != nil {
+			baseSampOnActivate(sv)
+		}
+		if sv.Name == "extractor" {
+			extractor.SetSampling(sv.Config.Temperature, sv.Config.MaxTokens, sv.Config.Seed)
+		}
 	}
 	// Activating the "extractor" prompt actually drives the LLM extractor (C5 down
 	// payment): chain the governed OnActivate to set the live extraction prompt.
@@ -289,7 +307,15 @@ func main() {
 				policies.Rehydrate(n, items)
 			}
 		}
+		if cfgJSON, ok, _ := inv.LatestSampling("extractor"); ok {
+			var cfg controlplane.SamplingConfig
+			if json.Unmarshal([]byte(cfgJSON), &cfg) == nil {
+				sampling.Rehydrate("extractor", cfg)
+			}
+		}
 		extractor.SetExtractionPrompt(prompts.Text("extractor"))
+		sc := sampling.Config("extractor")
+		extractor.SetSampling(sc.Temperature, sc.MaxTokens, sc.Seed)
 		profileLoad = func() webapp.Profile {
 			var p webapp.Profile
 			if v, ok, _ := inv.GetConfig("profile"); ok {
@@ -387,7 +413,7 @@ func main() {
 			AuditPath: auditPath, OutboxDir: cfg.Outbox, InboxPath: cfg.Inbox,
 			Egress: egress, Fetch: fetch, Verifier: verifier, Safety: safety, Search: search, Index: enrichIndex,
 			Authz: authz, OperatorToken: opToken, Audit: audit,
-			MCP: mcpList, MCPApprove: mcpApprove, Prompts: prompts, Policies: policies,
+			MCP: mcpList, MCPApprove: mcpApprove, Prompts: prompts, Policies: policies, Sampling: sampling,
 			EvalHistory: evalHistory, EvalRun: evalRun, PromptTest: promptTest,
 			ProfileLoad: profileLoad, ProfileSave: profileSave,
 		}).Handler(),

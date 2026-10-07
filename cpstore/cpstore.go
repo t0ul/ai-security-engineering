@@ -28,7 +28,8 @@ CREATE TABLE IF NOT EXISTS mcp_pins(server TEXT, hash TEXT, approved_by TEXT, at
 CREATE TABLE IF NOT EXISTS eval_scores(label TEXT, f1 REAL, at DATETIME DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS admin_audit(actor TEXT, action TEXT, detail TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS policies(name TEXT, version TEXT, hash TEXT, items TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);
-CREATE TABLE IF NOT EXISTS config(key TEXT PRIMARY KEY, value TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);`
+CREATE TABLE IF NOT EXISTS config(key TEXT PRIMARY KEY, value TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS sampling(name TEXT, version TEXT, hash TEXT, config TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);`
 
 // Open creates/opens the inventory at path (":memory:" for ephemeral).
 func Open(path string) (*Store, error) {
@@ -72,6 +73,26 @@ func (s *Store) GetConfig(key string) (string, bool, error) {
 		return "", false, nil
 	default:
 		return "", false, err
+	}
+}
+
+// RecordSampling stores a versioned, hashed sampling config (JSON) for a model.
+func (s *Store) RecordSampling(name, version, hash, config string) error {
+	_, err := s.db.Exec(`INSERT INTO sampling(name,version,hash,config) VALUES(?,?,?,?)`, name, version, hash, config)
+	return err
+}
+
+// LatestSampling returns the most recent persisted sampling config JSON for name,
+// so the resolver can rehydrate the active sampling on boot.
+func (s *Store) LatestSampling(name string) (config string, ok bool, err error) {
+	row := s.db.QueryRow(`SELECT config FROM sampling WHERE name=? ORDER BY at DESC, rowid DESC LIMIT 1`, name)
+	switch e := row.Scan(&config); e {
+	case nil:
+		return config, true, nil
+	case sql.ErrNoRows:
+		return "", false, nil
+	default:
+		return "", false, e
 	}
 }
 

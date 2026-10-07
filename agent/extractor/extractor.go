@@ -73,6 +73,37 @@ func ActivePrompt() string {
 	return ExtractionPrompt
 }
 
+// Governed sampling (C5): the LLM path reads decoding params from here. Defaults
+// are the shipped literals; SetSampling applies a governed/activated config. seed
+// > 0 is sent for reproducible generations.
+var (
+	sampMu        sync.RWMutex
+	sampTemp      = 0.1
+	sampMaxTokens = 900
+	sampSeed      = 0
+)
+
+// SetSampling sets the active decoding parameters for the LLM path (governed
+// activation). A non-positive temp/maxTokens keeps the current value; seed is set
+// as given (0 = omit).
+func SetSampling(temp float64, maxTokens, seed int) {
+	sampMu.Lock()
+	if temp > 0 {
+		sampTemp = temp
+	}
+	if maxTokens > 0 {
+		sampMaxTokens = maxTokens
+	}
+	sampSeed = seed
+	sampMu.Unlock()
+}
+
+func sampling() (float64, int, int) {
+	sampMu.RLock()
+	defer sampMu.RUnlock()
+	return sampTemp, sampMaxTokens, sampSeed
+}
+
 func env(k, d string) string {
 	if v := os.Getenv(k); v != "" {
 		return v
@@ -133,14 +164,18 @@ func parseCandidates(content string) []candidate {
 // llmPropose asks the planner for (title, when, where) candidates through the
 // gateway. The LLM proposes spans; dateparse decides the date.
 func llmPropose(emailText string, timeout time.Duration) ([]candidate, error) {
+	temp, maxTokens, seed := sampling()
 	payload := map[string]any{
 		"model":       env("PLANNER_MODEL", "planner"),
-		"temperature": 0.1,
-		"max_tokens":  900,
+		"temperature": temp,
+		"max_tokens":  maxTokens,
 		"messages": []map[string]string{
 			{"role": "system", "content": ActivePrompt()},
 			{"role": "user", "content": "<EMAIL>\n" + truncateRunes(emailText, 12000) + "\n</EMAIL>"},
 		},
+	}
+	if seed > 0 {
+		payload["seed"] = seed // reproducible generation (M19 forensics/eval)
 	}
 	raw, _ := json.Marshal(payload)
 	req, err := http.NewRequest(http.MethodPost, env("GATEWAY_URL", defaultGateway), bytes.NewReader(raw))

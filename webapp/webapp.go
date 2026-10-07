@@ -72,6 +72,11 @@ type Server struct {
 	// version, and rolls back to the shipped default. Nil = no Prompts tab.
 	Prompts *controlplane.Prompts
 
+	// Sampling, when set, is the governed decoding-params resolver (C5):
+	// temperature/max_tokens/seed per model as versioned, hashed, rollback-able
+	// artifacts. Nil = no Sampling tab.
+	Sampling *controlplane.Sampling
+
 	// Policies, when set, is the governed policy-allowlist resolver (C8): egress /
 	// exec / guardrail allowlists as versioned, hashed, rollback-able artifacts.
 	// The action egress check resolves its allowlist from here at request time, so
@@ -142,6 +147,11 @@ func (s *Server) Handler() http.Handler {
 		mux.HandleFunc("/api/prompts", s.promptsList)
 		mux.HandleFunc("/api/prompts/activate", csrf(s.authz(controlplane.ActionWrite, "prompts", s.promptsActivate)))
 		mux.HandleFunc("/api/prompts/reset", csrf(s.authz(controlplane.ActionWrite, "prompts", s.promptsReset)))
+	}
+	if s.Sampling != nil {
+		mux.HandleFunc("/api/sampling", s.samplingList)
+		mux.HandleFunc("/api/sampling/activate", csrf(s.authz(controlplane.ActionWrite, "sampling", s.samplingActivate)))
+		mux.HandleFunc("/api/sampling/reset", csrf(s.authz(controlplane.ActionWrite, "sampling", s.samplingReset)))
 	}
 	if s.Policies != nil {
 		mux.HandleFunc("/api/policies", s.policiesList)
