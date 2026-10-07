@@ -252,8 +252,12 @@ New phases:
 - **R3 — daily timeline** ⬜ (the hero of My Week): derive the kid's day from
   handbook + profile (`8:15 in · lunch 10:55 · out 2:30`), with half-day
   exceptions (conf days dismiss 11:30). Recurring; ties to the RRULE v2 item.
-- **R4 — Ask School Q&A** ⬜: one ask box over the corpus with source citations
-  ("phone policy?", "nurse?"); retrieval engine exists, endpoint + UI are new.
+- **R4 — Ask School** 🟡: `/api/ask` lexical search over the PII-scrubbed corpus
+  (FTS5, injection-safe) + an Ask tab (box + snippets, readable source, untrusted
+  badge). Verified live (nurse / phone policy → handbook). Remaining ⬜: an LLM
+  *answer* (not just snippets, needs the model) + passage-level chunking (rag
+  stores whole emails as one chunk, so the snippet is the doc start, not the
+  matching passage).
 - **R5 — structured directory** ⬜: role→name→email/ext lookup (extends contacts).
 - **R6 — safe link enrichment** 🟡 (engine ✅, wiring ⬜): fetch handbook URLs
   through `SandboxFetchTool` (VM + netpolicy). URLs come from an UNTRUSTED doc →

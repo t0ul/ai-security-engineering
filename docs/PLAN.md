@@ -1,5 +1,19 @@
 # Pure-Go Fold-In — Project Plan & Status
 
+## ▶ Resume here (2026-10-07) — everything green (`go test ./...`), all pushed except the Ask-School slice
+Rhythm: this session runs ON the Mac (Kuebiko) — `go build`/`go test`/`git` are fine here; only booting the VM (`launchvm`, needs codesign) is a manual step. Commits authored as `t <toul@hey.com>`, ZERO Claude attribution, ONE-LINE messages. Fleet via `replace => ../fleet/*`.
+
+**Shipped this stretch:** MicroVM egress-deny + broker + in-VM fetch (`docs/MICROVM-PLAN.md`); ADD library (`fleet/ADD`) + redteam/scorecard refactor + **fuzzing** (`docs/ADD-FRAMEWORK.md`); ensemble reconciler + promotion gate; app features A1–A7 (item types, web UI, month view — `docs/APP-FEATURES-PLAN.md`); Ask-School search (R4, this slice). **In-app security bridges, each with a test** (`docs/INTEGRATION-GAPS.md`): PII scrub on ingest, `/ics/` leak, CSRF, year, uid, provenance signing, HITL dialog, kill switch; closed dead stubs RecordPin/RecordPrompt.
+
+**Next (prioritized):**
+- Offline: governed `Runtime` resolver (C4, keystone — `docs/CONTROL-PLANE-PLAN.md`); console tabs for prompts/MCP/eval (C2/C6); policies-as-governed-artifacts (C8); cross-tool dedup polish; passage-chunking for Ask-School.
+- Model-blocked (needs llama up on the Mac): LLM extractor + logical `extractor` model + grammar JSON (C5), the live ensemble, the eval-tweak loop, an LLM *answer* for Ask-School, live VM boot to verify the chamber.
+- Product (Track 2): child profile (R1) → daily timeline (R3); handbook link-enrichment (R6, reuses SandboxFetchTool).
+
+Detailed plans: `docs/{APP-FEATURES-PLAN,CONTROL-PLANE-PLAN,MICROVM-PLAN,ADD-FRAMEWORK,INTEGRATION-GAPS,COURSE-OUTLINE}.md`.
+
+---
+
 **Goal:** fold the six fleet libraries into the course and remove all Python,
 keeping only the served-model boundary (llama.cpp, C++). Decisions (locked):
 clean M0–M20 redo · local `replace → ../fleet/*` during dev · build Gonductor
