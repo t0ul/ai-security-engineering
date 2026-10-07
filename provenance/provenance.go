@@ -41,6 +41,17 @@ func NewSigner(keyID string) (*Signer, ed25519.PublicKey, error) {
 	return &Signer{keyID: keyID, priv: priv}, pub, nil
 }
 
+// SignerFromSeed reconstructs a signer from a persisted 32-byte ed25519 seed, so
+// an agent keeps a stable identity (and verifiable public key) across restarts.
+func SignerFromSeed(keyID string, seed []byte) (*Signer, ed25519.PublicKey, error) {
+	if len(seed) != ed25519.SeedSize {
+		return nil, nil, fmt.Errorf("provenance: seed must be %d bytes, got %d", ed25519.SeedSize, len(seed))
+	}
+	priv := ed25519.NewKeyFromSeed(seed)
+	pub := priv.Public().(ed25519.PublicKey)
+	return &Signer{keyID: keyID, priv: priv}, pub, nil
+}
+
 // Sign produces a content credential for content.
 func (s *Signer) Sign(content []byte) Mark {
 	return Mark{KeyID: s.keyID, Alg: "ed25519", Sig: hex.EncodeToString(ed25519.Sign(s.priv, content))}

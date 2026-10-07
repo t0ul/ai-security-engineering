@@ -121,9 +121,18 @@ func (p Policy) HTTPClient(timeout time.Duration) *http.Client {
 	}
 }
 
+// hostAllowed matches an allowlist entry exactly, or as a parent domain: an
+// entry "schools.nyc.gov" also permits its subdomains ("www.schools.nyc.gov").
+// Internal-IP resolution is still rejected afterward, so a permissive domain
+// cannot be abused to reach an internal address via a subdomain.
 func (p Policy) hostAllowed(host string) bool {
+	host = strings.ToLower(strings.TrimSuffix(host, "."))
 	for _, a := range p.Allow {
-		if strings.EqualFold(a, host) {
+		a = strings.ToLower(strings.TrimPrefix(a, "."))
+		if a == "" {
+			continue
+		}
+		if host == a || strings.HasSuffix(host, "."+a) {
 			return true
 		}
 	}

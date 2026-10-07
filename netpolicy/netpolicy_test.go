@@ -29,6 +29,22 @@ func TestAllowsAllowlistedPublicHost(t *testing.T) {
 	}
 }
 
+func TestAllowsSubdomainOfAllowlistedDomain(t *testing.T) {
+	p := netpolicy.Policy{
+		Allow:   []string{"schools.nyc.gov"},
+		Resolve: fakeDNS(map[string]string{"www.schools.nyc.gov": "93.184.216.34", "schools.nyc.gov": "93.184.216.34", "evilschools.nyc.gov": "93.184.216.34"}),
+	}
+	if err := p.Check("https://www.schools.nyc.gov/menus"); err != nil {
+		t.Fatalf("subdomain of an allowlisted domain should pass, got %v", err)
+	}
+	if err := p.Check("https://schools.nyc.gov/"); err != nil {
+		t.Fatalf("the domain itself should pass, got %v", err)
+	}
+	if err := p.Check("https://evilschools.nyc.gov/"); err == nil {
+		t.Fatal("a look-alike sibling domain must NOT pass")
+	}
+}
+
 func TestBlocksIMDS(t *testing.T) {
 	p := netpolicy.Policy{Allow: []string{"metadata"}, Resolve: fakeDNS(map[string]string{"metadata": "169.254.169.254"})}
 	if err := p.Check("http://metadata/latest/meta-data/iam/security-credentials/"); !errors.Is(err, netpolicy.ErrBlockedIP) {
