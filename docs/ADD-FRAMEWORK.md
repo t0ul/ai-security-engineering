@@ -3,15 +3,30 @@
 A Go library that makes proving an attack as natural as writing a unit test. It
 rides `go test`; it is not a scanner, a CLI, or a product.
 
-> **Expectation — ADD is OFFLINE and does NOT call a live model.** Each case is a
-> white-box, in-process pair of `gorauder.TargetFunc` closures: an *undefended*
-> target that lets the attack land (ASR 100%) and a *defended* target running the
-> real control (ASR 0%). This proves the **controls** deterministically, fast, in
-> CI, with no llama/qwen running. "Scorecard green" means the controls hold against
-> the attack patterns — it does **not** mean the attacks were run against a live
-> model. The live-model path is separate (the eval F1 gate `cmd/livecheck` + the
-> LLM extractor, which call the gouncer gateway). Run `go run ./cmd/preflight` to
-> see what's offline vs live and whether the models are downloaded/serving.
+> **Two layers — offline (default) and live (`-tags live`).**
+>
+> **Offline** (default `go test ./...`, `cmd/scorecard`): each case is a white-box,
+> in-process pair of `gorauder.TargetFunc` closures — an *undefended* target that
+> lets the attack land (ASR 100%) and a *defended* target running the real control
+> (ASR 0%). Deterministic, fast, CI-able, no model. "Scorecard green" means the
+> controls hold against the attack patterns — **not** that attacks ran against a
+> live model.
+>
+> **Live** (`go test -tags live ./livetest/ -v`): the model-dependent checks run
+> against the REAL llama/qwen stack (`internal/livemodel` boots the models + the
+> in-process gouncer gateway, same as `cmd/livecheck`). Today: `TestLiveEvalF1`
+> (live extraction scored against the labeled emails — 3.txt F1=1.00, 1.txt
+> F1=1.00) and `TestLiveExtractionInjectionDefended` (a real indirect-injection
+> email through the live extractor). Honest rule for live ADD: **gate on the
+> defended path** (guard-sanitized input must not yield the attacker's event) and
+> **observe/log the undefended ASR** — a live 3B model may resist a given payload
+> on its own, so asserting undefended==100% would be a fake invariant. Live tests
+> Skip (not fail) when the models aren't set up.
+>
+> Run `go run ./cmd/preflight` to see offline-vs-live and whether models are
+> downloaded/serving. Not every test should be live: deterministic units (parsers,
+> control plane, crypto) need no model; only model-dependent behavior (extraction,
+> injection, hallucination, eval F1) gets a live variant in `livetest/`.
 
 ## Name
 Package `add` (Attack-Driven Development). Reads naturally in tests —

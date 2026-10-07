@@ -16,6 +16,10 @@ the course repo root unless noted:
   LLM extractor/ensemble, which call the gouncer gateway.
 - **Step 0 — preflight:** `go run ./cmd/preflight` reports whether the GGUFs are
   downloaded and whether the ports answer, and prints exactly what to run next.
+- **Live tests:** `go test -tags live ./livetest/ -v` boots the models + gateway
+  in-process and runs the model-dependent checks (live eval F1, live
+  prompt-injection through the real extractor). They Skip if models aren't set up.
+  `go run ./cmd/livecheck` is the one-shot F1 gate (same stack).
 
 ## Topology & ports
 
