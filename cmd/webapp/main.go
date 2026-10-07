@@ -73,6 +73,16 @@ func main() {
 	// drops paused. Tools/agent get narrower grants as those paths are wired (C4d/e).
 	authz := controlplane.NewAuthority(signer, verifier)
 	authz.Halted = func() bool { return safety.Level() >= controlplane.LevelHalt }
+	// Data-residency policy (C4e): a subject bound to an off-host (frontier) model
+	// may not be granted list/export of confidential data. Today every subject is
+	// on-host (frontier set empty), so nothing is refused — but the rule is live
+	// and swap-ready: binding a subject to a frontier model (a governed C5 swap)
+	// refuses its next issuance. The corpus is NOT confidential here because
+	// goflage scrubs it on ingest (declassified); contacts/email bodies are.
+	authz.IssuePolicy = controlplane.ResidencyPolicy(
+		map[string]bool{}, // frontier-bound subjects (none yet)
+		map[string]bool{"contacts": true, "email-bodies": true},
+	)
 	var opToken string
 	if g, gerr := authz.Issue(controlplane.Capability{Subject: "operator", Action: controlplane.Scope, Resource: controlplane.Scope, Tenant: controlplane.Scope}, 30*24*time.Hour); gerr == nil {
 		opToken = webapp.EncodeToken(g)
@@ -93,9 +103,17 @@ func main() {
 			defer ro.Close()
 			reader = ro
 		}
+		// The RAG reader is its own non-human identity (C4e): a grant scoped to
+		// list/corpus, minted through the residency policy. Verifying it per query
+		// means Halt revokes retrieval too, and a frontier-bound reader would be
+		// refused at issuance (fail-closed: no grant -> no search).
+		readerGrant, _ := authz.Issue(controlplane.Capability{Subject: "rag-reader", Action: controlplane.ActionList, Resource: "corpus", Tenant: "public"}, 30*24*time.Hour)
 		// Ask-School: lexical search over the scrubbed corpus (M8 — recalled text
 		// is untrusted data). "public" tenant: this is a single-household app.
 		search = func(q string, k int) ([]webapp.SearchHit, error) {
+			if _, err := authz.Verify(readerGrant, controlplane.Capability{Action: controlplane.ActionList, Resource: "corpus", Tenant: "public"}); err != nil {
+				return nil, fmt.Errorf("rag-reader capability refused: %w", err)
+			}
 			chunks, err := reader.Query("public", q, k)
 			if err != nil {
 				return nil, err
@@ -130,8 +148,20 @@ func main() {
 	egress := netpolicy.Policy{Allow: allowHosts}
 	interp := controlplane.NewInterpreter(*vmURL, audit)
 	fetchTool := controlplane.SandboxFetchTool(interp)
+	// MCP on the app path (C4e): the executing tool is reached through a gustoms
+	// gateway (manifest-pinned, allow-listed), not called directly — so a swapped
+	// tool is rejected, and the authorizer denies every call while the kill switch
+	// blocks tools (the functional "drop pins on halt").
+	toolGW := controlplane.NewToolGateway("sandbox", fetchTool, safety.AllowToolExec)
+	// The action-fetcher is its own NHI: a grant scoped to export/link (egress).
+	// Verifying it means Halt revokes the fetch in-flight, on top of the operator's
+	// HTTP gate — the human delegates to a least-privilege machine identity.
+	fetcherGrant, _ := authz.Issue(controlplane.Capability{Subject: "action-fetcher", Action: controlplane.ActionExport, Resource: "link", Tenant: "public"}, 30*24*time.Hour)
 	fetch := func(ctx context.Context, url string) (string, error) {
-		out, err := fetchTool.Handler(ctx, map[string]any{"url": url, "trace_id": gledger.NewTraceID()})
+		if _, err := authz.Verify(fetcherGrant, controlplane.Capability{Action: controlplane.ActionExport, Resource: "link", Tenant: "public"}); err != nil {
+			return "", fmt.Errorf("action-fetcher capability refused: %w", err)
+		}
+		out, err := toolGW.Call(ctx, gledger.NewTraceID(), "action-fetcher", "sandbox", "web_fetch", map[string]any{"url": url, "trace_id": gledger.NewTraceID()})
 		if err != nil {
 			return "", err
 		}

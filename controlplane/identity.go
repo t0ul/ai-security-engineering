@@ -3,6 +3,7 @@ package controlplane
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -68,6 +69,10 @@ var (
 	// ErrGrantScope means the Grant does not cover the requested action,
 	// resource, or tenant (over-scoped use / wrong audience).
 	ErrGrantScope = errors.New("controlplane: grant does not cover requested scope")
+	// ErrResidency means issuance was refused because the subject's bound model
+	// runs off-host (frontier) and the capability would ship confidential data
+	// to a third party.
+	ErrResidency = errors.New("controlplane: capability refused by data-residency policy")
 )
 
 // Scope is a wildcard that a Grant field may hold to cover any requested value
@@ -153,6 +158,23 @@ type Authority struct {
 // them with verifier. The verifier must already Trust the signer's key id.
 func NewAuthority(signer *provenance.Signer, verifier *provenance.Verifier) *Authority {
 	return &Authority{signer: signer, verifier: verifier, revoked: map[string]bool{}}
+}
+
+// ResidencyPolicy builds an IssuePolicy that enforces the data-residency rule: a
+// subject whose bound model runs off-host (frontier) may not be granted
+// ActionList or ActionExport over a confidential resource, because that ships the
+// data to a third party. frontier maps subject->true (absent = on-host, trusted);
+// confidential maps resource->true. Everything else — reads, public/declassified
+// resources (e.g. a goflage-scrubbed corpus), local subjects — is allowed.
+// Swapping a subject's binding local->frontier (a governed model-swap) therefore
+// refuses its next issuance; pair it with Revoke to kill outstanding grants.
+func ResidencyPolicy(frontier, confidential map[string]bool) func(Capability) error {
+	return func(c Capability) error {
+		if frontier[c.Subject] && confidential[c.Resource] && (c.Action == ActionList || c.Action == ActionExport) {
+			return fmt.Errorf("%w: %q is frontier-bound and may not %s confidential %q", ErrResidency, c.Subject, c.Action, c.Resource)
+		}
+		return nil
+	}
 }
 
 func (a *Authority) now() time.Time {

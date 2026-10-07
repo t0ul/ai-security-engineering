@@ -155,3 +155,32 @@ func TestFrontierExfilRefusedAtIssuance(t *testing.T) {
 		t.Fatalf("frontier read of public data should issue: %v", err)
 	}
 }
+
+// TestResidencyPolicy exercises the reusable policy the app wires: frontier
+// subjects are refused list/export of confidential resources, everyone else
+// passes (reads, public/declassified resources, local subjects).
+func TestResidencyPolicy(t *testing.T) {
+	pol := ResidencyPolicy(
+		map[string]bool{"frontier-planner": true},
+		map[string]bool{"contacts": true, "email-bodies": true},
+	)
+	refuse := []Capability{
+		{Subject: "frontier-planner", Action: ActionList, Resource: "contacts"},
+		{Subject: "frontier-planner", Action: ActionExport, Resource: "email-bodies"},
+	}
+	for _, c := range refuse {
+		if err := pol(c); err == nil {
+			t.Fatalf("frontier %s/%s should be refused", c.Action, c.Resource)
+		}
+	}
+	allow := []Capability{
+		{Subject: "frontier-planner", Action: ActionRead, Resource: "contacts"},  // read, not harvest
+		{Subject: "frontier-planner", Action: ActionList, Resource: "corpus"},    // scrubbed/declassified
+		{Subject: "local-agent", Action: ActionExport, Resource: "contacts"},     // on-host, data stays
+	}
+	for _, c := range allow {
+		if err := pol(c); err != nil {
+			t.Fatalf("%s %s/%s should be allowed, got %v", c.Subject, c.Action, c.Resource, err)
+		}
+	}
+}
