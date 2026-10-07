@@ -149,7 +149,7 @@ invariant a plain unit test can't (undefended ASR 100% so the attack is *real*,
 defended 0%, optional "is it wired" integration check), and emit an OWASP
 coverage grid. `redteam` becomes `add.Technique`s; `scorecard` runs on
 `add.Evaluate`. Hook: "I showed you how to do it by hand; here's how to make it a
-library your team drops into `go test`." Proof: 27 techniques, 17 OWASP risks,
+library your team drops into `go test`." Proof: 29 techniques, 17 OWASP risks,
 0 regressed — same guarantees, far less boilerplate, gaps now visible.
 
 **Post 15 · Capstone I — full-chain defense** (M12, ASI08/10) ✅
@@ -248,19 +248,23 @@ topics the Scott Moss courses teach that we under-indexed (see
 `docs/COURSE-COVERAGE.md`). Each still ships the ADD beat — the security control
 is the hook, not an afterthought.
 
-**Post 25 · Durable execution & resume-verify** (M18-adjacent) ⬜
-Build: checkpoint each agent step (model turn + tool call) to a durable log so a
-crash/rate-limit resumes from the last good step with cached results, not a
-restart. Break: resume the agent into a *tampered* checkpoint. Defend: the resume
-path verifies the gledger hash-chain before replaying a step — a forged/edited
-checkpoint fails closed. Hook: "durable execution that can't be rewound into a lie."
+**Post 25 · Durable execution & resume-verify** (M18-adjacent) ✅
+Build: the `durable` package — a hash-chained step log; `Do(session,kind,key,fn)`
+replays a completed step's cached result across a reopen (crash/rate-limit resume)
+instead of re-running it. Break: resume the agent into a *tampered* checkpoint.
+Defend: `Open`/`Verify` recompute the chain and fail closed on any edited record —
+a forged checkpoint is rejected (wired in cmd/webapp: tamper on boot → start fresh
++ audit). Proof: the `ResumeIntoTamperedState` ADD case 100→0; `durable` tests;
+live boot smoke. Hook: "durable execution that can't be rewound into a lie."
 
-**Post 26 · Exactly-once side effects** (reliability-as-security) ⬜
-Build: idempotency keys / action-ids, version preconditions, safe retries, and
-side-effect/ack-gap handling so a retried tool call never double-sends or
-double-refunds. Break: a replayed/duplicated action fires the side effect twice.
-Defend: action-id dedup + precondition checks at the tool boundary (ties to the
-single-use HITL nonce we already have). Hook: "a retry should never cost you twice."
+**Post 26 · Exactly-once side effects** (reliability-as-security) ✅
+Build: an idempotency key on `durable.Do` — the first success is recorded, a
+replay returns it, and a *failure* is not recorded (safe retry). So a
+duplicated/replayed action never double-sends or double-refunds. Break: a replayed
+action fires the side effect twice. Defend: tool-boundary dedup by action-id
+(extends the single-use HITL nonce), wired on the action-fetch. Proof: the
+`DuplicateSideEffect` ADD case 100→0. Hook: "a retry should never cost you twice."
+(Version-precondition / ack-gap handling layers on next.)
 
 **Post 27 · Context compaction & summarization injection** ⬜
 Build: token-budget compaction — running summary + eviction/sliding-window before

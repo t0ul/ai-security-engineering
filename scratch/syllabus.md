@@ -322,12 +322,13 @@ A robust practitioner is **both** an AI engineer and an AI security engineer. Th
 reliability topics (benchmarked against the Scott Moss AI-engineering courses —
 full gap audit in `docs/COURSE-COVERAGE.md`) are where a security-first build
 under-indexes; each is taught with its security control, ADD-style.
-- **Durable execution & resume-verify.** Checkpoint each step (model turn + tool
-  call) for crash/rate-limit resume with cached results; the resume path verifies
-  the gledger hash-chain so a tampered checkpoint fails closed (`ResumeIntoTamperedState`).
-- **Exactly-once side effects.** Idempotency keys / action-ids, version
-  preconditions, safe retries, side-effect/ack-gap handling, so a retried tool
-  never double-sends or double-refunds (`DuplicateSideEffect`).
+- ✅ **Durable execution & resume-verify.** `durable` pkg: a hash-chained step log
+  replays each completed step's cached result across a reopen (crash/rate-limit
+  resume); `Open`/`Verify` recompute the chain and fail closed on a tampered
+  checkpoint, so the agent can't be rewound into a forged state (`ResumeIntoTamperedState`).
+- ✅ **Exactly-once side effects.** `durable.Do` idempotency key: the first success
+  is cached, a replay returns it, a failure is retryable — a retried tool never
+  double-sends or double-refunds (`DuplicateSideEffect`). Next: version preconditions.
 - **Context compaction & summarization injection.** Running-summary / eviction /
   sliding-window compaction before each model turn; summarize untrusted content
   inside the CaMeL quarantine, re-scan the summary, keep provenance on compacted

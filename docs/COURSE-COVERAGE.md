@@ -56,8 +56,8 @@ each engineering topic, and (2) do we add the security control it needs. Status:
 ## GAPS — engineering topic we do NOT build (so no control hangs on it)
 | # | Gap | Why it matters (incl. the missing security control) | Priority |
 | --- | --- | --- | --- |
-| 1 | **Durable execution** (DBOS-style checkpoint + crash/rate-limit resume, cached step results) | We have audit + forensic replay, not *resume*. Security angle: resuming into a tampered state — our hash-chain would catch it, so this pairs naturally with a "resume-verify" control. | HIGH |
-| 2 | **Idempotency / exactly-once side effects** (action-id dedup, safe retries, version preconditions, side-effect/ack-gap) — from background-agents | A retried side-effectful tool = double send / double refund. We have single-use HITL nonce + result-dedup only, not exactly-once tool execution. Real reliability-security gap. | HIGH |
+| 1 | ✅ **DONE — Durable execution + resume-verify** (`durable` pkg: hash-chained step log, `Do` replays cached steps across reopen) | Resume replays completed steps; `Open`/`Verify` fails closed on a tampered checkpoint (`ResumeIntoTamperedState` ADD case, ASI10). Wired in cmd/webapp (action fetch; tamper on boot → start fresh + audit). | ~~HIGH~~ done |
+| 2 | ✅ **DONE — Exactly-once side effects** (`durable.Do` idempotency key: first success cached, replay returns it, failure retryable) | A duplicated/replayed action never re-fires the effect (`DuplicateSideEffect` ADD case, ASI08). Wired on the action-fetch tool boundary; extends the single-use HITL nonce. Version-precondition/ack-gap can layer on later. | ~~HIGH~~ done |
 | 3 | **Context compaction / summarization under token limits** (running summary, token counting, recursive compaction, eviction, sliding window) | Not built (short single-email tasks). Missing security control: **summarization injection** (malicious text steers/survives the summary; compaction silently drops a safety-relevant line). No ADD case. | MED |
 | 4 | **LLM-as-judge / model-graded evals** (judge schema, score+reasoning, multi-turn judging) | We're deterministic-only. Missing control: **judge manipulation / eval-gaming** (prompt-inject the judge to pass). | MED (model-blocked) |
 | 5 | **pass@k / pass^k reliability evals** | We score once, deterministically. No quantification of non-deterministic reliability over k samples. | MED |
@@ -78,9 +78,9 @@ each engineering topic, and (2) do we add the security control it needs. Status:
 
 ## Verdict
 On **security depth** we exceed every course (injection, exfil, SSRF, sandbox,
-identity/authZ, MCP, RAG, provenance, HITL, kill switch, ADD). The real holes are
-**AI-engineering reliability** topics: durable execution (#1), exactly-once side
-effects (#2), and context compaction (#3) — each of which also carries a security
-control we currently don't teach (resume-verify, replay-safety, summarization
-injection). Worth folding #1–#3 into the blog + a few ADD cases; #4–#6 are mostly
-model-blocked and can wait for the live LLM path (C5/C7).
+identity/authZ, MCP, RAG, provenance, HITL, kill switch, ADD). The two HIGH
+reliability holes are now **closed**: durable execution + resume-verify (#1) and
+exactly-once side effects (#2) ship in the `durable` package with ADD invariants
+(`ResumeIntoTamperedState`, `DuplicateSideEffect`) and are wired into the app.
+Remaining: context compaction + summarization-injection (#3, offline, MED) and the
+model-blocked eval methodology (#4–#6).

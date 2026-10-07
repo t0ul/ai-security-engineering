@@ -136,8 +136,8 @@ output, one capability, own labels). Demonstrates least-privilege per tool.
 Both hats: AI security engineer AND AI engineer. Gaps vs the Scott Moss courses
 (ai-engineering-fundamentals / harness-engineering / agents-v2 / background-agents).
 Each is offline-doable except where noted. Blog: Posts 25–28 in docs/COURSE-OUTLINE.md.
-- ⬜ **HIGH — durable execution + resume-verify**: checkpoint agent steps (model turn + tool call) for crash/rate-limit resume with cached results; resume path verifies the gledger hash-chain (reject a tampered checkpoint). ADD case `ResumeIntoTamperedState`.
-- ⬜ **HIGH — exactly-once side effects**: idempotency keys / action-ids, version preconditions, safe retries, side-effect/ack-gap. Tool boundary dedup (extends the single-use HITL nonce). ADD case `DuplicateSideEffect`.
+- ✅ **HIGH — durable execution + resume-verify** DONE: `durable` pkg (hash-chained step log; `Do` replays cached steps across reopen; `Open`/`Verify` fail closed on a tampered checkpoint). Wired in cmd/webapp (action fetch; tamper on boot → start fresh + audit). ADD `ResumeIntoTamperedState` (ASI10).
+- ✅ **HIGH — exactly-once side effects** DONE: `durable.Do` idempotency key (first success cached, replay returns it, failure retryable). Wired on the action-fetch tool boundary. ADD `DuplicateSideEffect` (ASI08). Follow-on: version-precondition / ack-gap handling.
 - ⬜ **MED — context compaction + summarization injection**: running-summary/eviction/sliding-window compaction before each model turn; summarize untrusted content inside the CaMeL quarantine + re-scan the summary + provenance on compacted spans. ADD case `SummarizationInjection`.
 - ⬜ **MED (model-blocked) — eval methodology**: pass@k/pass^k reliability scoring; LLM-as-judge scorer + `JudgeManipulation` ADD case; online eval / data-flywheel from the review queue. Ties to C7.
 - ⬜ **MED (model-blocked) — observability trend**: console Eval tab (F1/P/R + ASR over time), OTel export option. Ties to C7.
