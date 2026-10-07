@@ -24,6 +24,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -35,14 +36,12 @@ import (
 	"golang.org/x/term"
 )
 
-const (
-	vsockPort      = 5000
-	hostBridgeAddr = "127.0.0.1:5000"
-)
+const vsockPort = 5000 // guest vsock port where detonationd listens (internal to the VM)
 
 func main() {
 	dir := flag.String("dir", "set-up/vm-assets", "MicroVM assets directory")
 	allow := flag.String("allow", "", "comma-separated egress allowlist for the in-VM broker (default: deny all)")
+	bridge := flag.String("bridge", "127.0.0.1:5000", "host address for the guest-vsock command bridge; change if :5000 is taken (macOS AirPlay Receiver owns it) and pass the matching -microvm to cmd/webapp")
 	flag.Parse()
 
 	var allowHosts []string
@@ -127,7 +126,7 @@ func main() {
 		log.Fatalf("\r\nlaunchvm: start: %v\r\n", err)
 	}
 
-	go startVsockBridge(vm)
+	go startVsockBridge(vm, *bridge)
 	go startEgressBroker(vm, egressPolicy)
 	go driveConsole(hostReader, vmWriter)
 
@@ -188,16 +187,21 @@ const bringUpCmd = "mkdir -p /mnt/assets && mount -t virtiofs assets /mnt/assets
 // startVsockBridge accepts TCP on host loopback and pipes each connection to the
 // guest's vsock listener, exposing a plain 127.0.0.1:5000 endpoint backed by the
 // isolated MicroVM.
-func startVsockBridge(vm *vz.VirtualMachine) {
-	// Reclaim the fixed bridge port from any leftover launchvm so a re-run never
-	// binds a stale VM (same pattern as modeld's model ports).
-	modelserve.ReclaimPort(vsockPort, os.Stdout)
-	ln, err := net.Listen("tcp", hostBridgeAddr)
+func startVsockBridge(vm *vz.VirtualMachine, addr string) {
+	// Reclaim the bridge port from any leftover launchvm so a re-run never binds a
+	// stale VM (same pattern as modeld's model ports). Only reclaim a loopback port
+	// — never kill whatever owns a non-local one.
+	if _, p, perr := net.SplitHostPort(addr); perr == nil {
+		if port, aerr := strconv.Atoi(p); aerr == nil {
+			modelserve.ReclaimPort(port, os.Stdout)
+		}
+	}
+	ln, err := net.Listen("tcp", addr)
 	if err != nil {
-		log.Printf("vsock bridge: listen %s: %v", hostBridgeAddr, err)
+		log.Printf("vsock bridge: listen %s: %v (is macOS AirPlay Receiver on :5000? turn it off, or pass -bridge 127.0.0.1:5050 and -microvm http://127.0.0.1:5050)", addr, err)
 		return
 	}
-	os.Stdout.Write([]byte("\r\nvsock bridge up: 127.0.0.1:5000 -> guest vsock:5000\r\n"))
+	os.Stdout.Write([]byte("\r\nvsock bridge up: " + addr + " -> guest vsock:5000\r\n"))
 	for {
 		tcpConn, err := ln.Accept()
 		if err != nil {
