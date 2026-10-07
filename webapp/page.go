@@ -50,6 +50,7 @@ const dashboardHTML = `<!doctype html>
     <button data-tab="prompts">Prompts</button>
     <button data-tab="sampling">Sampling</button>
     <button data-tab="policies">Policies</button>
+    <button data-tab="budgets">Budgets</button>
     <button data-tab="eval">Eval</button>
     <button data-tab="incidents">Incidents</button>
   </nav>
@@ -183,6 +184,13 @@ const dashboardHTML = `<!doctype html>
     </div>
   </section>
 
+  <section id="budgets" class="hide">
+    <div class="card">
+      <strong>Budgets &amp; keys</strong> <span class="mut">— governed limits (M20): API rate (enforced here), token/concurrency/spend (gateway-side). Keys shown by POINTER (env-var name) + whether it's set — never the value.</span>
+      <div id="budgetList"><span class="mut">loading…</span></div>
+    </div>
+  </section>
+
   <section id="eval" class="hide">
     <div class="card">
       <strong>Eval</strong> <span class="mut">— ground-truth F1 on the labeled emails (M11). The promotion gate = F1 ≥ baseline AND ADD ASR = 0.</span>
@@ -206,7 +214,7 @@ const dashboardHTML = `<!doctype html>
 const __CAP__="__CAP_TOKEN__";
 (function(){const f=window.fetch.bind(window);window.fetch=(u,o)=>{o=o||{};const s=typeof u==='string'?u:(u&&u.url)||'';if(__CAP__&&(s.indexOf('/api/')===0||s.indexOf('/ics/')===0)){o.headers=Object.assign({},o.headers||{},{'Authorization':'Bearer '+__CAP__});}return f(u,o);};})();
 const $=s=>document.querySelector(s);
-const TABS=['calendar','week','tasks','review','activity','ask','security','prompts','sampling','policies','eval','incidents'];
+const TABS=['calendar','week','tasks','review','activity','ask','security','prompts','sampling','policies','budgets','eval','incidents'];
 const esc=s=>{const d=document.createElement('div');d.textContent=s||'';return d.innerHTML;};
 const when=e=>e.all_day?((e.due||e.start)+' · all day'):((e.start||e.due)+(e.end?(' – '+e.end.slice(11)):''));
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
@@ -222,6 +230,7 @@ document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
   if(t==='security'){loadKill();loadMCP();loadBundles();}
   if(t==='prompts') loadPrompts();
   if(t==='sampling') loadSampling();
+  if(t==='budgets') loadBudgets();
   if(t==='policies') loadPolicies();
   if(t==='eval') loadEval();
 });
@@ -307,6 +316,25 @@ async function activateSampling(name){
   await postJSON('/api/sampling/activate',{name:name,config:cfg});loadSampling();
 }
 async function resetSampling(name){await postJSON('/api/sampling/reset',{name:name});loadSampling();}
+async function loadBudgets(){
+  const c=$('#budgetList');if(!c)return;const d=await getJSON('/api/budgets');const bs=d.budgets||[];
+  if(!bs.length){c.innerHTML='<p class="mut">no budgets registered</p>';return;}
+  c.innerHTML=bs.map(b=>{const cf=b.config||{};const governed=b.version>0;
+    const key=cf.key_ref?(' · key <code>'+esc(cf.key_ref)+'</code> <span class="pill '+(b.key_set?'pass':'fail')+'">'+(b.key_set?'set':'unset')+'</span>'):'';
+    return '<div class="ev"><div><b>'+esc(b.name)+'</b> <span class="pill '+(governed?'pass':'')+'">v'+b.version+'</span>'+key+
+      '<div style="margin-top:6px">rate/min <input id="br_'+esc(b.name)+'" type="number" value="'+(cf.rate_per_min||0)+'" style="width:80px"> '+
+      'max tokens <input id="bt_'+esc(b.name)+'" type="number" value="'+(cf.max_tokens||0)+'" style="width:90px"> '+
+      'concurrency <input id="bc_'+esc(b.name)+'" type="number" value="'+(cf.max_concurrency||0)+'" style="width:80px"> '+
+      'spend $ <input id="bs_'+esc(b.name)+'" type="number" step="0.01" value="'+(cf.spend_cap_usd||0)+'" style="width:90px"></div>'+
+      '<div style="margin-top:6px"><button class="go" onclick="activateBudget(\''+esc(b.name)+'\',\''+esc(cf.key_ref||'')+'\')">Activate</button>'+
+      (governed?(' <button class="ghost" onclick="resetBudget(\''+esc(b.name)+'\')">Reset to default</button>'):'')+'</div></div></div>';
+  }).join('');
+}
+async function activateBudget(name,keyRef){
+  const cfg={rate_per_min:parseInt($('#br_'+name).value)||0,max_tokens:parseInt($('#bt_'+name).value)||0,max_concurrency:parseInt($('#bc_'+name).value)||0,spend_cap_usd:parseFloat($('#bs_'+name).value)||0,key_ref:keyRef};
+  await postJSON('/api/budgets/activate',{name:name,config:cfg});loadBudgets();
+}
+async function resetBudget(name){await postJSON('/api/budgets/reset',{name:name});loadBudgets();}
 async function loadPolicies(){
   const c=$('#policyList');if(!c)return;const d=await getJSON('/api/policies');const ps=d.policies||[];
   if(!ps.length){c.innerHTML='<p class="mut">no policies registered</p>';return;}

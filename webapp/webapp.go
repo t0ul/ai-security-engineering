@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/t0ul/ai-security-engineering/controlplane"
 	"github.com/t0ul/ai-security-engineering/ir"
@@ -71,6 +72,15 @@ type Server struct {
 	// each model's active/default system prompt, activates a new versioned+hashed
 	// version, and rolls back to the shipped default. Nil = no Prompts tab.
 	Prompts *controlplane.Prompts
+
+	// Budgets, when set, is the governed budgets/limits resolver (C9): rate/token/
+	// concurrency/spend ceilings + key POINTERS (env-var names, never values). The
+	// "api" budget's RatePerMin is enforced on the console API here; the rest are
+	// gateway-side. Nil = no Budgets tab, no rate limit.
+	Budgets  *controlplane.Budgets
+	rlMu     sync.Mutex
+	rlCount  int
+	rlWindow time.Time
 
 	// Sampling, when set, is the governed decoding-params resolver (C5):
 	// temperature/max_tokens/seed per model as versioned, hashed, rollback-able
@@ -154,6 +164,11 @@ func (s *Server) Handler() http.Handler {
 		mux.HandleFunc("/api/prompts", s.promptsList)
 		mux.HandleFunc("/api/prompts/activate", csrf(s.authz(controlplane.ActionWrite, "prompts", s.promptsActivate)))
 		mux.HandleFunc("/api/prompts/reset", csrf(s.authz(controlplane.ActionWrite, "prompts", s.promptsReset)))
+	}
+	if s.Budgets != nil {
+		mux.HandleFunc("/api/budgets", s.budgetsList)
+		mux.HandleFunc("/api/budgets/activate", csrf(s.authz(controlplane.ActionWrite, "budget", s.budgetsActivate)))
+		mux.HandleFunc("/api/budgets/reset", csrf(s.authz(controlplane.ActionWrite, "budget", s.budgetsReset)))
 	}
 	if s.Sampling != nil {
 		mux.HandleFunc("/api/sampling", s.samplingList)
@@ -264,6 +279,11 @@ func (s *Server) authz(action, resource string, h http.HandlerFunc) http.Handler
 		if _, err := s.Authz.Verify(g, controlplane.Capability{Action: action, Resource: resource, Tenant: "public"}); err != nil {
 			s.denyAudit(action, resource, err.Error())
 			http.Error(w, "capability refused: "+err.Error(), http.StatusForbidden)
+			return
+		}
+		if s.overBudget() { // governed per-minute API budget (C9)
+			s.denyAudit(action, resource, "rate budget exceeded")
+			http.Error(w, "rate budget exceeded", http.StatusTooManyRequests)
 			return
 		}
 		h(w, r)

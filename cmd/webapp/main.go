@@ -253,9 +253,17 @@ func main() {
 	samplingDefaults := map[string]controlplane.SamplingConfig{
 		"extractor": {Temperature: 0.1, MaxTokens: 900},
 	}
+	// Governed budgets (C9): the "api" rate limit is enforced in-app; model
+	// rate/token/spend are gateway-side. KeyRef is a POINTER (env-var name), never
+	// the key value — secrets stay out of the config/DB.
+	budgetDefaults := map[string]controlplane.BudgetConfig{
+		"api":     {RatePerMin: 0}, // 0 = unlimited until the operator sets one
+		"gateway": {MaxTokens: 900, KeyRef: "GATEWAY_KEY"},
+	}
 	var prompts *controlplane.Prompts
 	var policies *controlplane.Policies
 	var sampling *controlplane.Sampling
+	var budgets *controlplane.Budgets
 	var inv *cpstore.Store
 	if db, ierr := cpstore.Open(filepath.Join(*drop, "inventory.db")); ierr == nil {
 		inv = db
@@ -263,10 +271,12 @@ func main() {
 		prompts = controlplane.GovernedPrompts(promptDefaults, inv, audit)
 		policies = controlplane.GovernedPolicies(policyDefaults, inv, audit)
 		sampling = controlplane.GovernedSampling(samplingDefaults, inv, audit)
+		budgets = controlplane.GovernedBudgets(budgetDefaults, inv, audit)
 	} else {
 		prompts = controlplane.NewPrompts(promptDefaults)
 		policies = controlplane.NewPolicies(policyDefaults)
 		sampling = controlplane.NewSampling(samplingDefaults)
+		budgets = controlplane.NewBudgets(budgetDefaults)
 	}
 	// Activating the "extractor" sampling drives the live LLM decoding params.
 	baseSampOnActivate := sampling.OnActivate
@@ -311,6 +321,14 @@ func main() {
 			var cfg controlplane.SamplingConfig
 			if json.Unmarshal([]byte(cfgJSON), &cfg) == nil {
 				sampling.Rehydrate("extractor", cfg)
+			}
+		}
+		for _, n := range []string{"api", "gateway"} {
+			if cfgJSON, ok, _ := inv.LatestBudget(n); ok {
+				var cfg controlplane.BudgetConfig
+				if json.Unmarshal([]byte(cfgJSON), &cfg) == nil {
+					budgets.Rehydrate(n, cfg)
+				}
 			}
 		}
 		extractor.SetExtractionPrompt(prompts.Text("extractor"))
@@ -448,7 +466,7 @@ func main() {
 			AuditPath: auditPath, OutboxDir: cfg.Outbox, InboxPath: cfg.Inbox,
 			Egress: egress, Fetch: fetch, Verifier: verifier, Safety: safety, Search: search, Index: enrichIndex,
 			Authz: authz, OperatorToken: opToken, Audit: audit,
-			MCP: mcpList, MCPApprove: mcpApprove, Prompts: prompts, Policies: policies, Sampling: sampling,
+			MCP: mcpList, MCPApprove: mcpApprove, Prompts: prompts, Policies: policies, Sampling: sampling, Budgets: budgets,
 			EvalHistory: evalHistory, EvalRun: evalRun, PromptTest: promptTest,
 			BundleList: bundleList, BundleSave: bundleSave, BundleApply: bundleApply,
 			ProfileLoad: profileLoad, ProfileSave: profileSave,
