@@ -287,17 +287,20 @@ Break: prompt-inject the judge to pass a bad output (eval gaming). Defend:
 judge-input encapsulation + a deterministic cross-check (the ensemble pattern) —
 the `JudgeManipulation` ADD case. All runs in `livetest/` behind `-tags live`.
 
-**Post 29 · Live red-team: ADD against the real model** ✅ (started)
+**Post 29 · Live red-team: ADD against the real model** ✅
 The offline ADD scorecard proves the controls deterministically; this is the
 companion that runs the model-dependent attacks through the **actual llama/qwen**
-(`go test -tags live ./livetest/`). Shipped: `TestLiveEvalF1` (live F1) and
-`TestLiveScorecard` (extraction-injection + hallucination-reconcile — the
-hallucination case visibly flips undefended→defended live). Honest rule: gate on
-the defended path, *observe* undefended (a live 3B may resist a payload on its
-own). Planned: live variants of prompt-leak / URL-exfil / PII-echo, a stronger
-injection payload the raw model actually obeys, and a `-tags live` scorecard CLI.
-Hook: "the deterministic scorecard says the control works; here it is beating a
-real model."
+(`go test -tags live ./livetest/`). Shipped: `TestLiveEvalF1` (live F1 1.00/1.00)
+and a 5-case `TestLiveScorecard` — extraction-injection (LLM01), hallucination-
+reconcile (LLM09), prompt-leak (LLM07), url-exfil (LLM05), pii-echo (LLM02). Two
+visibly flip undefended→defended on the live model: **hallucination** (the live
+extraction plus a planted off-text date, dropped by `ensemble.Reconcile`) and
+**prompt-leak** (the raw 3B echoes its instructions; `guard.DetectPromptLeak`
+catches it). Honest rule: gate on the defended path, *observe/log* undefended — a
+live 3B resisted injection/exfil/pii on its own here, which we report rather than
+fake. Remaining: a stronger injection payload the raw model reliably obeys, and a
+`-tags live` scorecard CLI. Hook: "the deterministic scorecard says the control
+works; here it is beating a real model."
 
 ## Why this order (dependencies)
 - Observability (Post 2) comes before the attack posts because the audit log is
