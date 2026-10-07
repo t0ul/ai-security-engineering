@@ -20,10 +20,21 @@ executing agent tools**, not just a demo. Grounded in a code-verified review.
   temp dir removed afterwards.
 - **P5 non-root** ✅ `sandbox_init.sh` runs `detonationd` as user `sandbox`.
 - **P6 docs** ✅ syllabus, BACKLOG, this plan truthed up.
+- **P7 egress broker** ✅ (supersedes "web_fetch stays host-side"): executing
+  tools now run IN the VM and reach the network only through a host-side
+  netpolicy broker over vsock — the guest still has no NIC. New `broker` package
+  (host tunnel + guest `HTTPClient`), `sandbox.DialHost` (guest→host vsock),
+  `cmd/vmfetch` (in-VM fetch tool, cross-built by prepareassets, installed on
+  guest PATH by sandbox_init.sh), `controlplane.ExecuteFetch` + `SandboxFetchTool`
+  (web_fetch that detonates `vmfetch` in the VM), and `launchvm` host wiring
+  (`-allow` egress allowlist, vsock:5001 listener → broker). Host-tested over TCP
+  (`broker` tests, `cmd/mcpdemo` §11–12); netpolicy remains the single egress
+  authority, now enforced at the broker.
 
-**Remaining = t's step only:** re-boot the VM (`launchvm` + codesign) and
-confirm the acceptance checks below live (no-egress curl fails, `uname` works,
-`id` shows non-root). No host-side Go work left.
+**Remaining = t's step only:** re-boot the VM (`launchvm -allow <hosts>` +
+codesign) and confirm live: no-egress `curl` (direct) fails, `uname` works, `id`
+shows non-root, and `sandbox_exec ["vmfetch","https://<allowed>"]` succeeds while
+a non-allowlisted host is refused at the broker. No host-side Go work left.
 
 ## Rhythm (unchanged)
 Claude writes Go into the connected folders. **t runs `go test`, all `git`, and

@@ -25,7 +25,7 @@ Reconciles the skeleton draft (`scratch/skeleton-draft.md`) and the syllabus
 ## Track II — operate & govern
 | Module | Capability | Status |
 | --- | --- | --- |
-| M14 | governed control plane + operator RBAC | ✅ |
+| M14 | governed control plane + operator RBAC | ✅ (generic config); 🟡 prompts/models/policies not yet governed artifacts — see `docs/CONTROL-PLANE-PLAN.md` (prompts management plane, model-swap plane, promotion gates) |
 | M15 | admin audit + versioned rollback | ✅ |
 | M16 | network/credential containment (egress allowlist, DNS pinning, block link-local/RFC1918, SSRF→IMDS) | ✅ `netpolicy` + sandbox exec hardened to `argv` allowlist + `argcheck` arg-arrays (no shell strings); no-ambient-creds (captoken) exercised in redteam, live-loop wiring open |
 | M17 | AppSec/supply-chain of the harness (SAST/DAST/SCA, SLSA, AISBOM, signed images) | ⬜ **SKIPPED (operator's call)** |
@@ -33,6 +33,7 @@ Reconciles the skeleton draft (`scratch/skeleton-draft.md`) and the syllabus
 | M19 | MLOps/data/privacy | ✅ `registry` promotion gates (+eval-gated via cpstore) · `memory.Erase` DSAR · `dataset` provenance verify at ingest; post-fine-tune/RLHF N/A (no training pipeline) |
 | M20 | memory lifecycle + output authenticity + MCP gateway | ✅ `memory` (TTL/scope/erasure/untrusted-recall) + `provenance` (ed25519 content credentials) + MCP gateway (gustoms) |
 | Capstone II | operator console (local web app) | ✅ `controlplane.ConsoleServer` + `cmd/gridge`: served page + JSON API over the governed plane, reused in tests. Wails dropped — local web app reused for tests (decision) |
+| App (owner use) | beyond meetings: tasks/reminders, heads-ups, actions, digest+contacts surfacing, needs-review, month view | ⬜ planned — `docs/APP-FEATURES-PLAN.md` (item-kind model, VTODO, summary sidecars, new endpoints/tabs; phases A1–A8) |
 
 ## Specific gaps the operator flagged
 - **Layered kill switch** — spec (skeleton §28): revoke tokens → gateway fail-closed → scoped levels (pause-sessions / block-tools / full-halt) → AIDR auto-trigger → drain+snapshot. Today: binary `goverlord.KillSwitch`.

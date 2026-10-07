@@ -18,7 +18,8 @@ Mac**. Nothing Python is deleted until the Go passes the eval (Phase 5).
 | gorauder | red-team harness (PyRIT) | ✅ shipped |
 | goverlord | governed control plane | ✅ shipped + wired (controlplane.Governance: RBAC/four-eyes/rollback/kill-switch; cmd/console) |
 | gonductor | orchestrator / CaMeL loop (LangGraph) | ✅ generic state-graph engine (nodes/edges/conditional routing, 2-layer circuit breaker, step hook), tested; drives the course CaMeL loop |
-| gustoms | MCP gateway | ⬜ later (M7) |
+| gustoms | MCP gateway | ✅ shipped (M7) |
+| ADD | Attack-Driven Development test library (github.com/t0ul/ADD, pkg `add`) | ✅ shipped — paired undefended/defended invariant + OWASP coverage grid over gorauder; `redteam`/`cmd/scorecard` refactored onto it |
 | gridge | operator console (Wails GUI) | 🟡 HTTP backbone + served console page built in-course (controlplane.ConsoleServer + cmd/gridge, tested); Wails desktop wrapper over the same API still pending |
 
 ## Course Go port — agent/ (one module, replace → ../fleet)
@@ -64,6 +65,24 @@ None — repo is zero-Python as of 2026-10-06 (Phase 5 complete). Only non-Go ru
 - Harvest generic redteam seeds into gorauder; add live-LLM target + converters.
 - Goverlord governance ✅ wired (Track II M14/M15): `controlplane.Governance` puts the agent's operational config under RBAC + four-eyes approval + versioned rollback + fail-closed kill switch, audited to gledger; `Orchestrator.Killed` hook halts the loop when the switch is engaged; `cmd/console` demos the full lifecycle (chain verifies). Operator console backbone ✅: `controlplane.ConsoleServer` serves the governed plane as a JSON API + a live wired-to-state HTML console (`cmd/gridge`), goverlord enforced server-side, errors mapped to HTTP status (403/409/422/…), tested with httptest. Remaining Track II: the Wails desktop wrapper (fleet gridge repo) over this same API — Capstone II.
 - Swap local `replace` directives → version tags for release.
+
+## Next: control-plane hardening — see `docs/CONTROL-PLANE-PLAN.md`
+Make the control plane a governed-artifact registry. Headline gap: **prompts are
+hardcoded consts** (`PlannerSystemPrompt`/`CoderSystemPrompt`/`ExtractionPrompt`)
+— `cpstore.RecordPrompt` can store versioned/hashed prompts but nothing resolves
+them at runtime, so there's no prompts management plane. Plan: prompt resolver +
+pin + governed lifecycle (propose→approve→gate→activate→rollback), a logical
+`extractor` model for config-driven model swaps, the extraction ensemble +
+ExtractionInjection/HallucinationReconcile ADD cases, and an eval-F1 + ADD-ASR
+promotion gate on every prompt/model change. Phases C1–C6 (t implements).
+
+## Next: app features beyond meetings — see `docs/APP-FEATURES-PLAN.md`
+Owner-use app upgrade: non-meeting **tasks/reminders** (buy popcorn, clothes
+donation, permission slips), **heads-ups** (guest author visiting), **actions**
+(accept classroom-app invite / RSVP links, netpolicy+VM-brokered), plus
+surfacing the already-built read-only tools (digest, contacts, action-items) and
+a needs-review queue + month view. Item-kind model on `schema.Event`, `VTODO` in
+`ics`, pipeline summary sidecars, new web endpoints + tabs. Phased A1–A8.
 
 ## MicroVM hardening ✅ (host-side) — see `docs/MICROVM-PLAN.md`
 Made the MicroVM a real egress-denied, ephemeral detonation chamber and exposed
