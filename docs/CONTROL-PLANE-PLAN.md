@@ -211,9 +211,15 @@ so the bridge can't silently un-wire.
 - **C5 — Sampling + model-swap plane** 🟡 (live-doable now — models verified up
   this session; **the LLM extractor already works**: `EXTRACT_MODE=llm` scores
   F1=1.00/1.00 live via `cmd/livecheck` + `livetest`). Remaining: a **logical
-  `extractor` model binding** (route extraction to its own gouncer model, swap =
-  config not code) and **grammar-constrained JSON** (GBNF / response_format on
-  extraction, valid-by-construction). **Sampling governance DONE**:
+  `extractor` model binding** ✅ (`extractor.SetModel`; extraction routes to a
+  logical model name — `EXTRACTOR_MODEL`/config, default "planner" — so a swap is a
+  config edit, read from cpstore `extractor_model` on boot) and
+  **grammar-constrained JSON** ✅ (`extractor.SetJSONMode` attaches a GBNF event-
+  array grammar — `eventArrayGBNF` — so the model emits valid-by-construction JSON;
+  from cpstore `extractor_json`). Payload extracted to `extractionPayload` + tested;
+  live eval still 1.00/1.00 (default binding unchanged). To fully exercise the
+  swap/grammar live, gouncer needs an `extractor` route + a grammar-honoring model.
+  **Sampling governance DONE**:
   `controlplane.Sampling` resolver (`SamplingConfig` temp/max_tokens/top_p/seed/
   stop; List/Get/Activate/Reset/Verify/Rehydrate + `HashSampling`) + `GovernedSampling`
   over cpstore (`RecordSampling`/`LatestSampling`, gledger-audited) + console

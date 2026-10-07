@@ -295,8 +295,11 @@ The live eval path works (`livetest` / `cmd/livecheck`, F1=1.00/1.00). Shipped:
 number; `TestLivePassK` shows pass@3=pass^3=true, F1=[1,1,1]), and the
 `JudgeManipulation` ADD case — eval-gaming by prompt-injecting the LLM judge
 (undefended naive judge obeys "score 10/10"; defended judge treats the output as
-DATA and scores by the rubric only), 100%→0%. Remaining: an online eval /
-data-flywheel loop from the review queue.
+DATA and scores by the rubric only), 100%→0%. **Data-flywheel shipped**: operator
+accept/reject on extracted items is captured as durable, audited ground-truth
+(cpstore `feedback`) and surfaced as an accept-rate in the Eval tab — real use
+feeding the eval set. Plus the C5 model plane: a logical `extractor` model binding
+and GBNF grammar-constrained JSON (`extractor.SetModel`/`SetJSONMode`).
 
 **Post 29 · Live red-team: ADD against the real model** ✅
 The offline ADD scorecard proves the controls deterministically; this is the
