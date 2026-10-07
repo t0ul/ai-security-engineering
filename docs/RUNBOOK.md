@@ -79,6 +79,23 @@ codesign --entitlements set-up/entitlements.plist -s - --force launchvm
 Watch for `vsock bridge up: 127.0.0.1:5000 -> guest vsock:5000` and, in the guest
 console, `detonationd started`.
 
+**Assets are already staged** (`set-up/vm-assets/`: `Image`, `alpine-root`,
+`initramfs*`, `sandbox_init.sh`, a static `detonationd`, `vmfetch`, both GGUFs), so
+no `prepareassets` download is needed; and the host chain is verified to build and
+the guest `detonationd` to cross-compile to a static arm64 ELF.
+
+**Verify the chamber (acceptance checks once booted):**
+1. **Isolation works** — an allow-listed `sandbox_exec` of `uname -a && whoami`
+   returns output from *inside* the VM (via `controlplane.Interpreter` → vsock:5000),
+   not the host.
+2. **Non-root** — that `whoami` is not `root` (the guest drops privileges).
+3. **Egress dead** — a direct `web_fetch` from the guest to a non-allow-listed host
+   fails (no NIC); only a `vmfetch` through the host broker (netpolicy chokepoint)
+   to an allow-listed host succeeds.
+4. **Ephemeral** — state does not persist across a reboot (Alpine in RAM).
+5. `ForbiddenSignatures` / argv-allowlist still refuse a destructive command
+   (`AllowlistBypass` holds live, not just in the offline scorecard).
+
 ## 4. Live checks
 
 **Eval F1 gate (closes the 1.txt ≥0.87 target).** Default `GATEWAY_URL` is

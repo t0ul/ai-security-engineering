@@ -261,15 +261,21 @@ New phases:
   tomorrow|YYYY-MM-DD` aggregates the profile's daily anchors (`8:15 in · lunch
   10:55 · out 2:30`) + every extracted event/task/action landing on that day,
   across all processed emails (`allEvents()`); My Week tab with Today/Tomorrow.
-  Live-smoked (profile + a dropped dated email → the day's agenda). Remaining:
-  half-day exceptions (needs R2 doc-routing + handbook), RRULE recurrence.
+  Live-smoked (profile + a dropped dated email → the day's agenda). **Half-day
+  exceptions DONE** (profile `HalfDays`/`HalfDayOut`: on a listed day the timeline
+  flags `half_day`, moves dismissal to the early time, drops lunch — live-smoked).
+  **RRULE DONE** in the ics writer (`schema.Event.Recur` → sanitized `RRULE:` line;
+  recurrence *detection* from prose is a follow-on).
 - **R4 — Ask School** 🟡: `/api/ask` lexical search over the PII-scrubbed corpus
   (FTS5, injection-safe) + an Ask tab (box + snippets, readable source, untrusted
   badge). Verified live (nurse / phone policy → handbook). Remaining ⬜: an LLM
   *answer* (not just snippets, needs the model) + passage-level chunking (rag
   stores whole emails as one chunk, so the snippet is the doc start, not the
   matching passage).
-- **R5 — structured directory** ⬜: role→name→email/ext lookup (extends contacts).
+- **R5 — structured directory** ✅ (MVP): `/api/directory` + Ask-tab Directory card
+  consolidates the contacts the `contacts` tool surfaced across every email (deduped
+  emails) + profile teachers (name→role). Host-only, PII-scoped. Full role→ext
+  enrichment (NER) is a follow-on.
 - **R6 — safe link enrichment** ✅: `/api/enrich` (Ask tab "Enrich from a link")
   — a handbook URL is cleared by the egress allowlist (netpolicy deny-by-default,
   registrable-domain, no loopback/private/IMDS), gated by an evidence-first
@@ -278,8 +284,12 @@ New phases:
   trust it. Never auto-fetched. Security path live-smoked (401 w/o token;
   non-allowlisted host refused; allow-listed passes). Real page content needs the
   VM up (`launchvm`). Powers "what's for lunch Thursday?" once the menu is fetched.
-- **R7 — IA consolidation** ⬜: collapse the growing surface to Week + Ask +
-  Settings; one hero per parent tab (timeline, ask box). Guard against sprawl.
+- **R7 — IA consolidation** 🟡: nav now visually splits the parent view
+  (Calendar/My Week/Tasks/Review/Activity/Ask) from the `· operator ·` governance
+  group (Security/Prompts/Sampling/Policies/Budgets/Eval/Incidents). Full
+  consolidation (collapse to Week + Ask + Settings, one hero per tab) lands with
+  the repo refactor's `ui/templates` work (`docs/REFACTOR-PLAN.md`), since that
+  rewrites the view layer anyway.
 
 Order: R1→R2→R3→R4 delivers ask-my-day; R6 is the link-enrichment showcase
 (Post 16); R5/R7 polish.
