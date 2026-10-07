@@ -244,10 +244,10 @@ Already built (reused here):
 - contacts tool (`agent/tools.Contacts`) ✅
 
 New phases:
-- **R1 — child profile** ✅: `webapp.Profile`/`Child` (name/grade/class/teacher/
-  school/in/lunch/out/notes) persisted to `<drop>/profile.json` (0600, host-only,
-  never from an email); `/api/profile` + `/api/profile/save` (csrf + authz
-  write/profile). Edited in the My Week tab.
+- **R1 — child profile** ✅: `webapp.Profile`/`Child` (name/grade[free-text, e.g.
+  "K"]/class/teacher/school/in/lunch/out/notes) persisted **in the cpstore DB**
+  (config key "profile"), host-only, never from an email; `/api/profile` +
+  `/api/profile/save` (csrf + authz write/profile). Edited in the My Week tab.
 - **R2 — document-type routing** ⬜: on ingest, classify bulletin vs reference;
   reference → index into the corpus (don't extract-butcher it) but still pull the
   few embedded dated items (conferences Nov 5 / Mar 3, Back-to-School Sept 29).
@@ -264,11 +264,14 @@ New phases:
   stores whole emails as one chunk, so the snippet is the doc start, not the
   matching passage).
 - **R5 — structured directory** ⬜: role→name→email/ext lookup (extends contacts).
-- **R6 — safe link enrichment** 🟡 (engine ✅, wiring ⬜): fetch handbook URLs
-  through `SandboxFetchTool` (VM + netpolicy). URLs come from an UNTRUSTED doc →
-  allowlist by **registrable domain** (schools.nyc.gov, ps51eliashowe.org,
-  nyc.gov), never auto-fetch, HITL first host, fetched bytes → corpus as
-  Untrusted. Powers "what's for lunch Thursday?" from the fetched menu.
+- **R6 — safe link enrichment** ✅: `/api/enrich` (Ask tab "Enrich from a link")
+  — a handbook URL is cleared by the egress allowlist (netpolicy deny-by-default,
+  registrable-domain, no loopback/private/IMDS), gated by an evidence-first
+  single-use HITL confirm, fetched INSIDE the MicroVM (`SandboxFetchTool` via the
+  broker), PII-scrubbed on ingest, and indexed as UNTRUSTED so Ask can use but not
+  trust it. Never auto-fetched. Security path live-smoked (401 w/o token;
+  non-allowlisted host refused; allow-listed passes). Real page content needs the
+  VM up (`launchvm`). Powers "what's for lunch Thursday?" once the menu is fetched.
 - **R7 — IA consolidation** ⬜: collapse the growing surface to Week + Ask +
   Settings; one hero per parent tab (timeline, ask box). Guard against sprawl.
 
