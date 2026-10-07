@@ -68,7 +68,7 @@ type Event struct {
 	Location    string `json:"location"`
 	AllDay      bool   `json:"all_day"`
 	HasReminder bool   `json:"has_reminder"`
-	Signed      bool   `json:"signed"`        // the .ics has a valid agent content credential (M20)
+	Signed      bool   `json:"signed"` // the .ics has a valid agent content credential (M20)
 	File        string `json:"file"`
 	Kind        string `json:"kind"`          // event|task|heads_up|action (from X-KIND)
 	Due         string `json:"due,omitempty"` // task/action due date
@@ -77,7 +77,9 @@ type Event struct {
 
 // events reads the accepted .ics artifacts in OutboxDir and returns their events
 // for the calendar view. The .ics is the source of truth the user accepts.
-func (s *Server) events(w http.ResponseWriter, _ *http.Request) {
+// allEvents reads every .ics in the outbox into a sorted event list (shared by
+// the Calendar list and the daily timeline).
+func (s *Server) allEvents() []Event {
 	var out []Event
 	if s.OutboxDir != "" {
 		entries, _ := os.ReadDir(s.OutboxDir)
@@ -98,7 +100,11 @@ func (s *Server) events(w http.ResponseWriter, _ *http.Request) {
 		}
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Start < out[j].Start })
-	writeJSON(w, map[string]any{"events": out, "inbox": s.InboxPath})
+	return out
+}
+
+func (s *Server) events(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, map[string]any{"events": s.allEvents(), "inbox": s.InboxPath})
 }
 
 // parseICS extracts events from an .ics body (minimal VEVENT reader).

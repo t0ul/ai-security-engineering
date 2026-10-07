@@ -41,6 +41,7 @@ const dashboardHTML = `<!doctype html>
 <header><h1>🗓️ Agent Console</h1>
   <nav>
     <button data-tab="calendar" class="active">Calendar</button>
+    <button data-tab="week">My Week</button>
     <button data-tab="tasks">Tasks</button>
     <button data-tab="review">Review</button>
     <button data-tab="activity">Activity</button>
@@ -72,6 +73,23 @@ const dashboardHTML = `<!doctype html>
       </div>
       <div id="events"></div>
       <div id="monthView" class="hide"></div>
+    </div>
+  </section>
+
+  <section id="week" class="hide">
+    <div class="card">
+      <strong>My Week</strong> <span class="mut">— your kid's day from every processed email + the profile</span>
+      <div style="margin-top:8px">
+        <button class="ghost" onclick="loadWeek('today')">Today</button>
+        <button class="ghost" onclick="loadWeek('tomorrow')">Tomorrow</button>
+        <span id="weekDay" class="mut"></span>
+      </div>
+      <div id="timeline" style="margin-top:8px"><span class="mut">loading…</span></div>
+    </div>
+    <div class="card">
+      <strong>Child profile</strong> <span class="mut">— personalizes the day (stays on this host). JSON: children[] with name/grade/teacher/in/lunch/out/notes.</span>
+      <textarea id="profileJSON" rows="8" style="width:100%;margin-top:6px"></textarea>
+      <div style="margin-top:6px"><button class="go" onclick="saveProfile()">Save profile</button> <span id="profileMsg" class="mut"></span></div>
     </div>
   </section>
 
@@ -170,7 +188,7 @@ const dashboardHTML = `<!doctype html>
 const __CAP__="__CAP_TOKEN__";
 (function(){const f=window.fetch.bind(window);window.fetch=(u,o)=>{o=o||{};const s=typeof u==='string'?u:(u&&u.url)||'';if(__CAP__&&(s.indexOf('/api/')===0||s.indexOf('/ics/')===0)){o.headers=Object.assign({},o.headers||{},{'Authorization':'Bearer '+__CAP__});}return f(u,o);};})();
 const $=s=>document.querySelector(s);
-const TABS=['calendar','tasks','review','activity','ask','security','prompts','policies','eval','incidents'];
+const TABS=['calendar','week','tasks','review','activity','ask','security','prompts','policies','eval','incidents'];
 const esc=s=>{const d=document.createElement('div');d.textContent=s||'';return d.innerHTML;};
 const when=e=>e.all_day?((e.due||e.start)+' · all day'):((e.start||e.due)+(e.end?(' – '+e.end.slice(11)):''));
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
@@ -178,6 +196,7 @@ document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
   TABS.forEach(t=>$('#'+t).classList.toggle('hide',t!==b.dataset.tab));
   const t=b.dataset.tab;
   if(t==='calendar'){loadEvents();loadDeadlines();}
+  if(t==='week'){loadWeek('today');loadProfile();}
   if(t==='tasks') loadTasks();
   if(t==='review') loadReview();
   if(t==='activity') loadActivity();
@@ -245,6 +264,28 @@ async function activatePolicy(name){
   await postJSON('/api/policies/activate',{name:name,items:items});loadPolicies();
 }
 async function resetPolicy(name){await postJSON('/api/policies/reset',{name:name});loadPolicies();}
+async function loadWeek(day){
+  const c=$('#timeline');if(!c)return;const d=await getJSON('/api/timeline?day='+day);
+  const w=$('#weekDay');if(w)w.textContent=(d.weekday||'')+' '+(d.day||'');
+  let html='';
+  const anchors=d.anchors||[];
+  if(anchors.length) html+='<h3>Daily</h3>'+anchors.map(a=>'<div class="ev"><div><b>'+esc(a.child)+'</b> '+esc(a.label)+' <span class="mut">'+esc(a.time)+'</span></div></div>').join('');
+  const items=d.items||[];
+  html+='<h3>On this day</h3>';
+  if(!items.length) html+='<p class="mut">nothing extracted for this day</p>';
+  else html+=items.map(e=>'<div class="ev"><div><b>'+esc(e.title)+'</b>'+(e.kind&&e.kind!=='event'?' <span class="kind">'+esc(e.kind)+'</span>':'')+'<br><span class="mut">'+esc(when(e))+(e.location?(' · '+esc(e.location)):'')+'</span></div></div>').join('');
+  c.innerHTML=html;
+}
+async function loadProfile(){
+  const ta=$('#profileJSON');if(!ta)return;const p=await getJSON('/api/profile');
+  ta.value=JSON.stringify(p&&p.children?p:{children:[]},null,2);
+}
+async function saveProfile(){
+  const ta=$('#profileJSON');const m=$('#profileMsg');if(!ta)return;
+  let body;try{body=JSON.parse(ta.value);}catch(e){if(m)m.textContent='invalid JSON';return;}
+  const r=await postJSON('/api/profile/save',body);
+  if(m)m.textContent=r.ok?'saved':'save failed';loadWeek('today');
+}
 async function loadEval(){
   const c=$('#evalHistory');if(!c)return;const d=await getJSON('/api/eval');const h=d.history||[];
   if(!h.length){c.innerHTML='<p class="mut">no eval scores yet — click Run eval now (needs the model path up), or run cmd/livecheck</p>';return;}

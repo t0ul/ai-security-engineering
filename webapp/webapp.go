@@ -76,6 +76,10 @@ type Server struct {
 	// the static Egress is used.
 	Policies *controlplane.Policies
 
+	// ProfilePath, when set, is the household child-profile JSON (R1) that
+	// personalizes the daily timeline (R3). Operator-set; never from an email.
+	ProfilePath string
+
 	// Eval surfaces (C7): EvalHistory lists persisted F1 scores (the trend card);
 	// EvalRun runs the eval live and persists it; PromptTest shadow-evals a
 	// candidate extractor prompt (F1 + ADD-ASR + promotion-gate verdict) WITHOUT
@@ -146,13 +150,18 @@ func (s *Server) Handler() http.Handler {
 	if s.PromptTest != nil {
 		mux.HandleFunc("/api/prompts/test", csrf(s.authz(controlplane.ActionWrite, "prompts", s.promptsTest)))
 	}
+	if s.ProfilePath != "" {
+		mux.HandleFunc("/api/timeline", s.timeline)
+		mux.HandleFunc("/api/profile", s.profileGet)
+		mux.HandleFunc("/api/profile/save", csrf(s.authz(controlplane.ActionWrite, "profile", s.profileSave)))
+	}
 	if s.InboxPath != "" {
 		mux.HandleFunc("/api/drop", csrf(s.authz(controlplane.ActionWrite, "inbox", s.drop)))
 	}
 	if s.OutboxDir != "" {
 		mux.HandleFunc("/api/accept", csrf(s.authz(controlplane.ActionWrite, "calendar", s.accept)))
 		mux.HandleFunc("/api/action", csrf(s.authz(controlplane.ActionExport, "link", s.action))) // egress
-		mux.HandleFunc("/ics/", s.serveICS)                                                        // .ics only — NOT the whole outbox (sidecars hold PII)
+		mux.HandleFunc("/ics/", s.serveICS)                                                       // .ics only — NOT the whole outbox (sidecars hold PII)
 	}
 	mux.HandleFunc("/", s.index)
 	return mux

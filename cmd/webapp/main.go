@@ -348,6 +348,7 @@ func main() {
 			Authz: authz, OperatorToken: opToken, Audit: audit,
 			MCP: mcpList, MCPApprove: mcpApprove, Prompts: prompts, Policies: policies,
 			EvalHistory: evalHistory, EvalRun: evalRun, PromptTest: promptTest,
+			ProfilePath: filepath.Join(*drop, "profile.json"),
 		}).Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
