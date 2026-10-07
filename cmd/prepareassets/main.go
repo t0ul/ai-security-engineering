@@ -36,7 +36,7 @@ func main() {
 		log.Fatalf("prepareassets: %v", err)
 	}
 
-	steps := []func(string) error{prepareKernel, prepareRootFS, prepareModels, buildDetonationd}
+	steps := []func(string) error{prepareKernel, prepareRootFS, prepareModels, buildGuestBinaries}
 	for _, step := range steps {
 		if err := step(*dir); err != nil {
 			log.Fatalf("prepareassets: %v", err)
@@ -91,16 +91,23 @@ func prepareRootFS(dir string) error {
 	return cmd.Run()
 }
 
-// buildDetonationd cross-compiles the in-guest detonation daemon into the shared
-// assets dir. The VM is Alpine on Apple Silicon (linux/arm64); the daemon is
-// pure Go (CGO off), so it runs as a static binary with no runtime deps.
-func buildDetonationd(dir string) error {
-	dest := filepath.Join(dir, "detonationd")
-	fmt.Println("daemon: cross-compiling detonationd (linux/arm64, static)...")
-	cmd := exec.Command("go", "build", "-o", dest, "./cmd/detonationd")
-	cmd.Env = append(os.Environ(), "GOOS=linux", "GOARCH=arm64", "CGO_ENABLED=0")
-	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
-	return cmd.Run()
+// buildGuestBinaries cross-compiles the in-guest Go tools into the shared assets
+// dir. The VM is Alpine on Apple Silicon (linux/arm64); both are pure Go (CGO
+// off), so they run as static binaries with no runtime deps: detonationd (serves
+// the vsock detonation protocol) and vmfetch (the in-VM fetch tool that reaches
+// the net only through the host egress broker).
+func buildGuestBinaries(dir string) error {
+	for _, bin := range []string{"detonationd", "vmfetch"} {
+		dest := filepath.Join(dir, bin)
+		fmt.Printf("guest: cross-compiling %s (linux/arm64, static)...\n", bin)
+		cmd := exec.Command("go", "build", "-o", dest, "./cmd/"+bin)
+		cmd.Env = append(os.Environ(), "GOOS=linux", "GOARCH=arm64", "CGO_ENABLED=0")
+		cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+		if err := cmd.Run(); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func prepareModels(dir string) error {

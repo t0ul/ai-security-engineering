@@ -15,8 +15,11 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
+	"github.com/t0ul/ai-security-engineering/broker"
 	"github.com/t0ul/ai-security-engineering/controlplane"
+	"github.com/t0ul/ai-security-engineering/cpstore"
 	"github.com/t0ul/ai-security-engineering/mcp"
 	"github.com/t0ul/ai-security-engineering/netpolicy"
 	"github.com/t0ul/ai-security-engineering/sandbox"
@@ -70,11 +73,23 @@ func run() error {
 	mcpSrv := httptest.NewServer(mcp.NewServer(mcp.WebFetchTool(policy, 0), controlplane.SandboxExecTool(interp)))
 	defer mcpSrv.Close()
 
+	// Persist approved MCP manifest pins to the durable inventory (survives
+	// restarts; the console reads real pins).
+	inv, _ := cpstore.Open(filepath.Join("controlplane", "logs", "inventory.db"))
+	if inv != nil {
+		defer inv.Close()
+	}
 	gw := gustoms.New(
 		gustoms.WithServer(gustoms.Server{Name: "search", Client: &mcp.HTTPClient{URL: mcpSrv.URL}, AllowedTools: []string{"web_fetch", "sandbox_exec"}}),
 		gustoms.WithAuthorizer(func(caller, _, _ string) bool { return caller == "agent" }),
 		gustoms.WithAuditor(audit),
+		gustoms.WithPinRecorder(func(server, hash string) {
+			if inv != nil {
+				_ = inv.RecordPin(server, hash, "operator")
+			}
+		}),
 	)
+	_ = gw.Approve(context.Background(), gledger.NewTraceID(), "search") // pin + persist the current manifest
 
 	call := func(caller, server, tool, url string) {
 		args := map[string]any{}
@@ -127,6 +142,29 @@ func run() error {
 	callArgv("rm", "--recursive", "/")
 	fmt.Println("10) shell-metacharacter argument (argcheck refuses before detonation):")
 	callArgv("ls", "x; echo PWNED")
+
+	// Egress broker: how an in-VM tool (vmfetch) reaches the network without the
+	// guest having a NIC — every dial is gated by netpolicy on the host. Shown
+	// here over TCP; in the VM the same client dials the host over vsock.
+	bln, _ := net.Listen("tcp", "127.0.0.1:0")
+	defer bln.Close()
+	go (&broker.Broker{Policy: policy}).Serve(bln)
+	bdial := func(ctx context.Context) (net.Conn, error) {
+		var d net.Dialer
+		return d.DialContext(ctx, "tcp", bln.Addr().String())
+	}
+	bclient := broker.HTTPClient(bdial, 5*time.Second)
+	fmt.Println("11) egress broker — allow-listed fetch from inside the VM:")
+	if resp, err := bclient.Get(target.URL); err != nil {
+		fmt.Printf("  BLOCKED  broker fetch %s\n           %v\n", target.URL, err)
+	} else {
+		resp.Body.Close()
+		fmt.Printf("  ALLOWED  broker fetch %s -> HTTP %d\n", target.URL, resp.StatusCode)
+	}
+	fmt.Println("12) egress broker — SSRF to IMDS refused at the chokepoint:")
+	if _, err := bclient.Get("http://169.254.169.254/latest/meta-data/"); err != nil {
+		fmt.Printf("  BLOCKED  broker fetch IMDS\n           %v\n", err)
+	}
 
 	ok, n := audit.Verify()
 	fmt.Printf("\naudit: chain_ok=%t records=%d\n", ok, n)

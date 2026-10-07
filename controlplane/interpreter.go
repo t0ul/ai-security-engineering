@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -26,6 +27,7 @@ var ForbiddenSignatures = []string{"rm -rf", "nc -e", "mkfifo", "> /dev/tcp"}
 var DefaultAllowedCommands = []string{
 	"uname", "ls", "cat", "head", "tail", "echo", "pwd", "id",
 	"env", "date", "git", "whoami", "wc", "grep", "sort", "true",
+	"vmfetch", // in-VM fetch tool; reaches the net only via the host egress broker
 }
 
 // Policy is the outbound-command gate applied before anything reaches the
@@ -137,7 +139,33 @@ func (in *Interpreter) ExecuteArgv(ctx context.Context, traceID string, argv []s
 		return fmt.Sprintf("[Interpreter] BLOCKED: %s.", reason)
 	}
 	in.Audit.Emit(traceID, "policy", "gate", gledger.F{"decision": "allow", "argv": argv})
+	return in.detonate(ctx, traceID, argv)
+}
 
+// ExecuteFetch detonates the in-VM `vmfetch` tool against rawURL. The URL is
+// validated as an http/https URL here (not run through the shell-metacharacter
+// gate, which would wrongly reject legal URL characters) and passed as a single
+// argv element — the VM execs it with no shell, and vmfetch reaches the network
+// only through the host egress broker (netpolicy). So the fetch EXECUTES in the
+// chamber, not on the host, yet egress stays a single audited chokepoint.
+func (in *Interpreter) ExecuteFetch(ctx context.Context, traceID, rawURL string) string {
+	u, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		in.Audit.Emit(traceID, "policy", "gate", gledger.F{"decision": "block", "reason": "invalid url", "url": rawURL})
+		return "[Interpreter] BLOCKED: url must be a valid http(s) URL."
+	}
+	if strings.ContainsAny(rawURL, " \t\r\n") {
+		in.Audit.Emit(traceID, "policy", "gate", gledger.F{"decision": "block", "reason": "whitespace in url", "url": rawURL})
+		return "[Interpreter] BLOCKED: url contains whitespace."
+	}
+	in.Audit.Emit(traceID, "policy", "gate", gledger.F{"decision": "allow", "tool": "vmfetch", "url": rawURL})
+	return in.detonate(ctx, traceID, []string{"vmfetch", rawURL})
+}
+
+// detonate POSTs argv to the MicroVM and returns the sandbox output (or a status
+// message prefixed with [Interpreter]). It performs no policy checks — callers
+// gate first.
+func (in *Interpreter) detonate(ctx context.Context, traceID string, argv []string) string {
 	buf, _ := json.Marshal(detonateRequest{Argv: argv, TraceID: traceID})
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, in.MicroVMURL, bytes.NewReader(buf))
 	if err != nil {

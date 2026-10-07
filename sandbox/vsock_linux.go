@@ -31,6 +31,21 @@ func Listen(port uint32) (net.Listener, error) {
 	return &vsockListener{fd: fd, port: port}, nil
 }
 
+// DialHost opens an AF_VSOCK connection from the guest to the host (CID 2) on
+// port. The egress broker runs on the host; this is how an in-VM tool reaches it
+// without the guest having any IP network of its own.
+func DialHost(port uint32) (net.Conn, error) {
+	fd, err := unix.Socket(unix.AF_VSOCK, unix.SOCK_STREAM, 0)
+	if err != nil {
+		return nil, fmt.Errorf("sandbox: vsock socket: %w", err)
+	}
+	if err := unix.Connect(fd, &unix.SockaddrVM{CID: unix.VMADDR_CID_HOST, Port: port}); err != nil {
+		unix.Close(fd)
+		return nil, fmt.Errorf("sandbox: vsock connect host:%d: %w", port, err)
+	}
+	return &vsockConn{fd: fd}, nil
+}
+
 type vsockAddr struct {
 	cid  uint32
 	port uint32

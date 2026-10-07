@@ -23,7 +23,20 @@ if [ ! -f /mnt/assets/detonationd ]; then
     exec /bin/sh
 fi
 
-chmod +x /mnt/assets/detonationd
+# The assets live on a read-only virtiofs mount, so chmod is refused there — the
+# exec bit is already carried over from the host build. Best-effort, never fatal.
+chmod +x /mnt/assets/detonationd 2>/dev/null || true
+
+# Put the in-VM fetch tool on PATH so sandbox_exec can run it by name as
+# `vmfetch <url>` (detonationd exec's argv[0] via PATH lookup, and /mnt/assets is
+# not on PATH). It reaches the net only through the host egress broker over vsock.
+mkdir -p /usr/local/bin
+if [ -f /mnt/assets/vmfetch ]; then
+    cp /mnt/assets/vmfetch /usr/local/bin/vmfetch && chmod 0755 /usr/local/bin/vmfetch
+    echo "  vmfetch installed to /usr/local/bin"
+else
+    echo "  NOTE: /mnt/assets/vmfetch not found — re-run 'go run ./cmd/prepareassets'"
+fi
 # Dedicated unprivileged user; ignore the error if it already exists.
 adduser -D sandbox 2>/dev/null || true
 

@@ -29,6 +29,9 @@ import (
 	"time"
 
 	"github.com/Code-Hex/vz/v3"
+	"github.com/t0ul/ai-security-engineering/broker"
+	"github.com/t0ul/ai-security-engineering/internal/modelserve"
+	"github.com/t0ul/ai-security-engineering/netpolicy"
 	"golang.org/x/term"
 )
 
@@ -39,7 +42,16 @@ const (
 
 func main() {
 	dir := flag.String("dir", "set-up/vm-assets", "MicroVM assets directory")
+	allow := flag.String("allow", "", "comma-separated egress allowlist for the in-VM broker (default: deny all)")
 	flag.Parse()
+
+	var allowHosts []string
+	for _, h := range strings.Split(*allow, ",") {
+		if h = strings.TrimSpace(h); h != "" {
+			allowHosts = append(allowHosts, h)
+		}
+	}
+	egressPolicy := netpolicy.Policy{Allow: allowHosts}
 
 	kernelPath := filepath.Join(*dir, "Image")
 	initrdPath := filepath.Join(*dir, "initramfs.cpio.gz")
@@ -116,6 +128,7 @@ func main() {
 	}
 
 	go startVsockBridge(vm)
+	go startEgressBroker(vm, egressPolicy)
 	go driveConsole(hostReader, vmWriter)
 
 	sig := make(chan os.Signal, 1)
@@ -176,6 +189,9 @@ const bringUpCmd = "mkdir -p /mnt/assets && mount -t virtiofs assets /mnt/assets
 // guest's vsock listener, exposing a plain 127.0.0.1:5000 endpoint backed by the
 // isolated MicroVM.
 func startVsockBridge(vm *vz.VirtualMachine) {
+	// Reclaim the fixed bridge port from any leftover launchvm so a re-run never
+	// binds a stale VM (same pattern as modeld's model ports).
+	modelserve.ReclaimPort(vsockPort, os.Stdout)
 	ln, err := net.Listen("tcp", hostBridgeAddr)
 	if err != nil {
 		log.Printf("vsock bridge: listen %s: %v", hostBridgeAddr, err)
@@ -189,6 +205,32 @@ func startVsockBridge(vm *vz.VirtualMachine) {
 		}
 		go bridgeConn(vm, tcpConn)
 	}
+}
+
+// startEgressBroker listens on the guest-initiated vsock port and gates every
+// outbound connection the in-VM tools attempt through netpolicy. The guest has
+// NO network device (egress-denied), so this host-side broker is its only path
+// out — and a single, audited, allow-listed one. Byte tunneling and policy live
+// in the broker package; this just wires the vz vsock listener to it.
+func startEgressBroker(vm *vz.VirtualMachine, pol netpolicy.Policy) {
+	devices := vm.SocketDevices()
+	if len(devices) == 0 {
+		return
+	}
+	ln, err := devices[0].Listen(broker.DefaultPort)
+	if err != nil {
+		log.Printf("egress broker: listen vsock:%d: %v", broker.DefaultPort, err)
+		return
+	}
+	b := &broker.Broker{Policy: pol, Log: func(target string, allowed bool, reason string) {
+		if allowed {
+			os.Stdout.Write([]byte("\regress ALLOW " + target + "\r\n"))
+		} else {
+			os.Stdout.Write([]byte("\regress DENY  " + target + " (" + reason + ")\r\n"))
+		}
+	}}
+	os.Stdout.Write([]byte("\r\negress broker up: guest vsock:5001 -> host netpolicy\r\n"))
+	_ = b.Serve(ln)
 }
 
 func bridgeConn(vm *vz.VirtualMachine, tcpConn net.Conn) {

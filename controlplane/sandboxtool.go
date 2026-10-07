@@ -35,6 +35,28 @@ func SandboxExecTool(in *Interpreter) mcp.Tool {
 	}
 }
 
+// SandboxFetchTool is web_fetch done right for an agent: the fetch EXECUTES
+// inside the egress-denied MicroVM (via the in-VM `vmfetch` tool), not on the
+// host, so untrusted response bytes are parsed off the host. The guest has no
+// network of its own — vmfetch reaches the target only through the host egress
+// broker, where netpolicy (allowlist + dial-pinning + no-IMDS) is the single
+// authority. Contrast mcp.WebFetchTool, which fetches on the host behind the
+// same netpolicy; prefer this one for anything that processes the response.
+func SandboxFetchTool(in *Interpreter) mcp.Tool {
+	return mcp.Tool{
+		Name:        "web_fetch",
+		Description: "Fetch an allow-listed HTTP(S) URL inside the isolated MicroVM (egress brokered through the host) and return its status and body.",
+		Handler: func(ctx context.Context, args map[string]any) (any, error) {
+			rawURL, _ := args["url"].(string)
+			if rawURL == "" {
+				return nil, errors.New("web_fetch: 'url' argument is required")
+			}
+			traceID, _ := args["trace_id"].(string)
+			return map[string]any{"output": in.ExecuteFetch(ctx, traceID, rawURL)}, nil
+		},
+	}
+}
+
 // toArgv coerces a JSON array of strings into an argv slice.
 func toArgv(v any) ([]string, error) {
 	raw, ok := v.([]any)

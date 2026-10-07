@@ -68,6 +68,40 @@ func TestSandboxToolShellMetaRejectedBeforeVM(t *testing.T) {
 	}
 }
 
+func TestSandboxFetchRoutesThroughVM(t *testing.T) {
+	audit, _ := tempAudit(t)
+	hits := 0
+	vm := countingVM(t, &hits)
+	defer vm.Close()
+	in := &Interpreter{MicroVMURL: vm.URL, Audit: audit, HTTP: vm.Client()}
+	tool := SandboxFetchTool(in)
+
+	// Valid URL (with a query string, which the shell-meta gate would wrongly
+	// reject) detonates vmfetch inside the VM.
+	out, err := tool.Handler(context.Background(), map[string]any{"url": "https://example.com/a?b=1&c=2", "trace_id": "t"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hits != 1 {
+		t.Fatalf("fetch should reach the VM once, hits=%d", hits)
+	}
+	if got := out.(map[string]any)["output"].(string); !strings.Contains(got, "ran: vmfetch https://example.com/a?b=1&c=2") {
+		t.Fatalf("expected vmfetch argv in the VM, got %q", got)
+	}
+
+	// A non-http(s) URL is refused before any detonation.
+	out, err = tool.Handler(context.Background(), map[string]any{"url": "file:///etc/passwd", "trace_id": "t"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hits != 1 {
+		t.Fatalf("a bad-scheme URL must not reach the VM, hits=%d", hits)
+	}
+	if got := out.(map[string]any)["output"].(string); !strings.Contains(got, "BLOCKED") {
+		t.Fatalf("expected BLOCKED for file:// URL, got %q", got)
+	}
+}
+
 func TestSandboxToolNonAllowlistedRejectedBeforeVM(t *testing.T) {
 	audit, _ := tempAudit(t)
 	hits := 0
