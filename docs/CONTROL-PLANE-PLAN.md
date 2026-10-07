@@ -16,7 +16,7 @@ Implementation is t's (dev-caveman); this is the architecture.
 | **Prompts** (planner/coder/extractor) | consts; `controlplane.Prompts` resolver (C1) | orchestrator ✅, extractor ❌ | ❌ | hook exists, not wired |
 | **Sampling** (temperature/max_tokens/stop/top_p/seed) | hardcoded `CompleteOpts` literals | ❌ | ❌ | ❌ |
 | **Model bindings** (logical→gguf, allowlist) | orchestrator fields; gouncer allowlist | ❌ (fields); no `extractor` | ❌ | ❌ |
-| **MCP registry** (servers, allowed tools, manifest pins, strict) | `gustoms` (Pin/Approve/ManifestHash) | enforced at Call ✅ | ❌ no view | **`RecordPin` is dead code — never called** |
+| **MCP registry** (servers, allowed tools, manifest pins, strict) | `gustoms` (Pin/Approve/ManifestHash/**Status**) on the app path via `NewToolGateway` | enforced at Call ✅ | **console MCP tab ✅ (C6)** — list/tools/pin/rug-pull/Approve | `RecordPin` wired in `cmd/mcpdemo`; app gateway pin is deterministic from the shipped manifest |
 | **Guardrails** (gumpers rails, topic denylist, thresholds) | consts/flags | ❌ | ❌ | ❌ |
 | **Egress/exec policy** (netpolicy allowlist, argv allowlist, action-link allowlist) | flags/consts | ❌ | ❌ | ❌ |
 | **Budgets/limits** (rate, token, concurrency, per-caller) | gouncer gateway | gateway-side, not plane | ❌ | ❌ |
@@ -203,8 +203,14 @@ so the bridge can't silently un-wire.
     app-path gateway enforces; live smoke green. **C4 keystone complete (C4a–C4e).**
 - **C5 — Sampling + model-swap plane**: `rt.Sampling`, logical `extractor`,
   grammar-constrained JSON; sampling/model changes gated.
-- **C6 — MCP governance**: persist pins (`RecordPin`), registry-as-config,
-  console MCP tab (list/pins/rug-pull/re-approve).
+- **C6 — MCP governance console** ✅: `gustoms.Gateway.Status` (read-only snapshot:
+  tools, allow-list, approved pin vs live manifest, mismatch) + `webapp` MCP card
+  in the Security tab (status pinned/rug-pull/unapproved/blocked/error) + operator
+  **Approve** (re-pin, csrf + authz write/mcp). Live smoke: pinned→blocked under
+  the kill switch; approve 200 with token / 401 without. Remaining (not blocking):
+  registry-as-governed-config (add servers via propose/approve) when a 2nd MCP
+  server exists; durable `RecordPin` for the app gateway (its pin is deterministic
+  from the shipped manifest, so not needed for the single in-process tool).
 - **C7 — Eval-tweak loop**: shadow eval on a candidate, F1/ASR delta surfaced,
   gate on promote; console Test button + eval history.
 - **C8 — Policies as governed artifacts**: egress/argv/guardrail allowlists into

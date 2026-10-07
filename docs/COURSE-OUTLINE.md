@@ -101,7 +101,9 @@ defense, per-call authZ) and expose each roster tool as its own scoped MCP tool.
 Break: a shadow MCP server + a silently-swapped manifest + a spoofed peer.
 Defend: pinning + mutual auth + per-agent identity. Proof: rug-pull & a2a ASR
 100%→0%; the `cmd/mcpdemo` run. (The per-call scoped MCP tokens land on the *app*
-path in Post 18b, as capability grants bound to one audience.)
+path in Post 18b, as capability grants bound to one audience; the operator governs
+them from the console's **MCP tab** — tools, pin vs live manifest, rug-pull alert,
+one-click re-approve — built on `gustoms.Gateway.Status`.)
 
 ## Part 3 — The hard problems: data, retrieval, supply chain, the trifecta
 **Post 10 · RAG & memory security** (M8/M20-memory, LLM04/08/ASI06) ✅
