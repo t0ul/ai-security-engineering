@@ -238,10 +238,18 @@ SAST/DAST/SCA, signed builds + SLSA provenance + AISBOM, slopsquatting,
 verify-signature-at-deploy. Include if you want the "secure the artifact, not
 just the model" post.
 
-**Post 24 · Capstone II — the operator console** (Capstone II) 🟡
-The platform payoff: a local web app where a non-technical operator governs
-everything above by clicking. Built on `controlplane.ConsoleServer` +
-`cmd/gridge`; fold into the one app.
+**Post 24 · Make it idiomatic — the repo refactor** (replaces Capstone II) ⬜
+The operator console already serves a real governed dashboard, so the higher-value
+"make it a product" move is a clean, idiomatic Go layout a reviewer trusts at a
+glance. Adopt the `risk-rancher-core` pattern: thin `cmd/`, all libraries under
+`pkg/` (flat, by concern), the webapp split MVC — models in `pkg/domain`,
+persistence in `pkg/datastore`, HTTP in `pkg/server`, the dashboard HTML lifted
+out of the embedded string into `ui/templates`/`ui/static`. Canonical docs leave
+`scratch/`, sample emails become `examples/`, the stray build binary is gitignored.
+Pure move/rename, `go test ./...` green commit-by-commit. Full plan:
+`docs/REFACTOR-PLAN.md`. Hook: "the first thing a Go dev judges is the tree."
+*(Capstone II / the Wails wrapper is retired: a native shell adds packaging, not
+substance.)*
 
 ---
 
