@@ -212,11 +212,16 @@ so the bridge can't silently un-wire.
   this session; **the LLM extractor already works**: `EXTRACT_MODE=llm` scores
   F1=1.00/1.00 live via `cmd/livecheck` + `livetest`). Remaining: a **logical
   `extractor` model binding** (route extraction to its own gouncer model, swap =
-  config not code), **sampling governance** (`rt.Sampling(model)` → temp/top_p/
-  stop/seed from the governed store; `seed` → reproducible gens), and
-  **grammar-constrained JSON** (GBNF / response_format on extraction, valid-by-
-  construction). A model/sampling swap is gated by the promotion gate (eval F1 +
-  ADD ASR) and, per the residency policy (C4e), re-evaluates outstanding grants.
+  config not code) and **grammar-constrained JSON** (GBNF / response_format on
+  extraction, valid-by-construction). **Sampling governance DONE**:
+  `controlplane.Sampling` resolver (`SamplingConfig` temp/max_tokens/top_p/seed/
+  stop; List/Get/Activate/Reset/Verify/Rehydrate + `HashSampling`) + `GovernedSampling`
+  over cpstore (`RecordSampling`/`LatestSampling`, gledger-audited) + console
+  **Sampling tab**; the extractor LLM path reads it (`extractor.SetSampling`), and
+  **seed>0 → reproducible generation** (M19). DB-backed + rehydrates on boot
+  (verified: seed 42 survived a restart). A sampling/model swap is gated by the
+  promotion gate (eval F1 + ADD ASR) and, per the residency policy (C4e),
+  re-evaluates outstanding grants.
 - **C6 — MCP governance console** ✅: `gustoms.Gateway.Status` (read-only snapshot:
   tools, allow-list, approved pin vs live manifest, mismatch) + `webapp` MCP card
   in the Security tab (status pinned/rug-pull/unapproved/blocked/error) + operator
