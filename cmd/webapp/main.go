@@ -169,12 +169,41 @@ func main() {
 		return s, nil
 	}
 
+	// MCP governance tab (C6): surface the gateway's servers, their advertised +
+	// allow-listed tools, the approved pin vs the live manifest (rug-pull alert),
+	// and an operator Approve (re-pin). "blocked" reflects the kill switch.
+	mcpList := func() []webapp.MCPServer {
+		var out []webapp.MCPServer
+		for _, st := range toolGW.Status(context.Background()) {
+			status := "pinned"
+			switch {
+			case st.Err != "":
+				status = "error"
+			case !safety.AllowToolExec():
+				status = "blocked"
+			case st.Pinned == "":
+				status = "unapproved"
+			case st.Mismatch:
+				status = "rug-pull"
+			}
+			out = append(out, webapp.MCPServer{
+				Name: st.Name, Tools: st.Tools, Allowed: st.Allowed,
+				Pinned: shortHash(st.Pinned), Current: shortHash(st.Current), Status: status,
+			})
+		}
+		return out
+	}
+	mcpApprove := func(server string) error {
+		return toolGW.Approve(context.Background(), gledger.NewTraceID(), server)
+	}
+
 	srv := &http.Server{
 		Addr: *addr,
 		Handler: (&webapp.Server{
 			AuditPath: auditPath, OutboxDir: cfg.Outbox, InboxPath: cfg.Inbox,
 			Egress: egress, Fetch: fetch, Verifier: verifier, Safety: safety, Search: search,
 			Authz: authz, OperatorToken: opToken, Audit: audit,
+			MCP: mcpList, MCPApprove: mcpApprove,
 		}).Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
@@ -205,6 +234,14 @@ func agentIdentity(path string) (*provenance.Signer, *provenance.Verifier) {
 		signer, pub, _ = provenance.NewSigner(keyID) // ephemeral fallback
 	}
 	return signer, provenance.NewVerifier().Trust(keyID, pub)
+}
+
+// shortHash trims a hex manifest hash to a display prefix.
+func shortHash(h string) string {
+	if len(h) > 12 {
+		return h[:12]
+	}
+	return h
 }
 
 // defaultDrop is ~/Desktop/Email-to-Calendar (Mac-friendly), falling back to the

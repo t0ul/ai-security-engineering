@@ -58,6 +58,12 @@ type Server struct {
 	// Audit, when set, records every refused capability for the admin trail.
 	Audit *gledger.AuditLog
 
+	// MCP, when set, lists the MCP servers the agent reaches through the gustoms
+	// gateway with their pin status (C6). MCPApprove re-pins a server to its
+	// current manifest (rug-pull recovery, dual-control). Nil = no MCP tab.
+	MCP        func() []MCPServer
+	MCPApprove func(server string) error
+
 	// pending holds issued-but-unconfirmed HITL approvals, keyed by nonce (ASI09:
 	// evidence-first, single-use, clickjack/forgery-resistant confirm).
 	mu   sync.Mutex
@@ -99,6 +105,10 @@ func (s *Server) Handler() http.Handler {
 	// Ask lists the retrieval corpus — ActionList, the data-residency-sensitive
 	// endpoint (a frontier reader must not harvest it).
 	mux.HandleFunc("/api/ask", s.authz(controlplane.ActionList, "corpus", s.ask))
+	if s.MCP != nil {
+		mux.HandleFunc("/api/mcp", s.mcpList)
+		mux.HandleFunc("/api/mcp/approve", csrf(s.authz(controlplane.ActionWrite, "mcp", s.mcpApprove)))
+	}
 	if s.InboxPath != "" {
 		mux.HandleFunc("/api/drop", csrf(s.authz(controlplane.ActionWrite, "inbox", s.drop)))
 	}

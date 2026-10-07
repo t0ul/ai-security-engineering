@@ -118,6 +118,10 @@ const dashboardHTML = `<!doctype html>
       </div>
     </div>
     <div class="card">
+      <strong>MCP servers</strong> <span class="mut">— tool gateway: manifest pins &amp; rug-pull defense (M7)</span>
+      <div id="mcp"><span class="mut">loading…</span></div>
+    </div>
+    <div class="card">
       <strong>Security scorecard</strong>
       <p class="mut">Run the full red-team suite against the live controls. Every attack should drop to 0%.</p>
       <button class="go" onclick="runScorecard()">Run scorecard</button>
@@ -153,7 +157,7 @@ document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
   if(t==='review') loadReview();
   if(t==='activity') loadActivity();
   if(t==='incidents') loadIncidents();
-  if(t==='security') loadKill();
+  if(t==='security'){loadKill();loadMCP();}
 });
 async function doAsk(){
   const q=$('#askq').value.trim();const c=$('#askOut');if(!q){c.innerHTML='';return;}
@@ -164,7 +168,20 @@ async function doAsk(){
 }
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&document.activeElement&&document.activeElement.id==='askq')doAsk();});
 async function loadKill(){const d=await getJSON('/api/safety');const p=$('#klevel');if(p){p.textContent=d.level;p.className='pill '+(d.level==='none'?'pass':'fail');}}
-async function setKill(l){await postJSON('/api/killswitch',{level:l});loadKill();}
+async function setKill(l){await postJSON('/api/killswitch',{level:l});loadKill();loadMCP();}
+async function loadMCP(){
+  const c=$('#mcp');if(!c)return;const d=await getJSON('/api/mcp');const s=d.servers||[];
+  if(!s.length){c.innerHTML='<p class="mut">no MCP servers registered</p>';return;}
+  c.innerHTML=s.map(m=>{
+    const ok=m.status==='pinned';
+    const act=(m.status==='rug-pull'||m.status==='unapproved')?(' <button class="ghost" onclick="approveMCP(\''+esc(m.name)+'\')">Approve</button>'):'';
+    const drift=(m.current&&m.current!==m.pinned)?(' → now '+esc(m.current)):'';
+    return '<div class="ev"><div><b>'+esc(m.name)+'</b> <span class="pill '+(ok?'pass':'fail')+'">'+esc(m.status)+'</span>'+act+
+      '<br><span class="mut">tools: '+esc((m.tools||[]).join(', ')||'—')+' · allowed: '+esc((m.allowed||[]).join(', ')||'any')+'</span>'+
+      '<br><span class="mut">pin '+esc(m.pinned||'—')+drift+'</span></div></div>';
+  }).join('');
+}
+async function approveMCP(name){await postJSON('/api/mcp/approve',{server:name});loadMCP();}
 
 async function getJSON(u){try{return await (await fetch(u)).json();}catch(e){return {};}}
 
