@@ -128,3 +128,6 @@ output, one capability, own labels). Demonstrates least-privilege per tool.
 - ✅ Drop in the UI: drag/choose/paste a .txt in the Calendar tab -> `/api/drop` writes to inbox -> watcher extracts -> events render. e2e verified.
 - 🔎 MicroVM/CaMeL honesty (checked in code): MicroVM + dual-LLM are REAL but power the `cmd/controlplane` CaMeL command-execution loop, NOT the email agent (single-LLM, host-run extraction, guarded). Syllabus corrected to say so.
 - ⬜ **Open gap (tracked):** route the executing MCP tool (`web_fetch`) through `Interpreter.ExecuteInSandbox`/`detonationd` so executing tools actually run in the VM. Needs `launchvm` up to test.
+
+## Parked ideas (2026-10-07)
+- ⏸️ **Drosophila connectome / GNN** (non-LLM model): not the agent brain. Optional only — a bonus red-team post on GNN/graph poisoning, using a published fly-brain sim as (1) a detonation-chamber target ("run the untrusted sim in the egress-denied VM") and (2) a supply-chain artifact-verification example (safetensors/hash/provenance before load). Reuses VM + artifact checks; doesn't touch the main spine. Revisit after Track II.

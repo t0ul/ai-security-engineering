@@ -24,7 +24,7 @@ Implementation is t's (dev-caveman); this is the architecture.
 | **Eval scores + thresholds** (F1 gate, ASR gate, per-label latest) | `eval.ScoreEvents`; `cmd/livecheck`→`RecordEval`; `cpstore.LatestEval`; `mlops.PromoteWithLatestEval` | standalone; not tied to changes | ❌ | partial (livecheck only) |
 | **Promotion gate** (eval+ADD on activate) | `controlplane.PromotionGate` (C3) | not wired to real closures | ❌ | — |
 | **Safety level / kill switch** | `Governance.SetKillSwitch`, `Safety` | ✅ | ✅ | ✅ |
-| **Identity / authZ (NHI)** | `controlplane.Authority` + capability `Grant` (C4a ✅, on the provenance signer) | primitive ✅; not yet on the API/tool path | ❌ | signed + audited on issue/deny (C4b) |
+| **Identity / authZ (NHI)** | `controlplane.Authority` + capability `Grant` (C4a ✅) + `webapp` authz gate (C4b ✅) | on the API path ✅ (mutating/listing endpoints); per-tool grants pending C4d/e | ❌ | denials audited to gledger ✅ |
 | **RBAC / four-eyes** | goverlord roles + dual control | ✅ | partial | ✅ |
 | **Generic config map** | `Governance` (propose/approve/rollback/history) | ✅ mechanism, **~nothing reads it** | ✅ | ✅ (approvals, admin) |
 
@@ -168,12 +168,21 @@ so the bridge can't silently un-wire.
     expiry → scope, fail-closed), `Revoke`/`Reinstate`, `Halted` hook, action
     granularity (`ActionRead`/`List`/`Write`/`Export`), data-residency
     `IssuePolicy`. Unit-tested incl. the frontier `/list/contacts` refusal.
-  - **C4b — authZ gate on the app**: every `/api/*` and each tool call verifies a
-    grant scoped to `{action, resource, tenant}`; issue/deny audited to gledger;
-    one minimal local admin credential for the console.
-  - **C4c — kill switch = revocation**: wire `Authority.Halted` to `Safety` ≥
-    `LevelHalt`; Halt revokes the agent credential (+ drops MCP pins in C6) so
-    in-flight work dies. `RevokedTokenStillWorks` ADD case as the invariant.
+  - **C4b — authZ gate on the app** ✅: `Server.authz(action,resource)` verifies a
+    bearer capability `Grant` on the mutating/listing endpoints — `/api/ask`
+    (list/corpus), `/api/accept` (write/calendar), `/api/drop` (write/inbox),
+    `/api/action` (export/link) — fail-closed, denials audited to gledger. The
+    operator holds one broad grant minted from the agent key (`webapp.EncodeToken`),
+    injected into the page; a page fetch wrapper attaches it to every /api+/ics
+    request. Gate is a no-op when `Authz` unset (household mode). The kill switch
+    stays OUTSIDE the gate (Halt revokes all grants, so a gated killswitch could
+    never disengage). httptest covers missing/valid/over-scoped/halted; live smoke
+    confirmed (no token 401, token passes). Remaining: narrower per-tool grants
+    land with C4d/e.
+  - **C4c — kill switch = revocation** 🟡: `Authority.Halted` wired to `Safety` ≥
+    `LevelHalt` (cmd/webapp) — Halt revokes every grant so in-flight HTTP side
+    effects die (`TestAuthzHaltRevokesInFlight`). Remaining: drop MCP pins on Halt
+    (C6); the `RevokedTokenStillWorks` ADD case.
   - **C4d — RAG least privilege**: open the corpus `?mode=ro` for the retrieval
     path (engine-enforced no-write) + tenant scope (app-layer); `CrossTenantRead`
     ADD case.
