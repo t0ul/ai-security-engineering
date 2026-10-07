@@ -179,13 +179,17 @@ so the bridge can't silently un-wire.
     never disengage). httptest covers missing/valid/over-scoped/halted; live smoke
     confirmed (no token 401, token passes). Remaining: narrower per-tool grants
     land with C4d/e.
-  - **C4c — kill switch = revocation** 🟡: `Authority.Halted` wired to `Safety` ≥
+  - **C4c — kill switch = revocation** ✅: `Authority.Halted` wired to `Safety` ≥
     `LevelHalt` (cmd/webapp) — Halt revokes every grant so in-flight HTTP side
-    effects die (`TestAuthzHaltRevokesInFlight`). Remaining: drop MCP pins on Halt
-    (C6); the `RevokedTokenStillWorks` ADD case.
-  - **C4d — RAG least privilege**: open the corpus `?mode=ro` for the retrieval
-    path (engine-enforced no-write) + tenant scope (app-layer); `CrossTenantRead`
-    ADD case.
+    effects die (`TestAuthzHaltRevokesInFlight`), locked as the `RevokedTokenStillWorks`
+    ADD invariant (`redteam`, ASI10, 100→0). Remaining nit: drop MCP pins on Halt —
+    rolls into C4e when gustoms lands on the app path.
+  - **C4d — RAG least privilege** ✅: `rag.OpenReadOnly` opens the corpus `?mode=ro`
+    (engine-enforced no-write) for the Ask/retrieval path — a separate handle from
+    the writable ingestion one; tenant ACL is app-layer in `Query`'s WHERE
+    (authorization-first). `rag.TestOpenReadOnlyCannotWrite` + the existing
+    `RAGTenantLeak` (CrossTenantRead) ADD case. cmd/webapp wires the RO reader;
+    live smoke green.
   - **C4e — scoped MCP tokens**: gustoms on the app path, per-call
     audience-bound tokens, governed TTL/scope; `UnpinnedMCPServer` ADD case.
 - **C5 — Sampling + model-swap plane**: `rt.Sampling`, logical `extractor`,

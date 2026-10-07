@@ -147,7 +147,7 @@ invariant a plain unit test can't (undefended ASR 100% so the attack is *real*,
 defended 0%, optional "is it wired" integration check), and emit an OWASP
 coverage grid. `redteam` becomes `add.Technique`s; `scorecard` runs on
 `add.Evaluate`. Hook: "I showed you how to do it by hand; here's how to make it a
-library your team drops into `go test`." Proof: 23 techniques, 16 OWASP risks,
+library your team drops into `go test`." Proof: 27 techniques, 17 OWASP risks,
 0 regressed — same guarantees, far less boilerplate, gaps now visible.
 
 **Post 15 · Capstone I — full-chain defense** (M12, ASI08/10) ✅
