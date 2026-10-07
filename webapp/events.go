@@ -100,7 +100,7 @@ func (s *Server) allEvents() []Event {
 		}
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Start < out[j].Start })
-	return out
+	return dedupEvents(out)
 }
 
 func (s *Server) events(w http.ResponseWriter, _ *http.Request) {
