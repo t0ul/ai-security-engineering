@@ -40,6 +40,7 @@ import (
 	"github.com/t0ul/ai-security-engineering/redteam"
 	"github.com/t0ul/ai-security-engineering/webapp"
 	"github.com/t0ul/gledger"
+	"github.com/t0ul/goflage"
 	"github.com/t0ul/gorauder"
 )
 
@@ -97,10 +98,18 @@ func main() {
 	}
 	corpusPath := filepath.Join(*drop, "corpus.db")
 	var search func(string, int) ([]webapp.SearchHit, error)
+	var enrichIndex func(source, text string) error
 	if corpus, cerr := rag.Open(corpusPath); cerr == nil {
 		defer corpus.Close()
 		pipe.Index = func(traceID, source, rawText string) error {
 			return corpus.Add(rag.Doc{ID: source, Text: rawText, Prov: rag.Untrusted}) // readable source in Ask results
+		}
+		// R6 link enrichment: fetched handbook bytes are untrusted and may carry PII
+		// — scrub on ingest (M3), then index as Untrusted so Ask can use but never
+		// trust them.
+		enrichIndex = func(source, text string) error {
+			scrubbed, _ := goflage.New().Scrub(text)
+			return corpus.Add(rag.Doc{ID: source, Text: scrubbed, Prov: rag.Untrusted})
 		}
 		// Retrieval runs on a SEPARATE read-only handle (C4d least privilege): Ask
 		// can query but the engine refuses any write, so a bug or injection on the
@@ -344,7 +353,7 @@ func main() {
 		Addr: *addr,
 		Handler: (&webapp.Server{
 			AuditPath: auditPath, OutboxDir: cfg.Outbox, InboxPath: cfg.Inbox,
-			Egress: egress, Fetch: fetch, Verifier: verifier, Safety: safety, Search: search,
+			Egress: egress, Fetch: fetch, Verifier: verifier, Safety: safety, Search: search, Index: enrichIndex,
 			Authz: authz, OperatorToken: opToken, Audit: audit,
 			MCP: mcpList, MCPApprove: mcpApprove, Prompts: prompts, Policies: policies,
 			EvalHistory: evalHistory, EvalRun: evalRun, PromptTest: promptTest,

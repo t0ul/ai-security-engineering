@@ -44,6 +44,9 @@ type Server struct {
 	// Search, when set, answers Ask-School queries over the (PII-scrubbed)
 	// retrieval corpus. Nil = the Ask tab returns nothing.
 	Search func(query string, k int) ([]SearchHit, error)
+	// Index, when set with Fetch, powers safe handbook link enrichment (R6): it
+	// adds fetched (untrusted, PII-scrubbed) text to the retrieval corpus.
+	Index func(source, text string) error
 
 	// Authz, when set, turns the console into an authZ'd API: every mutating or
 	// data-listing endpoint requires a capability Grant (C4b). The operator
@@ -161,7 +164,12 @@ func (s *Server) Handler() http.Handler {
 	if s.OutboxDir != "" {
 		mux.HandleFunc("/api/accept", csrf(s.authz(controlplane.ActionWrite, "calendar", s.accept)))
 		mux.HandleFunc("/api/action", csrf(s.authz(controlplane.ActionExport, "link", s.action))) // egress
-		mux.HandleFunc("/ics/", s.serveICS)                                                       // .ics only — NOT the whole outbox (sidecars hold PII)
+	}
+	if s.Fetch != nil && s.Index != nil {
+		mux.HandleFunc("/api/enrich", csrf(s.authz(controlplane.ActionExport, "link", s.enrich))) // egress → corpus
+	}
+	if s.OutboxDir != "" {
+		mux.HandleFunc("/ics/", s.serveICS) // .ics only — NOT the whole outbox (sidecars hold PII)
 	}
 	mux.HandleFunc("/", s.index)
 	return mux

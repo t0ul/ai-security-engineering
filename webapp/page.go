@@ -126,6 +126,11 @@ const dashboardHTML = `<!doctype html>
       <div style="margin-top:8px"><input id="askq" placeholder="e.g. nurse, phone policy, book fair" style="width:70%"><button class="go" onclick="doAsk()">Search</button></div>
       <div id="askOut" style="margin-top:10px"></div>
     </div>
+    <div class="card">
+      <strong>Enrich from a link</strong> <span class="mut">— fetch an allow-listed handbook URL into the knowledge base (R6: HITL + egress-gated + fetched in the MicroVM, indexed untrusted)</span>
+      <div style="margin-top:8px"><input id="enrichURL" placeholder="https://ps51eliashowe.org/handbook" style="width:70%"><button class="go" onclick="doEnrich()">Fetch</button></div>
+      <div id="enrichOut" style="margin-top:10px" class="mut"></div>
+    </div>
   </section>
 
   <section id="security" class="hide">
@@ -214,6 +219,17 @@ async function doAsk(){
   c.innerHTML=hits.map(h=>'<div class="ev"><div><b>'+esc(h.source)+'</b>'+(h.untrusted?' <span class="kind warn">untrusted</span>':'')+'<br><span class="mut">'+esc(h.snippet)+'</span></div></div>').join('');
 }
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&document.activeElement&&document.activeElement.id==='askq')doAsk();});
+async function doEnrich(){
+  const u=$('#enrichURL').value.trim();const c=$('#enrichOut');if(!u){return;}
+  // phase 1: request the HITL challenge
+  let r=await (await postJSON('/api/enrich',{url:u})).json();
+  if(r.confirm_required){
+    if(!confirm('Fetch into the knowledge base?\n'+(r.evidence||[]).join('\n'))){c.textContent='cancelled';return;}
+    r=await (await postJSON('/api/enrich',{url:u,nonce:r.nonce,confirm:true})).json();
+  }
+  if(r.refused){c.innerHTML='<span class="kind warn">refused</span> '+esc(r.refused);return;}
+  if(r.ok){c.innerHTML='indexed '+r.bytes+' bytes from <b>'+esc(r.url)+'</b><br><span class="mut">'+esc(r.preview||'')+'</span>';}
+}
 async function loadKill(){const d=await getJSON('/api/safety');const p=$('#klevel');if(p){p.textContent=d.level;p.className='pill '+(d.level==='none'?'pass':'fail');}}
 async function setKill(l){await postJSON('/api/killswitch',{level:l});loadKill();loadMCP();}
 async function loadMCP(){
