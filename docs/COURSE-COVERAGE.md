@@ -83,6 +83,9 @@ reliability holes are now **closed**: durable execution + resume-verify (#1) and
 exactly-once side effects (#2) in the `durable` package, and context compaction +
 summarization-injection defense (#3) in the `compaction` package — each with an
 ADD invariant (`ResumeIntoTamperedState`, `DuplicateSideEffect`,
-`SummarizationInjection`). Remaining is the model-blocked eval methodology (#4–#6:
-pass@k, LLM-as-judge + judge-manipulation, online-eval flywheel, eval-trend tab),
-which waits for the live LLM path (C5/C7).
+`SummarizationInjection`). Remaining is the eval methodology (#4–#6: pass@k,
+LLM-as-judge + judge-manipulation, online-eval flywheel, eval-trend tab). These
+were called "model-blocked" but the live path is now proven (livecheck + livetest,
+F1=1.00/1.00; a live ADD scorecard runs in `livetest/`), so they are **live-doable**
+— they need `modeld` serving, not anything we lack. Plan in `docs/CONTROL-PLANE-PLAN.md`
+(C5/C7) and blog Posts 28–29.

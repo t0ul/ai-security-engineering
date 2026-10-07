@@ -278,12 +278,26 @@ Integration point is the multi-turn orchestrator's context assembly (the
 single-shot email app has nothing to compact). Hook: "the summary is trusted
 context — so the attacker wants to write it."
 
-**Post 28 · Eval methodology: pass@k, LLM-as-judge & the flywheel** (M11, model-blocked) ⬜
-Build: `pass@k`/`pass^k` reliability scoring over k samples (quantify
-non-determinism), an LLM-as-judge scorer for unstructured output, and an online
-eval / data-flywheel loop from the review queue. Break: prompt-inject the judge to
-pass a bad output (eval gaming). Defend: judge-input encapsulation + a deterministic
-cross-check (the ensemble pattern). Needs the live LLM path (C5/C7).
+**Post 28 · Eval methodology: pass@k, LLM-as-judge & the flywheel** (M11) 🟡 *(live-doable — models verified up)*
+The live eval path works (`livetest` / `cmd/livecheck`, F1=1.00/1.00), so this is
+no longer blocked. Build: `pass@k`/`pass^k` reliability scoring over k live samples
+(quantify non-determinism — one run isn't a number), an **LLM-as-judge** scorer for
+unstructured output, and an online eval / data-flywheel loop from the review queue.
+Break: prompt-inject the judge to pass a bad output (eval gaming). Defend:
+judge-input encapsulation + a deterministic cross-check (the ensemble pattern) —
+the `JudgeManipulation` ADD case. All runs in `livetest/` behind `-tags live`.
+
+**Post 29 · Live red-team: ADD against the real model** ✅ (started)
+The offline ADD scorecard proves the controls deterministically; this is the
+companion that runs the model-dependent attacks through the **actual llama/qwen**
+(`go test -tags live ./livetest/`). Shipped: `TestLiveEvalF1` (live F1) and
+`TestLiveScorecard` (extraction-injection + hallucination-reconcile — the
+hallucination case visibly flips undefended→defended live). Honest rule: gate on
+the defended path, *observe* undefended (a live 3B may resist a payload on its
+own). Planned: live variants of prompt-leak / URL-exfil / PII-echo, a stronger
+injection payload the raw model actually obeys, and a `-tags live` scorecard CLI.
+Hook: "the deterministic scorecard says the control works; here it is beating a
+real model."
 
 ## Why this order (dependencies)
 - Observability (Post 2) comes before the attack posts because the audit log is

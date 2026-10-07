@@ -143,3 +143,11 @@ Each is offline-doable except where noted. Blog: Posts 25–28 in docs/COURSE-OU
 - ⬜ **MED (model-blocked) — observability trend**: console Eval tab (F1/P/R + ASR over time), OTel export option. Ties to C7.
 - ⬜ **LOW** — RAG query-rewriting (note: rewriter is itself an injection surface); tool-selection precision eval; TOON/token-efficient context serialization; streaming output + incremental output-handling.
 Non-goals (not gaps): managed frameworks (OpenAI Agents SDK/Mastra/Voltagent), Cloudflare Durable Objects, Braintrust/Laminar SaaS, TS/React, arbitrary-code "code mode" (we run an argv allowlist by design).
+
+## Live-model work (2026-10-07) — models verified UP (not blocked)
+Live path proven this session: cmd/livecheck + livetest F1=1.00/1.00; live ADD scorecard (injection + hallucination) green. These were mislabeled "model-blocked" — they just need modeld serving, which works. Run: `go test -tags live ./livetest/ -v`.
+- ✅ Live test layer: `internal/livemodel` harness + `livetest/` (TestLiveEvalF1, TestLiveScorecard). Behind `//go:build live`; offline suite unaffected.
+- ⬜ **Expand live ADD** (reader-facing payoff): live variants of prompt-leak, URL/markdown-exfil, PII-echo; a stronger injection payload the raw 3B actually obeys (so undefended=true is visible); a `-tags live` scorecard that mirrors cmd/scorecard.
+- ⬜ **C5** sampling + model-swap plane: logical `extractor` model binding (route extraction to its own gouncer model), `rt.Sampling` (temp/top_p/stop/seed governed; seed→reproducible), GBNF/response_format grammar JSON on extraction. Gated by promotion gate; model swap re-evals grants (C4e residency).
+- ⬜ **C7** eval-tweak loop: shadow eval (live eval + ADD) of a candidate, F1/ASR delta surfaced, gate on promote; console Test button + Eval trend tab (F1/P/R + ASR over time from cpstore).
+- ⬜ **Reliability eval methodology**: pass@k/pass^k over k live samples; LLM-as-judge scorer + `JudgeManipulation` ADD case; online-eval/data-flywheel from the review queue.

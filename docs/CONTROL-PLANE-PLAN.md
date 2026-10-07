@@ -208,8 +208,15 @@ so the bridge can't silently un-wire.
     blocks tools = functional "drop pins on halt"). Tests: `TestResidencyPolicy`,
     `TestToolGateway*`; `McpRugPull` already covers the pin-mismatch defense the
     app-path gateway enforces; live smoke green. **C4 keystone complete (C4a–C4e).**
-- **C5 — Sampling + model-swap plane**: `rt.Sampling`, logical `extractor`,
-  grammar-constrained JSON; sampling/model changes gated.
+- **C5 — Sampling + model-swap plane** 🟡 (live-doable now — models verified up
+  this session; **the LLM extractor already works**: `EXTRACT_MODE=llm` scores
+  F1=1.00/1.00 live via `cmd/livecheck` + `livetest`). Remaining: a **logical
+  `extractor` model binding** (route extraction to its own gouncer model, swap =
+  config not code), **sampling governance** (`rt.Sampling(model)` → temp/top_p/
+  stop/seed from the governed store; `seed` → reproducible gens), and
+  **grammar-constrained JSON** (GBNF / response_format on extraction, valid-by-
+  construction). A model/sampling swap is gated by the promotion gate (eval F1 +
+  ADD ASR) and, per the residency policy (C4e), re-evaluates outstanding grants.
 - **C6 — MCP governance console** ✅: `gustoms.Gateway.Status` (read-only snapshot:
   tools, allow-list, approved pin vs live manifest, mismatch) + `webapp` MCP card
   in the Security tab (status pinned/rug-pull/unapproved/blocked/error) + operator
@@ -218,8 +225,14 @@ so the bridge can't silently un-wire.
   registry-as-governed-config (add servers via propose/approve) when a 2nd MCP
   server exists; durable `RecordPin` for the app gateway (its pin is deterministic
   from the shipped manifest, so not needed for the single in-process tool).
-- **C7 — Eval-tweak loop**: shadow eval on a candidate, F1/ASR delta surfaced,
-  gate on promote; console Test button + eval history.
+- **C7 — Eval-tweak loop** 🟡 (live-doable now — the live eval harness works:
+  `eval.Score(label, true)` runs real extraction and `cpstore.RecordEval` persists
+  F1). Build: a **shadow eval** of a candidate prompt/sampling/model change (run
+  the live eval + the ADD suite off to the side), surface the **F1 + ASR delta**,
+  and gate promotion on `PromotionGate.Allow()` (F1 ≥ baseline AND ASR = 0). Console
+  **Prompts/Models tab gets a "Test" button** that runs the shadow eval and shows
+  the delta *before* activate, plus an **Eval tab** (F1/P/R per label + ASR trend
+  from cpstore). This is the "tweak a prompt and see if it's safe" workbench.
 - **C8 — Policies as governed artifacts** ✅: `controlplane.Policies` resolver
   (`List`/`Activate`/`Reset`/`Verify`, order-independent `HashPolicy`) +
   `GovernedPolicies` over the cpstore inventory (`RecordPolicy` + gledger audit).
