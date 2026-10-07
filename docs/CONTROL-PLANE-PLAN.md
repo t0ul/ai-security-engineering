@@ -18,7 +18,7 @@ Implementation is t's (dev-caveman); this is the architecture.
 | **Model bindings** (logical→gguf, allowlist) | orchestrator fields; gouncer allowlist | ❌ (fields); no `extractor` | ❌ | ❌ |
 | **MCP registry** (servers, allowed tools, manifest pins, strict) | `gustoms` (Pin/Approve/ManifestHash/**Status**) on the app path via `NewToolGateway` | enforced at Call ✅ | **console MCP tab ✅ (C6)** — list/tools/pin/rug-pull/Approve | `RecordPin` wired in `cmd/mcpdemo`; app gateway pin is deterministic from the shipped manifest |
 | **Guardrails** (gumpers rails, topic denylist, thresholds) | consts/flags | ❌ | ❌ | ❌ |
-| **Egress/exec policy** (netpolicy allowlist, argv allowlist, action-link allowlist) | flags/consts | ❌ | ❌ | ❌ |
+| **Egress/exec policy** (netpolicy allowlist, argv allowlist, action-link allowlist) | `controlplane.Policies` resolver + `GovernedPolicies` in cmd/webapp | egress resolves live at action time ✅ (C8); exec allowlist governed artifact | **console Policies tab ✅ (C8)** — list/version/hash/activate/reset | `RecordPolicy` + gledger audit ✅ |
 | **Budgets/limits** (rate, token, concurrency, per-caller) | gouncer gateway | gateway-side, not plane | ❌ | ❌ |
 | **Keys/virtual keys** | gouncer | gateway-side | ❌ | ❌ (secrets stay out of config; pointers only) |
 | **Eval scores + thresholds** (F1 gate, ASR gate, per-label latest) | `eval.ScoreEvents`; `cmd/livecheck`→`RecordEval`; `cpstore.LatestEval`; `mlops.PromoteWithLatestEval` | standalone; not tied to changes | ❌ | partial (livecheck only) |
@@ -220,8 +220,19 @@ so the bridge can't silently un-wire.
   from the shipped manifest, so not needed for the single in-process tool).
 - **C7 — Eval-tweak loop**: shadow eval on a candidate, F1/ASR delta surfaced,
   gate on promote; console Test button + eval history.
-- **C8 — Policies as governed artifacts**: egress/argv/guardrail allowlists into
-  the governed store with the same lifecycle.
+- **C8 — Policies as governed artifacts** ✅: `controlplane.Policies` resolver
+  (`List`/`Activate`/`Reset`/`Verify`, order-independent `HashPolicy`) +
+  `GovernedPolicies` over the cpstore inventory (`RecordPolicy` + gledger audit).
+  Seeded with `egress` (action-link hosts) and `exec` (argv[0] allowlist). The
+  webapp action egress check resolves its allowlist **live** from the governed
+  policy (`Server.egressPolicy`), so a widening/rollback takes effect with no
+  redeploy — and deny-by-default (private/IMDS, argcheck) is unaffected, so the
+  SSRF / AllowlistBypass ADD cases still hold. Console Policies tab (list / version
+  / hash / activate / reset). Live smoke: activate v1 → reset v0, 401 without a
+  capability, 2 rows persisted + audited. No new ADD case: C8 governs *which*
+  allowlist is active (a lifecycle/audit property, unit-tested); the enforcement
+  it feeds is already covered by `SSRF`/`ActionLinkExfil` (egress) and
+  `AllowlistBypass` (exec).
 - **C9 — Budgets/limits + key pointers**: rate/token/concurrency/spend governed;
   keys referenced by pointer (never stored in config).
 - **C10 — Known-good bundle**: atomic snapshot/rollback across ALL knob classes;
