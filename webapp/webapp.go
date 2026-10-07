@@ -52,6 +52,10 @@ type Server struct {
 	// as durable ground-truth (the data-flywheel) and report the running tallies.
 	Feedback      func(decision, source, title string)
 	FlywheelStats func() (accepts, rejects int)
+	// Chat, when set, answers a question grounded in the corpus. unsafe=true runs
+	// the UNDEFENDED path (raw-concat retrieval, no encapsulation/scrub) — the live
+	// attack demo showing a poisoned doc's injection land; default is defended.
+	Chat func(question string, unsafe bool) (answer string, sources []string, err error)
 
 	// Authz, when set, turns the console into an authZ'd API: every mutating or
 	// data-listing endpoint requires a capability Grant (C4b). The operator
@@ -160,6 +164,9 @@ func (s *Server) Handler() http.Handler {
 	// Ask lists the retrieval corpus — ActionList, the data-residency-sensitive
 	// endpoint (a frontier reader must not harvest it).
 	mux.HandleFunc("/api/ask", s.authz(controlplane.ActionList, "corpus", s.ask))
+	if s.Chat != nil {
+		mux.HandleFunc("/api/chat", csrf(s.authz(controlplane.ActionList, "corpus", s.chat)))
+	}
 	if s.MCP != nil {
 		mux.HandleFunc("/api/mcp", s.mcpList)
 		mux.HandleFunc("/api/mcp/approve", csrf(s.authz(controlplane.ActionWrite, "mcp", s.mcpApprove)))

@@ -37,16 +37,43 @@ const dashboardHTML = `<!doctype html>
   .it{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-radius:4px;padding:0 4px;margin-top:2px;font-size:11px}
   .k-event{background:color-mix(in srgb,var(--accent) 20%,transparent)} .k-task{background:color-mix(in srgb,var(--warn) 24%,transparent)}
   .k-heads_up{background:color-mix(in srgb,var(--ok) 20%,transparent)} .k-action{background:color-mix(in srgb,var(--accent) 34%,transparent)}
+  /* --- redesigned shell: sidebar nav --- */
+  :root{--side:#0f1420;--sidefg:#c9d2e3}
+  @media (prefers-color-scheme:dark){:root{--side:#0a0d14;--sidefg:#aeb8cc}}
+  .app{display:flex;min-height:100vh}
+  .sidebar{width:208px;flex:0 0 208px;background:var(--side);color:var(--sidefg);padding:16px 12px;position:sticky;top:0;height:100vh;overflow-y:auto}
+  .brand{font-size:16px;font-weight:700;color:#fff;padding:6px 10px 14px;display:flex;gap:8px;align-items:center}
+  header{display:none}
+  .sidebar nav{display:flex;flex-direction:column;gap:2px}
+  .sidebar nav .grp{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--mut);padding:14px 10px 4px}
+  .sidebar nav button{font:inherit;text-align:left;padding:8px 10px;border:0;background:none;color:var(--sidefg);cursor:pointer;border-radius:8px;width:100%;box-shadow:none}
+  .sidebar nav button:hover{background:rgba(255,255,255,.07);color:#fff}
+  .sidebar nav button.active{background:var(--accent);color:#fff;box-shadow:none}
+  main{flex:1;padding:24px 30px;max-width:980px;margin:0}
+  .card{border-radius:14px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+  /* chat */
+  .chatlog{max-height:54vh;overflow-y:auto;padding:4px 2px;display:flex;flex-direction:column}
+  .msg{margin:7px 0;padding:10px 13px;border-radius:14px;max-width:86%;white-space:pre-wrap;font-size:14px}
+  .msg.u{background:var(--accent);color:#fff;align-self:flex-end;border-bottom-right-radius:4px}
+  .msg.a{background:var(--card);border:1px solid var(--line);align-self:flex-start;border-bottom-left-radius:4px}
+  .msg .src{font-size:11px;color:var(--mut);margin-top:6px}
+  .chatrow{display:flex;gap:8px;margin-top:10px} .chatrow input{flex:1}
+  input{font:inherit;background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:9px;padding:8px 11px}
+  @media (max-width:640px){.app{flex-direction:column}.sidebar{width:auto;flex:none;height:auto;position:static;display:flex;gap:12px;overflow-x:auto}.sidebar nav{flex-direction:row;flex-wrap:wrap}.sidebar nav .grp{display:none}}
 </style></head><body>
-<header><h1>🗓️ Agent Console</h1>
+<div class="app">
+<aside class="sidebar">
+  <div class="brand">🗓️ Agent Console</div>
   <nav>
+    <button data-tab="chat">💬 Chat</button>
+    <div class="grp">You</div>
     <button data-tab="calendar" class="active">Calendar</button>
     <button data-tab="week">My Week</button>
     <button data-tab="tasks">Tasks</button>
     <button data-tab="review">Review</button>
-    <button data-tab="activity">Activity</button>
     <button data-tab="ask">Ask school</button>
-    <span class="mut" style="padding:0 6px;opacity:.6">· operator ·</span>
+    <button data-tab="activity">Activity</button>
+    <div class="grp">Operator</div>
     <button data-tab="security">Security</button>
     <button data-tab="prompts">Prompts</button>
     <button data-tab="sampling">Sampling</button>
@@ -55,8 +82,16 @@ const dashboardHTML = `<!doctype html>
     <button data-tab="eval">Eval</button>
     <button data-tab="incidents">Incidents</button>
   </nav>
-</header>
+</aside>
 <main>
+  <section id="chat" class="hide">
+    <div class="card">
+      <strong>Chat</strong> <span class="mut">— ask about your emails; grounded in the scrubbed corpus, retrieved text treated as untrusted data (M8)</span>
+      <div id="chatlog" class="chatlog"></div>
+      <div class="chatrow"><input id="chatq" placeholder="e.g. what's on next week? who do I email about the trip?"><button class="go" onclick="sendChat()">Send</button></div>
+      <label class="mut" style="display:block;margin-top:8px"><input type="checkbox" id="chatUnsafe"> controls off <span style="opacity:.7">— demo: show a poisoned email hijack the answer (then uncheck to see the control block it)</span></label>
+    </div>
+  </section>
   <section id="calendar">
     <div class="card">
       <strong>Upcoming</strong> <span class="mut">— next things across meetings, tasks &amp; heads-ups</span>
@@ -213,6 +248,7 @@ const dashboardHTML = `<!doctype html>
     <div class="card hide" id="replayCard"><strong>Replay</strong><pre id="replay"></pre></div>
   </section>
 </main>
+</div>
 <script>
 // Capability token (C4b): when the server runs as an authZ'd API it injects the
 // operator Grant here, and this wrapper attaches it to every same-origin API/ICS
@@ -220,13 +256,14 @@ const dashboardHTML = `<!doctype html>
 const __CAP__="__CAP_TOKEN__";
 (function(){const f=window.fetch.bind(window);window.fetch=(u,o)=>{o=o||{};const s=typeof u==='string'?u:(u&&u.url)||'';if(__CAP__&&(s.indexOf('/api/')===0||s.indexOf('/ics/')===0)){o.headers=Object.assign({},o.headers||{},{'Authorization':'Bearer '+__CAP__});}return f(u,o);};})();
 const $=s=>document.querySelector(s);
-const TABS=['calendar','week','tasks','review','activity','ask','security','prompts','sampling','policies','budgets','eval','incidents'];
+const TABS=['chat','calendar','week','tasks','review','activity','ask','security','prompts','sampling','policies','budgets','eval','incidents'];
 const esc=s=>{const d=document.createElement('div');d.textContent=s||'';return d.innerHTML;};
 const when=e=>e.all_day?((e.due||e.start)+' · all day'):((e.start||e.due)+(e.end?(' – '+e.end.slice(11)):''));
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
   document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('active',x===b));
   TABS.forEach(t=>$('#'+t).classList.toggle('hide',t!==b.dataset.tab));
   const t=b.dataset.tab;
+  if(t==='chat'){const q=$('#chatq');if(q)q.focus();}
   if(t==='calendar'){loadEvents();loadDeadlines();}
   if(t==='week'){loadWeek('today');loadProfile();}
   if(t==='tasks') loadTasks();
@@ -258,6 +295,18 @@ async function loadDirectory(){
   if(em.length) h+='<div class="ev"><div><b>Emails</b><br><span class="mut">'+em.map(esc).join(', ')+'</span></div></div>';
   c.innerHTML=h;
 }
+async function sendChat(){
+  const inp=$('#chatq');const q=(inp.value||'').trim();if(!q)return;const log=$('#chatlog');
+  const unsafe=$('#chatUnsafe')&&$('#chatUnsafe').checked;
+  log.insertAdjacentHTML('beforeend','<div class="msg u">'+esc(q)+'</div>');inp.value='';
+  log.insertAdjacentHTML('beforeend','<div class="msg a" id="pending"><span class="mut">thinking…</span></div>');log.scrollTop=log.scrollHeight;
+  let r;try{r=await (await postJSON('/api/chat',{question:q,unsafe:unsafe})).json();}catch(e){r={answer:'error'};}
+  const p=document.getElementById('pending');if(p)p.remove();
+  const src=(r.sources&&r.sources.length)?'<div class="src">sources: '+r.sources.map(esc).join(', ')+'</div>':'';
+  const warn=unsafe?'<div class="src" style="color:var(--bad)">⚠ controls off — retrieved text spliced in raw (injection can hijack)</div>':'';
+  log.insertAdjacentHTML('beforeend','<div class="msg a">'+esc(r.answer||'(no answer)')+warn+src+'</div>');log.scrollTop=log.scrollHeight;
+}
+document.addEventListener('keydown',e=>{if(e.key==='Enter'&&document.activeElement&&document.activeElement.id==='chatq')sendChat();});
 async function doEnrich(){
   const u=$('#enrichURL').value.trim();const c=$('#enrichOut');if(!u){return;}
   // phase 1: request the HITL challenge
