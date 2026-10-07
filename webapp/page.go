@@ -48,6 +48,7 @@ const dashboardHTML = `<!doctype html>
     <button data-tab="security">Security</button>
     <button data-tab="prompts">Prompts</button>
     <button data-tab="policies">Policies</button>
+    <button data-tab="eval">Eval</button>
     <button data-tab="incidents">Incidents</button>
   </nav>
 </header>
@@ -146,6 +147,14 @@ const dashboardHTML = `<!doctype html>
     </div>
   </section>
 
+  <section id="eval" class="hide">
+    <div class="card">
+      <strong>Eval</strong> <span class="mut">— ground-truth F1 on the labeled emails (M11). The promotion gate = F1 ≥ baseline AND ADD ASR = 0.</span>
+      <div style="margin-top:8px"><button class="go" onclick="runEval()">Run eval now</button> <span id="evalMode" class="mut"></span></div>
+      <div id="evalHistory" style="margin-top:8px"><span class="mut">loading…</span></div>
+    </div>
+  </section>
+
   <section id="incidents" class="hide">
     <div class="card">
       <strong>Incidents</strong> <span class="mut">— click a trace to replay it on tamper-evident evidence</span>
@@ -161,7 +170,7 @@ const dashboardHTML = `<!doctype html>
 const __CAP__="__CAP_TOKEN__";
 (function(){const f=window.fetch.bind(window);window.fetch=(u,o)=>{o=o||{};const s=typeof u==='string'?u:(u&&u.url)||'';if(__CAP__&&(s.indexOf('/api/')===0||s.indexOf('/ics/')===0)){o.headers=Object.assign({},o.headers||{},{'Authorization':'Bearer '+__CAP__});}return f(u,o);};})();
 const $=s=>document.querySelector(s);
-const TABS=['calendar','tasks','review','activity','ask','security','prompts','policies','incidents'];
+const TABS=['calendar','tasks','review','activity','ask','security','prompts','policies','eval','incidents'];
 const esc=s=>{const d=document.createElement('div');d.textContent=s||'';return d.innerHTML;};
 const when=e=>e.all_day?((e.due||e.start)+' · all day'):((e.start||e.due)+(e.end?(' – '+e.end.slice(11)):''));
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
@@ -176,6 +185,7 @@ document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
   if(t==='security'){loadKill();loadMCP();}
   if(t==='prompts') loadPrompts();
   if(t==='policies') loadPolicies();
+  if(t==='eval') loadEval();
 });
 async function doAsk(){
   const q=$('#askq').value.trim();const c=$('#askOut');if(!q){c.innerHTML='';return;}
@@ -207,8 +217,10 @@ async function loadPrompts(){
     const governed=p.version>0;
     return '<div class="ev"><div><b>'+esc(p.name)+'</b> <span class="pill '+(governed?'pass':'')+'">v'+p.version+'</span> <span class="mut">'+esc(p.hash)+'</span>'+
       '<br><textarea id="pt_'+esc(p.name)+'" rows="5" style="width:100%;margin-top:6px">'+esc(p.text)+'</textarea>'+
-      '<div style="margin-top:6px"><button class="go" onclick="activatePrompt(\''+esc(p.name)+'\')">Activate new version</button>'+
-      (governed?(' <button class="ghost" onclick="resetPrompt(\''+esc(p.name)+'\')">Reset to default</button>'):'')+'</div></div></div>';
+      '<div style="margin-top:6px"><button class="ghost" onclick="testPrompt(\''+esc(p.name)+'\')">Test (shadow eval)</button> '+
+      '<button class="go" onclick="activatePrompt(\''+esc(p.name)+'\')">Activate new version</button>'+
+      (governed?(' <button class="ghost" onclick="resetPrompt(\''+esc(p.name)+'\')">Reset to default</button>'):'')+
+      '<div id="pttest_'+esc(p.name)+'" class="mut" style="margin-top:4px"></div></div></div></div>';
   }).join('');
 }
 async function activatePrompt(name){
@@ -233,6 +245,25 @@ async function activatePolicy(name){
   await postJSON('/api/policies/activate',{name:name,items:items});loadPolicies();
 }
 async function resetPolicy(name){await postJSON('/api/policies/reset',{name:name});loadPolicies();}
+async function loadEval(){
+  const c=$('#evalHistory');if(!c)return;const d=await getJSON('/api/eval');const h=d.history||[];
+  if(!h.length){c.innerHTML='<p class="mut">no eval scores yet — click Run eval now (needs the model path up), or run cmd/livecheck</p>';return;}
+  c.innerHTML='<table><thead><tr><th>label</th><th>F1</th><th>when</th></tr></thead><tbody>'+
+    h.map(e=>'<tr><td>'+esc(e.label)+'</td><td><span class="pill '+(e.f1>=0.87?'pass':'fail')+'">'+e.f1.toFixed(2)+'</span></td><td class="mut">'+esc(e.at||'')+'</td></tr>').join('')+'</tbody></table>';
+}
+async function runEval(){
+  const m=$('#evalMode');if(m)m.textContent='running…';
+  const r=await (await fetch('/api/eval/run',{method:'POST'})).json();
+  if(m)m.textContent=r.mode||'';loadEval();
+}
+async function testPrompt(name){
+  const ta=$('#pt_'+name);if(!ta)return;const out=$('#pttest_'+name);if(out)out.textContent='testing…';
+  const r=await (await fetch('/api/prompts/test',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,text:ta.value})})).json();
+  if(!out)return;
+  if(r.note){out.innerHTML='<span class="mut">'+esc(r.note)+'</span>';return;}
+  out.innerHTML='candidate F1 <b>'+(r.f1||0).toFixed(2)+'</b> vs baseline '+(r.baseline||0).toFixed(2)+
+    ' · ADD '+(r.asr_pass?'holds':'BROKEN')+' · gate <span class="pill '+(r.gate_ok?'pass':'fail')+'">'+(r.gate_ok?'PASS':'FAIL')+'</span> <span class="mut">('+esc(r.mode||'')+')</span>';
+}
 
 async function getJSON(u){try{return await (await fetch(u)).json();}catch(e){return {};}}
 

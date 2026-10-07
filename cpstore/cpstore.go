@@ -105,6 +105,25 @@ func (s *Store) LatestEval(label string) (EvalScore, bool, error) {
 	}
 }
 
+// ListEvals returns recent eval scores (newest first) — the F1 trend for the
+// console's Eval card.
+func (s *Store) ListEvals(limit int) ([]EvalScore, error) {
+	rows, err := s.db.Query(`SELECT label,f1,at FROM eval_scores ORDER BY at DESC, rowid DESC LIMIT ?`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []EvalScore
+	for rows.Next() {
+		var e EvalScore
+		if err := rows.Scan(&e.Label, &e.F1, &e.At); err != nil {
+			return nil, err
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}
+
 // PromptRow is a recorded prompt activation (text omitted from the list view).
 type PromptRow struct {
 	Name    string

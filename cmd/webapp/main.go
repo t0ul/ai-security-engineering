@@ -15,14 +15,17 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
+	"github.com/t0ul/ai-security-engineering/agent/eval"
 	"github.com/t0ul/ai-security-engineering/agent/extractor"
 	"github.com/t0ul/ai-security-engineering/agent/pipeline"
 	"github.com/t0ul/ai-security-engineering/agent/roster"
@@ -34,8 +37,10 @@ import (
 	"github.com/t0ul/ai-security-engineering/netpolicy"
 	"github.com/t0ul/ai-security-engineering/provenance"
 	"github.com/t0ul/ai-security-engineering/rag"
+	"github.com/t0ul/ai-security-engineering/redteam"
 	"github.com/t0ul/ai-security-engineering/webapp"
 	"github.com/t0ul/gledger"
+	"github.com/t0ul/gorauder"
 )
 
 func main() {
@@ -235,13 +240,104 @@ func main() {
 	}
 	var prompts *controlplane.Prompts
 	var policies *controlplane.Policies
-	if inv, ierr := cpstore.Open(filepath.Join(*drop, "inventory.db")); ierr == nil {
+	var inv *cpstore.Store
+	if db, ierr := cpstore.Open(filepath.Join(*drop, "inventory.db")); ierr == nil {
+		inv = db
 		defer inv.Close()
 		prompts = controlplane.GovernedPrompts(promptDefaults, inv, audit)
 		policies = controlplane.GovernedPolicies(policyDefaults, inv, audit)
 	} else {
 		prompts = controlplane.NewPrompts(promptDefaults)
 		policies = controlplane.NewPolicies(policyDefaults)
+	}
+	// Activating the "extractor" prompt actually drives the LLM extractor (C5 down
+	// payment): chain the governed OnActivate to set the live extraction prompt.
+	baseOnActivate := prompts.OnActivate
+	prompts.OnActivate = func(pv controlplane.PromptVersion) {
+		if baseOnActivate != nil {
+			baseOnActivate(pv)
+		}
+		if pv.Name == "extractor" {
+			extractor.SetExtractionPrompt(pv.Text)
+		}
+	}
+
+	// Eval surfaces (C7): the Eval card + a "Test" button that shadow-evals a
+	// candidate extractor prompt before activation. Live eval and shadow eval
+	// mutate process-global state (EXTRACT_MODE, the extractor prompt override), so
+	// serialize them. Live runs need the gouncer gateway at :4000 (cmd/livecheck /
+	// a running modeld+gouncer); without it the extractor falls back to regex and
+	// we say so.
+	var evalMu sync.Mutex
+	labels := []string{"testdata/emaildrop/labels/3.json", "testdata/emaildrop/labels/1.json"}
+	evalHistory := func() []webapp.EvalResult {
+		if inv == nil {
+			return nil
+		}
+		rows, _ := inv.ListEvals(20)
+		out := make([]webapp.EvalResult, 0, len(rows))
+		for _, e := range rows {
+			out = append(out, webapp.EvalResult{Label: e.Label, F1: e.F1, At: e.At.Format("2006-01-02 15:04")})
+		}
+		return out
+	}
+	evalRun := func() ([]webapp.EvalResult, string) {
+		evalMu.Lock()
+		defer evalMu.Unlock()
+		live := gatewayUp()
+		prev := os.Getenv("EXTRACT_MODE")
+		os.Setenv("EXTRACT_MODE", "llm")
+		defer os.Setenv("EXTRACT_MODE", prev)
+		var out []webapp.EvalResult
+		for _, l := range labels {
+			rep, err := eval.Score(l, true)
+			if err != nil {
+				continue
+			}
+			if inv != nil {
+				_ = inv.RecordEval(rep.Source, rep.F1)
+			}
+			out = append(out, webapp.EvalResult{Label: rep.Source, F1: rep.F1})
+		}
+		return out, evalMode(live)
+	}
+	promptTest := func(name, candidate string) webapp.PromptTestResult {
+		if name != "extractor" {
+			return webapp.PromptTestResult{Note: "shadow eval applies to the 'extractor' prompt (the labeled eval path); planner/coder drive the orchestrator demo, not this eval."}
+		}
+		evalMu.Lock()
+		defer evalMu.Unlock()
+		live := gatewayUp()
+		prevMode := os.Getenv("EXTRACT_MODE")
+		os.Setenv("EXTRACT_MODE", "llm")
+		defer os.Setenv("EXTRACT_MODE", prevMode)
+		extractor.SetExtractionPrompt(candidate)
+		defer extractor.SetExtractionPrompt(prompts.Text("extractor")) // restore the governed-active prompt
+
+		rep, err := eval.Score("testdata/emaildrop/labels/1.json", true)
+		f1 := 0.0
+		if err == nil {
+			f1 = rep.F1
+		}
+		baseline := 0.0
+		if inv != nil {
+			if e, ok, _ := inv.LatestEval("samples/1.txt"); ok {
+				baseline = e.F1
+			}
+		}
+		asrPass := true
+		for _, c := range redteam.Cases() {
+			if defendedASR(c) > 0 {
+				asrPass = false
+				break
+			}
+		}
+		asrVal := 0.0
+		if !asrPass {
+			asrVal = 1.0
+		}
+		gateOK, _ := controlplane.PromotionGate{MinF1: baseline, F1: func() float64 { return f1 }, ASR: func() float64 { return asrVal }}.Allow()
+		return webapp.PromptTestResult{F1: f1, Baseline: baseline, ASRPass: asrPass, GateOK: gateOK, Mode: evalMode(live)}
 	}
 
 	srv := &http.Server{
@@ -251,6 +347,7 @@ func main() {
 			Egress: egress, Fetch: fetch, Verifier: verifier, Safety: safety, Search: search,
 			Authz: authz, OperatorToken: opToken, Audit: audit,
 			MCP: mcpList, MCPApprove: mcpApprove, Prompts: prompts, Policies: policies,
+			EvalHistory: evalHistory, EvalRun: evalRun, PromptTest: promptTest,
 		}).Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
@@ -281,6 +378,30 @@ func agentIdentity(path string) (*provenance.Signer, *provenance.Verifier) {
 		signer, pub, _ = provenance.NewSigner(keyID) // ephemeral fallback
 	}
 	return signer, provenance.NewVerifier().Trust(keyID, pub)
+}
+
+// gatewayUp reports whether the gouncer gateway is reachable, so a live eval run
+// can say whether it ran against the model or fell back to regex.
+func gatewayUp() bool {
+	c, err := net.DialTimeout("tcp", "127.0.0.1:4000", 300*time.Millisecond)
+	if err != nil {
+		return false
+	}
+	_ = c.Close()
+	return true
+}
+
+func evalMode(live bool) string {
+	if live {
+		return "llm (gouncer :4000)"
+	}
+	return "gateway :4000 down → regex fallback; start cmd/livecheck or modeld+gouncer for the live path"
+}
+
+// defendedASR runs one ADD case's defended target and returns its attack success
+// rate (0 = the control holds).
+func defendedASR(c redteam.Case) float64 {
+	return gorauder.NewRunner(c.Defended, gorauder.WithScorer(redteam.Scorer())).Run(context.Background(), c.Seeds).ASR()
 }
 
 // shortHash trims a hex manifest hash to a display prefix.

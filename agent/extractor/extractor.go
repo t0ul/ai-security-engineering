@@ -18,6 +18,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -42,6 +43,34 @@ Copy each date/time phrase verbatim from the text; never compute or reformat a d
 ALWAYS include no-school days, half days, and holidays even with NO time — they are all-day events and are the easiest to miss. Examples:
   "Monday, October 12th- Italian Heritage Day" -> {"title": "Italian Heritage Day (No School)", "when": "Monday, October 12th", "where": ""}
   "volunteer training session on Friday, October 9th at 8:45 AM" -> {"title": "Volunteer Training", "when": "Friday, October 9th at 8:45 AM", "where": ""}`
+
+// Runtime prompt override (C2 governed prompt / C7 shadow eval). The LLM path
+// uses ActivePrompt(): the governed-active prompt when one is set, else the
+// shipped ExtractionPrompt default. SetExtractionPrompt("") resets to default.
+// Serialized so a shadow eval can set a candidate, run, and restore safely.
+var (
+	promptMu       sync.RWMutex
+	promptOverride string
+)
+
+// SetExtractionPrompt sets the active LLM extraction system prompt at runtime
+// (governed activation or a shadow-eval candidate). Empty resets to the default.
+func SetExtractionPrompt(p string) {
+	promptMu.Lock()
+	promptOverride = p
+	promptMu.Unlock()
+}
+
+// ActivePrompt returns the prompt the LLM path will use: the override if set,
+// else the shipped ExtractionPrompt.
+func ActivePrompt() string {
+	promptMu.RLock()
+	defer promptMu.RUnlock()
+	if promptOverride != "" {
+		return promptOverride
+	}
+	return ExtractionPrompt
+}
 
 func env(k, d string) string {
 	if v := os.Getenv(k); v != "" {
@@ -108,7 +137,7 @@ func llmPropose(emailText string, timeout time.Duration) ([]candidate, error) {
 		"temperature": 0.1,
 		"max_tokens":  900,
 		"messages": []map[string]string{
-			{"role": "system", "content": ExtractionPrompt},
+			{"role": "system", "content": ActivePrompt()},
 			{"role": "user", "content": "<EMAIL>\n" + truncateRunes(emailText, 12000) + "\n</EMAIL>"},
 		},
 	}

@@ -76,6 +76,14 @@ type Server struct {
 	// the static Egress is used.
 	Policies *controlplane.Policies
 
+	// Eval surfaces (C7): EvalHistory lists persisted F1 scores (the trend card);
+	// EvalRun runs the eval live and persists it; PromptTest shadow-evals a
+	// candidate extractor prompt (F1 + ADD-ASR + promotion-gate verdict) WITHOUT
+	// activating it. Nil = no Eval tab / Test button.
+	EvalHistory func() []EvalResult
+	EvalRun     func() ([]EvalResult, string)
+	PromptTest  func(name, candidate string) PromptTestResult
+
 	// pending holds issued-but-unconfirmed HITL approvals, keyed by nonce (ASI09:
 	// evidence-first, single-use, clickjack/forgery-resistant confirm).
 	mu   sync.Mutex
@@ -130,6 +138,13 @@ func (s *Server) Handler() http.Handler {
 		mux.HandleFunc("/api/policies", s.policiesList)
 		mux.HandleFunc("/api/policies/activate", csrf(s.authz(controlplane.ActionWrite, "policy", s.policiesActivate)))
 		mux.HandleFunc("/api/policies/reset", csrf(s.authz(controlplane.ActionWrite, "policy", s.policiesReset)))
+	}
+	if s.EvalHistory != nil {
+		mux.HandleFunc("/api/eval", s.evalList)
+		mux.HandleFunc("/api/eval/run", csrf(s.authz(controlplane.ActionWrite, "eval", s.evalRunHandler)))
+	}
+	if s.PromptTest != nil {
+		mux.HandleFunc("/api/prompts/test", csrf(s.authz(controlplane.ActionWrite, "prompts", s.promptsTest)))
 	}
 	if s.InboxPath != "" {
 		mux.HandleFunc("/api/drop", csrf(s.authz(controlplane.ActionWrite, "inbox", s.drop)))
