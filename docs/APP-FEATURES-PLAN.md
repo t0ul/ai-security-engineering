@@ -248,9 +248,15 @@ New phases:
   "K"]/class/teacher/school/in/lunch/out/notes) persisted **in the cpstore DB**
   (config key "profile"), host-only, never from an email; `/api/profile` +
   `/api/profile/save` (csrf + authz write/profile). Edited in the My Week tab.
-- **R2 — document-type routing** ⬜: on ingest, classify bulletin vs reference;
-  reference → index into the corpus (don't extract-butcher it) but still pull the
-  few embedded dated items (conferences Nov 5 / Mar 3, Back-to-School Sept 29).
+- **R2 — document-type routing** ✅: `items.DocumentType(email)` classifies
+  bulletin vs reference at ingest; the pipeline records it (`EmailSummary.DocType`
+  + gledger `classified` + a console badge) and passes `tool.Ctx.Reference` to
+  every tool. A reference doc still feeds the Ask corpus but is extracted
+  conservatively — the event extractor keeps only *announced* events
+  (`announcedEvent`: a real 2+-word name or a specific time), so handbook prose
+  dates ("The school year began…") are not calendared while real ones
+  (Parent-Teacher Conferences) are; items already suppresses handbook tasks.
+  Live-smoked: handbook → reference, only the conference reached the calendar.
 - **R3 — daily timeline** ✅ (the hero of My Week): `/api/timeline?day=today|
   tomorrow|YYYY-MM-DD` aggregates the profile's daily anchors (`8:15 in · lunch
   10:55 · out 2:30`) + every extracted event/task/action landing on that day,
