@@ -1,0 +1,2 @@
+go test fuzz v1
+string("\xb7B00A \x9d\xd8A\xfd\xc4\xc4ba 0\x90ލ\xf1  C  DeCemBer 25")

@@ -47,6 +47,30 @@ func TestApprovalsPersistAndList(t *testing.T) {
 	}
 }
 
+func TestPromptsPersistAndList(t *testing.T) {
+	s, _ := cpstore.Open(":memory:")
+	defer s.Close()
+	if err := s.RecordPrompt("planner", "v1", "abc123", "hello"); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := s.ListPrompts(10)
+	if err != nil || len(rows) != 1 || rows[0].Name != "planner" || rows[0].Hash != "abc123" {
+		t.Fatalf("prompt not persisted/listed: %+v (%v)", rows, err)
+	}
+}
+
+func TestPinsPersistAndList(t *testing.T) {
+	s, _ := cpstore.Open(":memory:")
+	defer s.Close()
+	if err := s.RecordPin("search", "deadbeef", "operator"); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := s.ListPins(10)
+	if err != nil || len(rows) != 1 || rows[0].Server != "search" || rows[0].ApprovedBy != "operator" {
+		t.Fatalf("pin not persisted/listed: %+v (%v)", rows, err)
+	}
+}
+
 func TestRecordersDoNotError(t *testing.T) {
 	s := open(t)
 	if err := s.RecordPrompt("planner", "v2", "deadbeef", "You are..."); err != nil {

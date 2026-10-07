@@ -1,64 +1,31 @@
 package redteam_test
 
 import (
-	"context"
 	"testing"
 
+	"github.com/t0ul/ADD"
 	"github.com/t0ul/ai-security-engineering/redteam"
-	"github.com/t0ul/gorauder"
 )
 
-func runASR(target gorauder.Target, seeds []gorauder.Seed) gorauder.Report {
-	r := gorauder.NewRunner(target, gorauder.WithScorer(redteam.Scorer()))
-	return r.Run(context.Background(), seeds)
-}
-
-func TestEachControlDrivesASRToZero(t *testing.T) {
-	for _, c := range redteam.Cases() {
-		t.Run(c.Name, func(t *testing.T) {
-			before := runASR(c.Undefended, c.Seeds)
-			after := runASR(c.Defended, c.Seeds)
-
-			if before.ASR() != 1.0 {
-				t.Fatalf("undefended ASR = %.2f, want 1.00 — seeds not landing on the baseline:\n%s",
-					before.ASR(), before.Summary())
-			}
-			if after.ASR() != 0.0 {
-				t.Fatalf("defended ASR = %.2f, want 0.00 — control leaks:\n%s",
-					after.ASR(), after.Summary())
-			}
-			t.Logf("%s: ASR %.0f%% -> %.0f%% over %d attack(s)",
-				c.Technique, before.ASR()*100, after.ASR()*100, before.Total)
-		})
+// The ADD framework drives the invariant for every technique: the attack must
+// breach the undefended baseline (ASR 100% — so the test proves something) and
+// the control must block it (ASR 0%). add.Gate runs each as a subtest and logs
+// the OWASP coverage grid.
+func TestADDGate(t *testing.T) {
+	outs := add.Gate(t, redteam.Techniques()...)
+	if len(outs) == 0 {
+		t.Fatal("no techniques ran")
 	}
 }
 
-func TestOverallASRDrop(t *testing.T) {
-	tally := func(defended bool) (succeeded, total int) {
-		for _, c := range redteam.Cases() {
-			target := c.Undefended
-			if defended {
-				target = c.Defended
-			}
-			rep := runASR(target, c.Seeds)
-			succeeded += rep.Succeeded
-			total += rep.Total
+// Every technique must carry an OWASP tag so the coverage grid has no silent
+// gaps (an untagged technique is an untracked risk).
+func TestEveryTechniqueTagged(t *testing.T) {
+	for _, tech := range redteam.Techniques() {
+		if tech.Risk == "" {
+			t.Errorf("technique %q has no OWASP risk tag", tech.Name)
 		}
-		return succeeded, total
 	}
-
-	us, ut := tally(false)
-	ds, dt := tally(true)
-	if ut == 0 || dt == 0 {
-		t.Fatal("no attacks ran")
-	}
-	if us != ut {
-		t.Fatalf("undefended should land every attack: %d/%d", us, ut)
-	}
-	if ds != 0 {
-		t.Fatalf("defended should block every attack: %d/%d succeeded", ds, dt)
-	}
-	t.Logf("overall ASR %d/%d (100%%) -> %d/%d (0%%)", us, ut, ds, dt)
 }
 
 func TestAllSeedsNonEmpty(t *testing.T) {

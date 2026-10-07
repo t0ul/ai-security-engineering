@@ -14,6 +14,7 @@ import (
 	"context"
 	"strings"
 
+	"github.com/t0ul/ADD"
 	"github.com/t0ul/ai-security-engineering/agent/guard"
 	"github.com/t0ul/ai-security-engineering/agent/pipeline"
 	"github.com/t0ul/ai-security-engineering/controlplane"
@@ -180,7 +181,8 @@ func Cases() []Case {
 		OutputForgery(), ModelSupplyChain(),
 		ArgInjection(), AmbientCredTheft(), CanaryExfil(), ApprovalForgery(),
 		AIDRUncontained(), DatasetPoisoning(), MultiAgentCollusion(),
-		AllowlistBypass(),
+		AllowlistBypass(), ActionLinkExfil(),
+		ExtractionInjection(), HallucinationReconcile(),
 	}
 }
 
@@ -189,6 +191,56 @@ func AllSeeds() []gorauder.Seed {
 	var out []gorauder.Seed
 	for _, c := range Cases() {
 		out = append(out, c.Seeds...)
+	}
+	return out
+}
+
+// riskByName maps each case to its primary OWASP Top-10 tag (LLM 2025 / Agentic
+// 2025). Best-effort — the point is the coverage grid, not a taxonomy debate.
+var riskByName = map[string]string{
+	"indirect-injection":    "LLM01",
+	"prompt-leak":           "LLM07",
+	"url-exfil":             "LLM05",
+	"pii-secret-leak":       "LLM02",
+	"sponge-dos":            "LLM10",
+	"ssrf-imds":             "LLM05",
+	"mcp-rug-pull":          "ASI04",
+	"a2a-spoof":             "ASI07",
+	"killswitch-bypass":     "ASI10",
+	"rag-poisoning":         "LLM08",
+	"rag-tenant-leak":       "ASI06",
+	"memory-poisoning":      "LLM08",
+	"promotion-gate-bypass": "LLM03",
+	"output-forgery":        "ASI08",
+	"model-supply-chain":    "LLM03",
+	"arg-injection":         "ASI05",
+	"ambient-cred-theft":    "ASI03",
+	"canary-exfil":          "LLM02",
+	"approval-forgery":      "ASI09",
+	"aidr-uncontained":      "ASI10",
+	"dataset-poisoning":     "LLM04",
+	"multi-agent-collusion": "ASI07",
+	"allowlist-bypass":      "ASI05",
+	"action-link-exfil":     "LLM05",
+	"extraction-injection":  "LLM01",
+	"hallucination-reconcile": "LLM09",
+}
+
+// Techniques exposes the red-team cases as ADD techniques — the attack library
+// driven by the add framework (paired undefended/defended invariant + OWASP
+// coverage grid), run under `go test` via add.Gate.
+func Techniques() []add.Technique {
+	cases := Cases()
+	out := make([]add.Technique, 0, len(cases))
+	for _, c := range cases {
+		out = append(out, add.Technique{
+			Name:            c.Name,
+			Risk:            riskByName[c.Name],
+			Seeds:           c.Seeds,
+			Undefended:      c.Undefended,
+			Defended:        c.Defended,
+			BlockedSentinel: BlockSentinel,
+		})
 	}
 	return out
 }

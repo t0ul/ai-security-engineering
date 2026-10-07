@@ -97,6 +97,58 @@ func (s *Store) LatestEval(label string) (EvalScore, bool, error) {
 	}
 }
 
+// PromptRow is a recorded prompt activation (text omitted from the list view).
+type PromptRow struct {
+	Name    string
+	Version string
+	Hash    string
+	At      time.Time
+}
+
+// ListPrompts returns recent prompt activations, newest first.
+func (s *Store) ListPrompts(limit int) ([]PromptRow, error) {
+	rows, err := s.db.Query(`SELECT name,version,hash,at FROM prompts ORDER BY at DESC, rowid DESC LIMIT ?`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []PromptRow
+	for rows.Next() {
+		var p PromptRow
+		if err := rows.Scan(&p.Name, &p.Version, &p.Hash, &p.At); err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
+// PinRow is a recorded MCP manifest pin.
+type PinRow struct {
+	Server     string
+	Hash       string
+	ApprovedBy string
+	At         time.Time
+}
+
+// ListPins returns recent MCP manifest pins, newest first.
+func (s *Store) ListPins(limit int) ([]PinRow, error) {
+	rows, err := s.db.Query(`SELECT server,hash,approved_by,at FROM mcp_pins ORDER BY at DESC, rowid DESC LIMIT ?`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []PinRow
+	for rows.Next() {
+		var p PinRow
+		if err := rows.Scan(&p.Server, &p.Hash, &p.ApprovedBy, &p.At); err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
 // Approval is one recorded decision.
 type Approval struct {
 	ID       string

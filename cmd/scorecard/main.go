@@ -1,43 +1,48 @@
-// Command scorecard is the M12 full-chain security gate: it runs every red-team
-// technique against the undefended baseline and the real control, printing the
-// attack-success-rate before and after each defense. It exits non-zero if any
-// defended ASR is above zero, so it doubles as a CI security-regression gate —
-// a real incident becomes a permanent test that cannot silently recur.
+// Command scorecard is the M12 full-chain security gate, now powered by the ADD
+// framework (github.com/t0ul/ADD). It evaluates every red-team technique's ADD
+// invariant — the attack breaches the undefended baseline and the control blocks
+// it — printing the attack-success-rate before and after each defense, plus the
+// OWASP coverage grid. It exits non-zero if any invariant is violated, so it
+// doubles as a CI security-regression gate: a real incident becomes a permanent
+// check that cannot silently recur.
 package main
 
 import (
-	"context"
 	"fmt"
 	"os"
 
+	"github.com/t0ul/ADD"
 	"github.com/t0ul/ai-security-engineering/redteam"
-	"github.com/t0ul/gorauder"
 )
 
 func main() {
-	ctx := context.Background()
-	asr := func(target gorauder.Target, seeds []gorauder.Seed) float64 {
-		return gorauder.NewRunner(target, gorauder.WithScorer(redteam.Scorer())).Run(ctx, seeds).ASR()
-	}
+	fmt.Println("== security scorecard (ADD: ASR before -> after) ==")
+	fmt.Printf("%-24s %-8s %8s %8s\n", "technique", "risk", "before", "after")
 
-	fmt.Println("== security scorecard (ASR before -> after) ==")
-	fmt.Printf("%-22s %-14s %8s %8s\n", "technique", "control", "before", "after")
-
+	techniques := redteam.Techniques()
+	outs := make([]add.Outcome, 0, len(techniques))
 	failed := 0
-	total := 0
-	for _, c := range redteam.Cases() {
-		before := asr(c.Undefended, c.Seeds) * 100
-		after := asr(c.Defended, c.Seeds) * 100
+	for _, tech := range techniques {
+		out, violations := add.Evaluate(tech)
+		outs = append(outs, out)
 		flag := "ok"
-		if after > 0 {
+		if len(violations) > 0 {
 			flag = "FAIL"
 			failed++
 		}
-		total++
-		fmt.Printf("%-22s %-14s %7.0f%% %7.0f%%  %s\n", c.Name, c.Technique, before, after, flag)
+		fmt.Printf("%-24s %-8s %7.0f%% %7.0f%%  %s\n",
+			out.Name, out.Risk, out.UndefendedASR*100, out.DefendedASR*100, flag)
+		for _, v := range violations {
+			fmt.Printf("    ! %s\n", v)
+		}
 	}
 
-	fmt.Printf("\n%d technique(s); %d regressed\n", total, failed)
+	fmt.Println()
+	for _, line := range add.Grid(outs) {
+		fmt.Println(line)
+	}
+
+	fmt.Printf("\n%d technique(s); %d regressed\n", len(techniques), failed)
 	if failed > 0 {
 		os.Exit(1)
 	}

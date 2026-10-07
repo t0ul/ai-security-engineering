@@ -71,6 +71,23 @@ type Orchestrator struct {
 	// plan that does not verify as the trusted planner's, unaltered.
 	Signer   *a2a.Signer
 	Verifier *a2a.Verifier
+	// Prompts, when set, resolves the active governed system prompt per logical
+	// model (the prompts management plane). Nil = use the shipped const defaults.
+	Prompts *Prompts
+}
+
+func (o *Orchestrator) plannerPrompt() string {
+	if o.Prompts != nil {
+		return o.Prompts.Text("planner")
+	}
+	return PlannerSystemPrompt
+}
+
+func (o *Orchestrator) coderPrompt() string {
+	if o.Prompts != nil {
+		return o.Prompts.Text("coder")
+	}
+	return CoderSystemPrompt
 }
 
 // SafetyGate is the layered kill switch the loop consults; *Safety implements it.
@@ -132,7 +149,7 @@ func (o *Orchestrator) planner(ctx *gonductor.Context, s State) (State, error) {
 		s.BlogPlan = haltSentinel
 		return s, nil
 	}
-	plan, err := o.LLM.Complete(ctx, s.TraceID, o.plannerModel(), PlannerSystemPrompt, s.RawHistory,
+	plan, err := o.LLM.Complete(ctx, s.TraceID, o.plannerModel(), o.plannerPrompt(), s.RawHistory,
 		CompleteOpts{Temperature: 0.1, MaxTokens: 250, Stop: []string{"<|eot_id|>", "<|end_of_text|>"}})
 	if err != nil {
 		return s, err
@@ -208,7 +225,7 @@ func (o *Orchestrator) coder(ctx *gonductor.Context, s State) (State, error) {
 	user := "Write a Markdown blog post using this structure:\n" + planForBlog +
 		"\n\nVerified command output captured from the sandbox:\n" + s.ToolOutput +
 		"\n\nRaw session logs:\n" + s.RawHistory
-	raw, err := o.LLM.Complete(ctx, s.TraceID, o.coderModel(), CoderSystemPrompt, user,
+	raw, err := o.LLM.Complete(ctx, s.TraceID, o.coderModel(), o.coderPrompt(), user,
 		CompleteOpts{Temperature: 0.1, MaxTokens: 600, Stop: []string{"<|im_end|>", "<|endoftext|>"}})
 	if err != nil {
 		return s, err

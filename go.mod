@@ -17,6 +17,7 @@ require (
 
 require (
 	github.com/Code-Hex/vz/v3 v3.8.0
+	github.com/t0ul/ADD v0.0.0-00010101000000-000000000000
 	github.com/t0ul/gledger v0.0.0-00010101000000-000000000000
 	github.com/t0ul/goflage v0.0.0-00010101000000-000000000000
 	github.com/t0ul/gonductor v0.0.0-00010101000000-000000000000
@@ -31,6 +32,7 @@ require (
 )
 
 replace (
+	github.com/t0ul/ADD => ../fleet/ADD
 	github.com/t0ul/gledger => ../fleet/gledger
 	github.com/t0ul/goflage => ../fleet/goflage
 	github.com/t0ul/gonductor => ../fleet/gonductor
