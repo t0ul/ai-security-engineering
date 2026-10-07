@@ -30,6 +30,7 @@ import (
 	"github.com/t0ul/ai-security-engineering/agent/watcher"
 	"github.com/t0ul/ai-security-engineering/controlplane"
 	"github.com/t0ul/ai-security-engineering/cpstore"
+	"github.com/t0ul/ai-security-engineering/durable"
 	"github.com/t0ul/ai-security-engineering/netpolicy"
 	"github.com/t0ul/ai-security-engineering/provenance"
 	"github.com/t0ul/ai-security-engineering/rag"
@@ -159,16 +160,32 @@ func main() {
 	// Verifying it means Halt revokes the fetch in-flight, on top of the operator's
 	// HTTP gate — the human delegates to a least-privilege machine identity.
 	fetcherGrant, _ := authz.Issue(controlplane.Capability{Subject: "action-fetcher", Action: controlplane.ActionExport, Resource: "link", Tenant: "public"}, 30*24*time.Hour)
+
+	// Durable execution + exactly-once (reliability track): the action-link fetch
+	// is the app's side-effecting tool, so route it through a hash-chained step
+	// log. A duplicated/replayed action with the same key returns the first result
+	// instead of re-firing (exactly-once); the log is chain-verified on open, so a
+	// tampered checkpoint fails closed — we start fresh rather than resume into a
+	// forged state.
+	steps, serr := durable.Open(filepath.Join(*drop, "steps.jsonl"))
+	if serr != nil {
+		log.Printf("[durable] step log failed verification (%v) — starting fresh, NOT resuming into it", serr)
+		audit.Emit(gledger.NewTraceID(), "durable", "tamper_detected", gledger.F{"error": serr.Error()})
+		steps, _ = durable.Open("")
+	}
 	fetch := func(ctx context.Context, url string) (string, error) {
 		if _, err := authz.Verify(fetcherGrant, controlplane.Capability{Action: controlplane.ActionExport, Resource: "link", Tenant: "public"}); err != nil {
 			return "", fmt.Errorf("action-fetcher capability refused: %w", err)
 		}
-		out, err := toolGW.Call(ctx, gledger.NewTraceID(), "action-fetcher", "sandbox", "web_fetch", map[string]any{"url": url, "trace_id": gledger.NewTraceID()})
-		if err != nil {
-			return "", err
-		}
-		s, _ := out.(map[string]any)["output"].(string)
-		return s, nil
+		out, _, derr := steps.Do("webapp", "tool", "fetch:"+url, func() (string, error) {
+			o, err := toolGW.Call(ctx, gledger.NewTraceID(), "action-fetcher", "sandbox", "web_fetch", map[string]any{"url": url, "trace_id": gledger.NewTraceID()})
+			if err != nil {
+				return "", err
+			}
+			s, _ := o.(map[string]any)["output"].(string)
+			return s, nil
+		})
+		return out, derr
 	}
 
 	// MCP governance tab (C6): surface the gateway's servers, their advertised +
