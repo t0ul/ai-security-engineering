@@ -29,7 +29,8 @@ CREATE TABLE IF NOT EXISTS eval_scores(label TEXT, f1 REAL, at DATETIME DEFAULT 
 CREATE TABLE IF NOT EXISTS admin_audit(actor TEXT, action TEXT, detail TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS policies(name TEXT, version TEXT, hash TEXT, items TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS config(key TEXT PRIMARY KEY, value TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);
-CREATE TABLE IF NOT EXISTS sampling(name TEXT, version TEXT, hash TEXT, config TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);`
+CREATE TABLE IF NOT EXISTS sampling(name TEXT, version TEXT, hash TEXT, config TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS bundles(label TEXT, config TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);`
 
 // Open creates/opens the inventory at path (":memory:" for ephemeral).
 func Open(path string) (*Store, error) {
@@ -74,6 +75,52 @@ func (s *Store) GetConfig(key string) (string, bool, error) {
 	default:
 		return "", false, err
 	}
+}
+
+// SaveBundle stores a known-good configuration snapshot (JSON) under a label — a
+// point the whole governed plane can be rolled back to in one step (C10).
+func (s *Store) SaveBundle(label, config string) error {
+	_, err := s.db.Exec(`INSERT INTO bundles(label,config) VALUES(?,?)`, label, config)
+	return err
+}
+
+// GetBundle returns the most recent snapshot stored under label.
+func (s *Store) GetBundle(label string) (config string, ok bool, err error) {
+	row := s.db.QueryRow(`SELECT config FROM bundles WHERE label=? ORDER BY at DESC, rowid DESC LIMIT 1`, label)
+	switch e := row.Scan(&config); e {
+	case nil:
+		return config, true, nil
+	case sql.ErrNoRows:
+		return "", false, nil
+	default:
+		return "", false, e
+	}
+}
+
+// BundleRow is a stored snapshot's label + time (config omitted from the list).
+type BundleRow struct {
+	Label string
+	At    time.Time
+}
+
+// ListBundles returns the most-recent snapshot per label, newest first. It selects
+// the real `at` column (not MAX(at), which some drivers return as a string that
+// won't scan into time.Time) via a per-label latest-row subquery.
+func (s *Store) ListBundles(limit int) ([]BundleRow, error) {
+	rows, err := s.db.Query(`SELECT label, at FROM bundles b WHERE at = (SELECT MAX(at) FROM bundles WHERE label = b.label) GROUP BY label ORDER BY at DESC LIMIT ?`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []BundleRow
+	for rows.Next() {
+		var b BundleRow
+		if err := rows.Scan(&b.Label, &b.At); err != nil {
+			return nil, err
+		}
+		out = append(out, b)
+	}
+	return out, rows.Err()
 }
 
 // RecordSampling stores a versioned, hashed sampling config (JSON) for a model.

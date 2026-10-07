@@ -149,6 +149,11 @@ const dashboardHTML = `<!doctype html>
       <div id="mcp"><span class="mut">loading…</span></div>
     </div>
     <div class="card">
+      <strong>Config snapshots</strong> <span class="mut">— known-good bundles (M15/C10): snapshot the whole governed plane (prompts + sampling + policies) and roll it all back in one click.</span>
+      <div style="margin-top:8px"><input id="bundleLabel" placeholder="e.g. before-prompt-tweak" style="width:50%"><button class="go" onclick="saveBundle()">Snapshot now</button></div>
+      <div id="bundleList" style="margin-top:8px"><span class="mut">loading…</span></div>
+    </div>
+    <div class="card">
       <strong>Security scorecard</strong>
       <p class="mut">Run the full red-team suite against the live controls. Every attack should drop to 0%.</p>
       <button class="go" onclick="runScorecard()">Run scorecard</button>
@@ -214,7 +219,7 @@ document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
   if(t==='review') loadReview();
   if(t==='activity') loadActivity();
   if(t==='incidents') loadIncidents();
-  if(t==='security'){loadKill();loadMCP();}
+  if(t==='security'){loadKill();loadMCP();loadBundles();}
   if(t==='prompts') loadPrompts();
   if(t==='sampling') loadSampling();
   if(t==='policies') loadPolicies();
@@ -254,6 +259,19 @@ async function loadMCP(){
   }).join('');
 }
 async function approveMCP(name){await postJSON('/api/mcp/approve',{server:name});loadMCP();}
+async function loadBundles(){
+  const c=$('#bundleList');if(!c)return;const d=await getJSON('/api/bundles');const bs=d.bundles||[];
+  if(!bs.length){c.innerHTML='<p class="mut">no snapshots yet</p>';return;}
+  c.innerHTML=bs.map(b=>'<div class="ev"><div><b>'+esc(b.label)+'</b> <span class="mut">'+esc(b.at)+'</span> <button class="ghost" onclick="applyBundle(\''+esc(b.label)+'\')">Roll back to this</button></div></div>').join('');
+}
+async function saveBundle(){
+  const l=$('#bundleLabel').value.trim();if(!l)return;
+  await postJSON('/api/bundles/save',{label:l});$('#bundleLabel').value='';loadBundles();
+}
+async function applyBundle(label){
+  if(!confirm('Roll the ENTIRE governed plane (prompts + sampling + policies) back to "'+label+'"?'))return;
+  await postJSON('/api/bundles/apply',{label:label});loadBundles();
+}
 async function loadPrompts(){
   const c=$('#promptList');if(!c)return;const d=await getJSON('/api/prompts');const ps=d.prompts||[];
   if(!ps.length){c.innerHTML='<p class="mut">no prompts registered</p>';return;}

@@ -90,6 +90,13 @@ type Server struct {
 	ProfileLoad func() Profile
 	ProfileSave func(Profile) error
 
+	// Bundle surfaces (C10): BundleList shows saved known-good snapshots; BundleSave
+	// snapshots the whole governed plane; BundleApply rolls it all back. Nil = no
+	// snapshot card.
+	BundleList  func() []BundleInfo
+	BundleSave  func(label string) error
+	BundleApply func(label string) error
+
 	// Eval surfaces (C7): EvalHistory lists persisted F1 scores (the trend card);
 	// EvalRun runs the eval live and persists it; PromptTest shadow-evals a
 	// candidate extractor prompt (F1 + ADD-ASR + promotion-gate verdict) WITHOUT
@@ -164,6 +171,11 @@ func (s *Server) Handler() http.Handler {
 	}
 	if s.PromptTest != nil {
 		mux.HandleFunc("/api/prompts/test", csrf(s.authz(controlplane.ActionWrite, "prompts", s.promptsTest)))
+	}
+	if s.BundleList != nil {
+		mux.HandleFunc("/api/bundles", s.bundlesList)
+		mux.HandleFunc("/api/bundles/save", csrf(s.authz(controlplane.ActionWrite, "bundle", s.bundlesSave)))
+		mux.HandleFunc("/api/bundles/apply", csrf(s.authz(controlplane.ActionWrite, "bundle", s.bundlesApply)))
 	}
 	if s.ProfileLoad != nil {
 		mux.HandleFunc("/api/timeline", s.timeline)

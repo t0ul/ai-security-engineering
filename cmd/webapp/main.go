@@ -329,6 +329,41 @@ func main() {
 		}
 	}
 
+	// Known-good bundles (C10): snapshot the whole governed plane under a label and
+	// roll it all back in one step. Needs the DB.
+	var bundleList func() []webapp.BundleInfo
+	var bundleSave func(string) error
+	var bundleApply func(string) error
+	if inv != nil {
+		bundleList = func() []webapp.BundleInfo {
+			rows, _ := inv.ListBundles(50)
+			out := make([]webapp.BundleInfo, 0, len(rows))
+			for _, b := range rows {
+				out = append(out, webapp.BundleInfo{Label: b.Label, At: b.At.Format("2006-01-02 15:04")})
+			}
+			return out
+		}
+		bundleSave = func(label string) error {
+			b := controlplane.Snapshot(label, prompts, sampling, policies)
+			raw, _ := json.Marshal(b)
+			audit.Emit(gledger.NewTraceID(), "bundle", "saved", gledger.F{"label": label})
+			return inv.SaveBundle(label, string(raw))
+		}
+		bundleApply = func(label string) error {
+			cfg, ok, err := inv.GetBundle(label)
+			if err != nil || !ok {
+				return fmt.Errorf("no such snapshot %q", label)
+			}
+			var b controlplane.Bundle
+			if err := json.Unmarshal([]byte(cfg), &b); err != nil {
+				return err
+			}
+			b.Apply(prompts, sampling, policies)
+			audit.Emit(gledger.NewTraceID(), "bundle", "rolled_back", gledger.F{"label": label})
+			return nil
+		}
+	}
+
 	// Eval surfaces (C7): the Eval card + a "Test" button that shadow-evals a
 	// candidate extractor prompt before activation. Live eval and shadow eval
 	// mutate process-global state (EXTRACT_MODE, the extractor prompt override), so
@@ -415,6 +450,7 @@ func main() {
 			Authz: authz, OperatorToken: opToken, Audit: audit,
 			MCP: mcpList, MCPApprove: mcpApprove, Prompts: prompts, Policies: policies, Sampling: sampling,
 			EvalHistory: evalHistory, EvalRun: evalRun, PromptTest: promptTest,
+			BundleList: bundleList, BundleSave: bundleSave, BundleApply: bundleApply,
 			ProfileLoad: profileLoad, ProfileSave: profileSave,
 		}).Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
