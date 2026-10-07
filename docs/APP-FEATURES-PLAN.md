@@ -244,14 +244,19 @@ Already built (reused here):
 - contacts tool (`agent/tools.Contacts`) ✅
 
 New phases:
-- **R1 — child profile** ⬜: grade/class/teacher/allergies in Settings; the key
-  that personalizes the handbook.
+- **R1 — child profile** ✅: `webapp.Profile`/`Child` (name/grade/class/teacher/
+  school/in/lunch/out/notes) persisted to `<drop>/profile.json` (0600, host-only,
+  never from an email); `/api/profile` + `/api/profile/save` (csrf + authz
+  write/profile). Edited in the My Week tab.
 - **R2 — document-type routing** ⬜: on ingest, classify bulletin vs reference;
   reference → index into the corpus (don't extract-butcher it) but still pull the
   few embedded dated items (conferences Nov 5 / Mar 3, Back-to-School Sept 29).
-- **R3 — daily timeline** ⬜ (the hero of My Week): derive the kid's day from
-  handbook + profile (`8:15 in · lunch 10:55 · out 2:30`), with half-day
-  exceptions (conf days dismiss 11:30). Recurring; ties to the RRULE v2 item.
+- **R3 — daily timeline** ✅ (the hero of My Week): `/api/timeline?day=today|
+  tomorrow|YYYY-MM-DD` aggregates the profile's daily anchors (`8:15 in · lunch
+  10:55 · out 2:30`) + every extracted event/task/action landing on that day,
+  across all processed emails (`allEvents()`); My Week tab with Today/Tomorrow.
+  Live-smoked (profile + a dropped dated email → the day's agenda). Remaining:
+  half-day exceptions (needs R2 doc-routing + handbook), RRULE recurrence.
 - **R4 — Ask School** 🟡: `/api/ask` lexical search over the PII-scrubbed corpus
   (FTS5, injection-safe) + an Ask tab (box + snippets, readable source, untrusted
   badge). Verified live (nurse / phone policy → handbook). Remaining ⬜: an LLM

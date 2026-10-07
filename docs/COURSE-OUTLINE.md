@@ -165,7 +165,10 @@ visiting), **actions** (accept the classroom-app invite / RSVP links, screened b
 netpolicy + fetched in the VM), plus surfacing digest + contacts and a
 needs-review queue, month view, drop-in UI. Hook: "I actually run this now."
 Security stays on: every new surface rides the same guards; action links are
-HITL + netpolicy + VM-brokered.
+HITL + netpolicy + VM-brokered. Track 2 **My Week** shipped: a child profile
+(host-only, authz-gated) + a daily timeline (`/api/timeline`) that aggregates the
+profile's anchors and every extracted item for a day across all emails — "what's
+my kid's day."
 
 **Post 17 · Productionization & deployment** (M13) 🟡
 Ship it: loopback/vsock-only binding, pinned+verified deps, secrets out of
