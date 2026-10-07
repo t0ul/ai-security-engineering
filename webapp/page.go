@@ -395,6 +395,7 @@ async function loadSummaries(items){
     const div=document.createElement('div');div.className='ev';
     const digest=(s.tools&&s.tools.digest)||'';const contacts=(s.tools&&s.tools.contacts)||'';
     div.innerHTML='<div style="width:100%"><b>'+esc(s.source||f)+'</b>'+
+      (s.doc_type?' <span class="kind'+(s.doc_type==='reference'?' warn':'')+'">'+esc(s.doc_type)+'</span>':'')+
       (digest?'<pre class="mut" style="margin-top:6px">'+esc(digest)+'</pre>':'')+
       (contacts?'<div class="mut" style="margin-top:6px">✉️ '+esc(contacts.replace(/\n/g,', '))+'</div>':'')+'</div>';
     c.appendChild(div);}

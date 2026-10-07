@@ -7,6 +7,7 @@
 // the watched folder is an untrusted ingestion boundary, so it enforces:
 //   - a settle delay (never read a half-written file),
 //   - a per-cycle rate cap (DoS, M10),
+//
 // alongside the size cap the pipeline already applies. This is the
 // long-running-agent threat surface: indirect injection (M4), DoS (M10),
 // goal drift (ASI06).

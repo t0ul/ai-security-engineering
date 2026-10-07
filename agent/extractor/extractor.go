@@ -20,6 +20,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/t0ul/ai-security-engineering/agent/dateparse"
@@ -484,6 +485,23 @@ func (*EventExtractor) Run(emailText string, ctx tool.Ctx) tool.Result {
 		warnings = append(warnings, fmt.Sprintf("days-off net authoritative on %d date(s)", len(netDates)))
 	}
 
+	// Reference/handbook routing (R2): a policy doc is standing reference, not a
+	// bulletin — don't shred its prose dates onto the calendar. Keep only clearly
+	// announced events (a real event name, or a specific time); the whole doc still
+	// feeds the Ask corpus via the pipeline.
+	if ctx.Reference {
+		var kept []schema.Event
+		for _, e := range events {
+			if announcedEvent(e) {
+				kept = append(kept, e)
+			}
+		}
+		if len(kept) != len(events) {
+			warnings = append(warnings, fmt.Sprintf("reference doc: kept %d announced event(s) of %d (prose dates not calendared)", len(kept), len(events)))
+		}
+		events = kept
+	}
+
 	icsText, removed, err := ics.Write(events, "Email-to-Calendar")
 	if err != nil {
 		warnings = append(warnings, fmt.Sprintf("ics write error: %v", err))
@@ -504,6 +522,39 @@ func (*EventExtractor) Run(emailText string, ctx tool.Ctx) tool.Result {
 }
 
 // --- helpers ---
+
+// announcedEvent reports whether an event is a genuinely announced one (a real
+// event name of 2+ substantial words, or a specific time) rather than a date
+// mentioned in policy prose — the keep-rule for reference documents (R2).
+func announcedEvent(e schema.Event) bool {
+	if strings.Contains(e.Start, "T") { // has a specific time
+		return true
+	}
+	t := strings.TrimSpace(e.Title)
+	low := strings.ToLower(t)
+	// A narrative sentence ("The school year began"), not an event name.
+	if strings.HasPrefix(low, "the ") {
+		for _, v := range []string{" began", " begins", " ended", " ends", " started", " starts", " opened", " closed", " resumed", " was", " were"} {
+			if strings.Contains(low, v) {
+				return false
+			}
+		}
+	}
+	// A real event name has 2+ substantial words.
+	words := 0
+	for _, w := range strings.Fields(t) {
+		letters := 0
+		for _, r := range w {
+			if unicode.IsLetter(r) {
+				letters++
+			}
+		}
+		if letters >= 4 {
+			words++
+		}
+	}
+	return words >= 2
+}
 
 func dateKey(iso string) string {
 	if len(iso) >= 10 {

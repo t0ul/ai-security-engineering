@@ -19,6 +19,7 @@ type Ctx struct {
 	Source      string
 	DefaultYear int
 	Mode        string // "", "auto", "llm", or "regex"
+	Reference   bool   // the source is a reference/handbook doc (R2): extract conservatively, feed the corpus
 }
 
 // Result is a tool's typed output.

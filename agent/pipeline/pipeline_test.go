@@ -273,9 +273,14 @@ func TestCapabilityEnforcement(t *testing.T) {
 	if len(sum.Artifacts) != 0 {
 		t.Fatalf("read-only tool was allowed to write: %v", sum.Artifacts)
 	}
-	// nothing should have been written to the outbox
-	if entries, _ := os.ReadDir(p.OutboxDir); len(entries) != 0 {
-		t.Errorf("outbox not empty: %v", entries)
+	// No capability-gated artifact (.ics) may be written by a read-only tool. The
+	// pipeline's own derived sidecar (classification/items metadata, R2) is not a
+	// tool artifact and may be present.
+	entries, _ := os.ReadDir(p.OutboxDir)
+	for _, e := range entries {
+		if strings.HasSuffix(e.Name(), ".ics") {
+			t.Errorf("a read-only tool wrote a capability-gated .ics: %s", e.Name())
+		}
 	}
 	if ok, _ := verify(); !ok {
 		t.Error("audit chain should still verify after a capability violation")

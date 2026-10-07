@@ -31,10 +31,10 @@ var (
 	// not a task; real joins carry a link and are caught as actions.)
 	reAction = regexp.MustCompile(`(?i)\b(buy|purchase|bring|donate|donation|drop[- ]?off|rsvp|accept|confirm|sign up|sign-up|sign and return|return the|return your|submit|register|complete the|pay|volunteer|no later than|don't forget|do not forget|reminder to|must|deadline|due by|due)\b`)
 	// reHeadsUp: informational, dated — something is happening, no action needed.
-	reHeadsUp = regexp.MustCompile(`(?i)\b(visiting|will visit|guest (author|speaker|reader)|coming to|assembly|book fair|spirit week|picture day|no school|early dismissal|field trip|week of)\b`)
-	reURL     = regexp.MustCompile(`(?i)\bhttps?://\S+`)
-	reBullet  = regexp.MustCompile(`^\s*[-*•●\x{25cf}\x{25cb}\x{2022}]+\s*`)
-	reSpace   = regexp.MustCompile(`\s+`)
+	reHeadsUp  = regexp.MustCompile(`(?i)\b(visiting|will visit|guest (author|speaker|reader)|coming to|assembly|book fair|spirit week|picture day|no school|early dismissal|field trip|week of)\b`)
+	reURL      = regexp.MustCompile(`(?i)\bhttps?://\S+`)
+	reBullet   = regexp.MustCompile(`^\s*[-*•●\x{25cf}\x{25cb}\x{2022}]+\s*`)
+	reSpace    = regexp.MustCompile(`\s+`)
 	reSentence = regexp.MustCompile(`[.!?]+\s+`)
 	// reOrgPrefix strips leading org/sender tags from a subject/header so the
 	// event name is left ("PS 51 PTA Multicultural Potluck" -> "Multicultural
@@ -161,6 +161,17 @@ func isHeader(line string) bool {
 		return false // a sentence, not a heading
 	}
 	return reSentence.FindStringIndex(line) == nil
+}
+
+// DocumentType classifies an email at ingest (R2): "reference" for a standing
+// policy/handbook doc (feed the corpus for Q&A, extract conservatively) vs
+// "bulletin" for an actionable newsletter (full extraction). First-class routing
+// signal recorded by the pipeline.
+func DocumentType(email string) string {
+	if referenceLike(email) {
+		return "reference"
+	}
+	return "bulletin"
 }
 
 // referenceLike detects a long policy/reference document (a handbook): it should

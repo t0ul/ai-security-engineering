@@ -16,6 +16,7 @@ import (
 	"strings"
 
 	"github.com/t0ul/ai-security-engineering/agent/guard"
+	"github.com/t0ul/ai-security-engineering/agent/items"
 	"github.com/t0ul/ai-security-engineering/agent/schema"
 	"github.com/t0ul/ai-security-engineering/agent/tool"
 	"github.com/t0ul/ai-security-engineering/provenance"
@@ -49,6 +50,7 @@ type EmailSummary struct {
 	Tools       map[string]string `json:"tools"`                  // read-only tool name -> text
 	Items       []schema.Event    `json:"items"`                  // events + tasks/heads-ups/actions (Kind-tagged)
 	NeedsReview []schema.Event    `json:"needs_review,omitempty"` // low-confidence / warned items
+	DocType     string            `json:"doc_type,omitempty"`     // "bulletin" | "reference" (R2 routing)
 }
 
 // Pipeline wires a tool registry to an audit log and an outbox.
@@ -213,9 +215,17 @@ func (p *Pipeline) ProcessEmail(path string) (Summary, error) {
 	if year == 0 {
 		year = 2026
 	}
+	// Document-type routing (R2): classify the (sanitized) body once. A reference
+	// doc (handbook/policy) feeds the Ask corpus but is extracted conservatively —
+	// its prose dates are not shredded onto the calendar — while a bulletin gets
+	// full extraction. The decision is recorded + audited and passed to every tool.
+	docType := items.DocumentType(text)
+	reference := docType == "reference"
+	p.Audit.Emit(trace, "pipeline", "classified", gledger.F{"source": source, "doc_type": docType})
+
 	stem := strings.TrimSuffix(source, filepath.Ext(source))
 	summary := Summary{TraceID: trace, Source: source, Artifacts: []string{}, Warnings: []string{}}
-	sidecar := EmailSummary{Source: source, TraceID: trace, Tools: map[string]string{}}
+	sidecar := EmailSummary{Source: source, TraceID: trace, Tools: map[string]string{}, DocType: docType}
 
 	for _, name := range names {
 		t, ok := p.Registry.Get(name)
@@ -223,7 +233,7 @@ func (p *Pipeline) ProcessEmail(path string) (Summary, error) {
 			continue
 		}
 		sp := p.Audit.Start(trace, name, gledger.F{"capability": string(t.Capability())})
-		res := t.Run(text, tool.Ctx{Source: source, DefaultYear: year})
+		res := t.Run(text, tool.Ctx{Source: source, DefaultYear: year, Reference: reference})
 		sp.End()
 
 		// Capability enforcement (M6): only a WRITE_ICS tool may emit artifacts.
@@ -306,7 +316,10 @@ func (p *Pipeline) ProcessEmail(path string) (Summary, error) {
 	}
 
 	// Write the derived per-email sidecar (pipeline-owned, not a tool artifact).
-	if len(sidecar.Tools) > 0 || len(sidecar.Items) > 0 {
+	// Always written now that it carries the DocType classification (R2), so the
+	// console can show how every email was routed — even a reference doc with no
+	// extracted items.
+	if sidecar.DocType != "" || len(sidecar.Tools) > 0 || len(sidecar.Items) > 0 {
 		if b, err := json.MarshalIndent(sidecar, "", "  "); err == nil {
 			sp := filepath.Join(p.OutboxDir, stem+".summary.json")
 			// Not added to summary.Artifacts: that list is the user-acceptable .ics
