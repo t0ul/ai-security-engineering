@@ -104,6 +104,71 @@ func sampling() (float64, int, int) {
 	return sampTemp, sampMaxTokens, sampSeed
 }
 
+// Logical model binding + grammar-constrained JSON (C5). Extraction routes to a
+// logical model name the gateway maps to a physical model, so swapping the
+// extractor's model is a config edit, not code. jsonMode sends a GBNF grammar so
+// the model can only emit a valid JSON event array (valid-by-construction).
+var (
+	modelMu       sync.RWMutex
+	modelOverride string
+	jsonMode      bool
+)
+
+// SetModel binds the logical extraction model (e.g. "extractor"); "" clears it,
+// falling back to EXTRACTOR_MODEL / PLANNER_MODEL / "planner".
+func SetModel(name string) {
+	modelMu.Lock()
+	modelOverride = name
+	modelMu.Unlock()
+}
+
+// SetJSONMode toggles GBNF grammar-constrained JSON output.
+func SetJSONMode(on bool) {
+	modelMu.Lock()
+	jsonMode = on
+	modelMu.Unlock()
+}
+
+func extractionModel() string {
+	modelMu.RLock()
+	o := modelOverride
+	modelMu.RUnlock()
+	if o != "" {
+		return o
+	}
+	return env("EXTRACTOR_MODEL", env("PLANNER_MODEL", "planner"))
+}
+
+// eventArrayGBNF constrains output to a JSON array of {title,when,where} objects.
+const eventArrayGBNF = `root ::= ws "[" ws (obj (ws "," ws obj)*)? ws "]" ws
+obj ::= "{" ws "\"title\"" ws ":" ws str ws "," ws "\"when\"" ws ":" ws str ws "," ws "\"where\"" ws ":" ws str ws "}"
+str ::= "\"" ([^"\\] | "\\" .)* "\""
+ws ::= [ \t\n]*`
+
+// extractionPayload builds the gateway request body (extracted for testability).
+func extractionPayload(emailText string) map[string]any {
+	temp, maxTokens, seed := sampling()
+	p := map[string]any{
+		"model":       extractionModel(),
+		"temperature": temp,
+		"max_tokens":  maxTokens,
+		"messages": []map[string]string{
+			{"role": "system", "content": ActivePrompt()},
+			{"role": "user", "content": "<EMAIL>\n" + truncateRunes(emailText, 12000) + "\n</EMAIL>"},
+		},
+	}
+	if seed > 0 {
+		p["seed"] = seed // reproducible generation (M19 forensics/eval)
+	}
+	modelMu.RLock()
+	jm := jsonMode
+	modelMu.RUnlock()
+	if jm {
+		p["grammar"] = eventArrayGBNF // valid-by-construction JSON (llama.cpp GBNF)
+	}
+	return p
+}
+
 func env(k, d string) string {
 	if v := os.Getenv(k); v != "" {
 		return v
@@ -164,20 +229,7 @@ func parseCandidates(content string) []candidate {
 // llmPropose asks the planner for (title, when, where) candidates through the
 // gateway. The LLM proposes spans; dateparse decides the date.
 func llmPropose(emailText string, timeout time.Duration) ([]candidate, error) {
-	temp, maxTokens, seed := sampling()
-	payload := map[string]any{
-		"model":       env("PLANNER_MODEL", "planner"),
-		"temperature": temp,
-		"max_tokens":  maxTokens,
-		"messages": []map[string]string{
-			{"role": "system", "content": ActivePrompt()},
-			{"role": "user", "content": "<EMAIL>\n" + truncateRunes(emailText, 12000) + "\n</EMAIL>"},
-		},
-	}
-	if seed > 0 {
-		payload["seed"] = seed // reproducible generation (M19 forensics/eval)
-	}
-	raw, _ := json.Marshal(payload)
+	raw, _ := json.Marshal(extractionPayload(emailText))
 	req, err := http.NewRequest(http.MethodPost, env("GATEWAY_URL", defaultGateway), bytes.NewReader(raw))
 	if err != nil {
 		return nil, err

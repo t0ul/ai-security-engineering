@@ -334,6 +334,14 @@ func main() {
 		extractor.SetExtractionPrompt(prompts.Text("extractor"))
 		sc := sampling.Config("extractor")
 		extractor.SetSampling(sc.Temperature, sc.MaxTokens, sc.Seed)
+		// Logical extractor model binding + grammar JSON (C5), from governed config
+		// (DB is the source of truth). Defaults: model "planner", grammar off.
+		if m, ok, _ := inv.GetConfig("extractor_model"); ok && m != "" {
+			extractor.SetModel(m)
+		}
+		if j, ok, _ := inv.GetConfig("extractor_json"); ok && j == "true" {
+			extractor.SetJSONMode(true)
+		}
 		profileLoad = func() webapp.Profile {
 			var p webapp.Profile
 			if v, ok, _ := inv.GetConfig("profile"); ok {
