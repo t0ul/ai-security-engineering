@@ -177,7 +177,7 @@ configs/policy/keys, operator RBAC, four-eyes on changes, break-glass. Break: a
 lone/compromised operator swaps a prompt. Defend: RBAC + two-person +
 hash-pinned approvals.
 
-**Post 18b · Non-human identity: the agent gets a wallet** (M14/M20, LLM02/LLM06/ASI03) 🟡
+**Post 18b · Non-human identity: the agent gets a wallet** (M14/M20, LLM02/LLM06/ASI03) ✅
 The pivot that makes the series *really* interesting: the loopback parse tool
 becomes an **authZ'd API**, and every actor that isn't a human — the agent, each
 tool, each MCP server, the RAG reader — becomes a **non-human identity** holding a
@@ -192,10 +192,14 @@ tier** (on-host-local vs off-host-frontier). Break: a frontier-bound identity
 mints `list contacts`, or a stolen/over-scoped token is replayed against the
 corpus. Defend: capability tokens with fail-closed issuance — a frontier identity
 can only get public or **goflage-scrubbed** data, and a model-swap *revokes* the
-old grants so you can't raise egress by editing a config. Proof: the
-`StolenAgentToken` / `OverScopedToken` / `FrontierContactsExfil` ADD cases
-100%→0%. *(Honest note: single-household loopback — no fake human SSO; the
-interesting identities are the machines.)*
+old grants so you can't raise egress by editing a config. Shipped on the real app:
+the operator's broad grant drives the UI; the action-fetcher (export/link) and the
+RAG reader (list/corpus) are each their own scoped NHI verified per call; the
+executing tool is reached through a **pinned gustoms MCP gateway**; and engaging
+the kill switch revokes every grant mid-flight. Proof: `RevokedTokenStillWorks`
+and the identity-scope ADD cases 100%→0%, plus httptest + live smoke on the app.
+*(Honest note: single-household loopback — no fake human SSO; the interesting
+identities are the machines.)*
 
 **Post 19 · Admin audit & one-click rollback** (M15) ✅
 Every config change attributable and instantly reversible; hash-chained admin

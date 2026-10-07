@@ -24,7 +24,7 @@ Implementation is t's (dev-caveman); this is the architecture.
 | **Eval scores + thresholds** (F1 gate, ASR gate, per-label latest) | `eval.ScoreEvents`; `cmd/livecheck`→`RecordEval`; `cpstore.LatestEval`; `mlops.PromoteWithLatestEval` | standalone; not tied to changes | ❌ | partial (livecheck only) |
 | **Promotion gate** (eval+ADD on activate) | `controlplane.PromotionGate` (C3) | not wired to real closures | ❌ | — |
 | **Safety level / kill switch** | `Governance.SetKillSwitch`, `Safety` | ✅ | ✅ | ✅ |
-| **Identity / authZ (NHI)** | `controlplane.Authority` + capability `Grant` (C4a ✅) + `webapp` authz gate (C4b ✅) | on the API path ✅ (mutating/listing endpoints); per-tool grants pending C4d/e | ❌ | denials audited to gledger ✅ |
+| **Identity / authZ (NHI)** | `controlplane.Authority` + capability `Grant` (C4a) + `webapp` authz gate (C4b) + tool NHIs + residency policy + MCP gateway (C4e) — **C4 complete** | on the API path ✅ + each tool is a scoped NHI; MCP (gustoms) on the app path ✅ | ❌ console tab (C6) | denials audited to gledger ✅ |
 | **RBAC / four-eyes** | goverlord roles + dual control | ✅ | partial | ✅ |
 | **Generic config map** | `Governance` (propose/approve/rollback/history) | ✅ mechanism, **~nothing reads it** | ✅ | ✅ (approvals, admin) |
 
@@ -190,8 +190,17 @@ so the bridge can't silently un-wire.
     (authorization-first). `rag.TestOpenReadOnlyCannotWrite` + the existing
     `RAGTenantLeak` (CrossTenantRead) ADD case. cmd/webapp wires the RO reader;
     live smoke green.
-  - **C4e — scoped MCP tokens**: gustoms on the app path, per-call
-    audience-bound tokens, governed TTL/scope; `UnpinnedMCPServer` ADD case.
+  - **C4e — scoped tool NHIs + MCP on the app path** ✅: (1) the action-fetch tool
+    is its own identity (`action-fetcher`, export/link grant) and the RAG reader
+    its own (`rag-reader`, list/corpus grant), each verified per call so Halt
+    revokes them in-flight; (2) `controlplane.ResidencyPolicy` wired as the
+    `IssuePolicy` (frontier-bound subject refused list/export of confidential data;
+    corpus is declassified by goflage, so it is allowed — swap-ready for C5); (3)
+    the fetch tool is reached through a gustoms gateway (`controlplane.NewToolGateway`:
+    manifest-pinned, allow-listed, authorizer denies all calls while the kill switch
+    blocks tools = functional "drop pins on halt"). Tests: `TestResidencyPolicy`,
+    `TestToolGateway*`; `McpRugPull` already covers the pin-mismatch defense the
+    app-path gateway enforces; live smoke green. **C4 keystone complete (C4a–C4e).**
 - **C5 — Sampling + model-swap plane**: `rt.Sampling`, logical `extractor`,
   grammar-constrained JSON; sampling/model changes gated.
 - **C6 — MCP governance**: persist pins (`RecordPin`), registry-as-config,
