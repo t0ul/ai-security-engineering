@@ -32,10 +32,29 @@ func (s *Server) timeline(w http.ResponseWriter, r *http.Request) {
 	}
 	key := day.Format("2006-01-02")
 
-	// Anchors from each child's profile.
+	// Anchors from each child's profile — with half-day exceptions: on a listed
+	// half day, dismissal moves to HalfDayOut and lunch is dropped.
 	var anchors []Anchor
+	halfDay := false
 	for _, c := range s.loadProfile().Children {
-		for _, a := range []struct{ label, t string }{{"in", c.In}, {"lunch", c.Lunch}, {"out", c.Out}} {
+		half := false
+		for _, d := range c.HalfDays {
+			if d == key {
+				half = true
+				halfDay = true
+			}
+		}
+		out, outLabel := c.Out, "out"
+		if half {
+			if c.HalfDayOut != "" {
+				out = c.HalfDayOut
+			}
+			outLabel = "out (half day)"
+		}
+		for _, a := range []struct{ label, t string }{{"in", c.In}, {"lunch", c.Lunch}, {outLabel, out}} {
+			if half && a.label == "lunch" {
+				continue // no lunch on an early-dismissal day
+			}
 			if a.t != "" {
 				anchors = append(anchors, Anchor{Child: c.Name, Label: a.label, Time: a.t})
 			}
@@ -51,9 +70,10 @@ func (s *Server) timeline(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, map[string]any{
-		"day":     key,
-		"weekday": day.Weekday().String(),
-		"anchors": anchors,
-		"items":   items,
+		"day":      key,
+		"weekday":  day.Weekday().String(),
+		"anchors":  anchors,
+		"items":    items,
+		"half_day": halfDay,
 	})
 }

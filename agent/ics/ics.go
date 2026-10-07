@@ -49,6 +49,23 @@ func escape(value string) string {
 	return value
 }
 
+// sanitizeRRULE admits only a well-formed iCalendar recurrence rule (uppercase
+// keywords, digits, and the RRULE separators = ; ,). It must begin FREQ= or it is
+// dropped, so an attacker can't smuggle extra ICS lines/props through the field.
+func sanitizeRRULE(r string) string {
+	r = strings.ToUpper(strings.TrimSpace(r))
+	if !strings.HasPrefix(r, "FREQ=") {
+		return ""
+	}
+	for _, c := range r {
+		ok := (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '=' || c == ';' || c == ','
+		if !ok {
+			return ""
+		}
+	}
+	return r
+}
+
 func formatDT(value string, allDay bool) (string, error) {
 	if allDay {
 		if len(value) < 10 {
@@ -139,6 +156,9 @@ func writeVEvent(lines *[]string, ev schema.Event, now string) (int, error) {
 	*lines = append(*lines, "SUMMARY:"+escape(title))
 	if location != "" {
 		*lines = append(*lines, "LOCATION:"+escape(location))
+	}
+	if r := sanitizeRRULE(ev.Recur); r != "" {
+		*lines = append(*lines, "RRULE:"+r) // recurring event (R3/R6 half-day/RRULE)
 	}
 	removed += appendDescription(lines, ev)
 

@@ -46,6 +46,7 @@ const dashboardHTML = `<!doctype html>
     <button data-tab="review">Review</button>
     <button data-tab="activity">Activity</button>
     <button data-tab="ask">Ask school</button>
+    <span class="mut" style="padding:0 6px;opacity:.6">· operator ·</span>
     <button data-tab="security">Security</button>
     <button data-tab="prompts">Prompts</button>
     <button data-tab="sampling">Sampling</button>
@@ -132,6 +133,10 @@ const dashboardHTML = `<!doctype html>
       <strong>Enrich from a link</strong> <span class="mut">— fetch an allow-listed handbook URL into the knowledge base (R6: HITL + egress-gated + fetched in the MicroVM, indexed untrusted)</span>
       <div style="margin-top:8px"><input id="enrichURL" placeholder="https://ps51eliashowe.org/handbook" style="width:70%"><button class="go" onclick="doEnrich()">Fetch</button></div>
       <div id="enrichOut" style="margin-top:10px" class="mut"></div>
+    </div>
+    <div class="card">
+      <strong>Directory</strong> <span class="mut">— contacts the agent surfaced across your emails + profile teachers (R5, host-only)</span>
+      <div id="directory" style="margin-top:8px"><span class="mut">loading…</span></div>
     </div>
   </section>
 
@@ -226,6 +231,7 @@ document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
   if(t==='week'){loadWeek('today');loadProfile();}
   if(t==='tasks') loadTasks();
   if(t==='review') loadReview();
+  if(t==='ask') loadDirectory();
   if(t==='activity') loadActivity();
   if(t==='incidents') loadIncidents();
   if(t==='security'){loadKill();loadMCP();loadBundles();}
@@ -243,6 +249,15 @@ async function doAsk(){
   c.innerHTML=hits.map(h=>'<div class="ev"><div><b>'+esc(h.source)+'</b>'+(h.untrusted?' <span class="kind warn">untrusted</span>':'')+'<br><span class="mut">'+esc(h.snippet)+'</span></div></div>').join('');
 }
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&document.activeElement&&document.activeElement.id==='askq')doAsk();});
+async function loadDirectory(){
+  const c=$('#directory');if(!c)return;const d=await getJSON('/api/directory');
+  const ppl=d.people||[];const em=d.emails||[];
+  if(!ppl.length&&!em.length){c.innerHTML='<p class="mut">no contacts surfaced yet</p>';return;}
+  let h='';
+  if(ppl.length) h+=ppl.map(p=>'<div class="ev"><div><b>'+esc(p.name)+'</b> <span class="kind">'+esc(p.role)+'</span></div></div>').join('');
+  if(em.length) h+='<div class="ev"><div><b>Emails</b><br><span class="mut">'+em.map(esc).join(', ')+'</span></div></div>';
+  c.innerHTML=h;
+}
 async function doEnrich(){
   const u=$('#enrichURL').value.trim();const c=$('#enrichOut');if(!u){return;}
   // phase 1: request the HITL challenge
@@ -355,7 +370,7 @@ async function activatePolicy(name){
 async function resetPolicy(name){await postJSON('/api/policies/reset',{name:name});loadPolicies();}
 async function loadWeek(day){
   const c=$('#timeline');if(!c)return;const d=await getJSON('/api/timeline?day='+day);
-  const w=$('#weekDay');if(w)w.textContent=(d.weekday||'')+' '+(d.day||'');
+  const w=$('#weekDay');if(w)w.innerHTML=esc((d.weekday||'')+' '+(d.day||''))+(d.half_day?' <span class="pill fail">half day</span>':'');
   let html='';
   const anchors=d.anchors||[];
   if(anchors.length) html+='<h3>Daily</h3>'+anchors.map(a=>'<div class="ev"><div><b>'+esc(a.child)+'</b> '+esc(a.label)+' <span class="mut">'+esc(a.time)+'</span></div></div>').join('');

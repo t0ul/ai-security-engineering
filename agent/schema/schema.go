@@ -28,6 +28,7 @@ type Event struct {
 	Due   string `json:"due,omitempty"`   // task/action due date (distinct from Start)
 	Notes string `json:"notes,omitempty"` // the asking line / short free text
 	URL   string `json:"url,omitempty"`   // action only; validated + egress-gated before any click
+	Recur string `json:"recur,omitempty"` // iCalendar RRULE for a recurring event, e.g. "FREQ=WEEKLY;BYDAY=TU"
 }
 
 // ResolvedKind returns the item kind, defaulting to KindEvent.

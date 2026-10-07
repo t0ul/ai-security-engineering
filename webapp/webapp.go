@@ -216,7 +216,8 @@ func (s *Server) Handler() http.Handler {
 		mux.HandleFunc("/api/enrich", csrf(s.authz(controlplane.ActionExport, "link", s.enrich))) // egress → corpus
 	}
 	if s.OutboxDir != "" {
-		mux.HandleFunc("/ics/", s.serveICS) // .ics only — NOT the whole outbox (sidecars hold PII)
+		mux.HandleFunc("/ics/", s.serveICS)           // .ics only — NOT the whole outbox (sidecars hold PII)
+		mux.HandleFunc("/api/directory", s.directory) // consolidated contacts (R5)
 	}
 	mux.HandleFunc("/", s.index)
 	return mux

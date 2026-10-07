@@ -17,6 +17,9 @@ type Child struct {
 	Lunch   string `json:"lunch,omitempty"` // lunch, e.g. "10:55"
 	Out     string `json:"out,omitempty"`   // dismissal, e.g. "2:30"
 	Notes   string `json:"notes,omitempty"` // allergies, bus, etc.
+
+	HalfDays   []string `json:"half_days,omitempty"`    // ISO dates with early dismissal
+	HalfDayOut string   `json:"half_day_out,omitempty"` // early dismissal time on a half day, e.g. "11:30"
 }
 
 // Profile is the household's children.
