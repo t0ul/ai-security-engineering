@@ -47,6 +47,7 @@ const dashboardHTML = `<!doctype html>
     <button data-tab="ask">Ask school</button>
     <button data-tab="security">Security</button>
     <button data-tab="prompts">Prompts</button>
+    <button data-tab="policies">Policies</button>
     <button data-tab="incidents">Incidents</button>
   </nav>
 </header>
@@ -138,6 +139,13 @@ const dashboardHTML = `<!doctype html>
     </div>
   </section>
 
+  <section id="policies" class="hide">
+    <div class="card">
+      <strong>Policies</strong> <span class="mut">— governed security allowlists (M14/M16): egress hosts, exec argv[0]s. Versioned, hashed, rollback. Deny-by-default (private/IMDS, argcheck) still enforced regardless.</span>
+      <div id="policyList"><span class="mut">loading…</span></div>
+    </div>
+  </section>
+
   <section id="incidents" class="hide">
     <div class="card">
       <strong>Incidents</strong> <span class="mut">— click a trace to replay it on tamper-evident evidence</span>
@@ -153,7 +161,7 @@ const dashboardHTML = `<!doctype html>
 const __CAP__="__CAP_TOKEN__";
 (function(){const f=window.fetch.bind(window);window.fetch=(u,o)=>{o=o||{};const s=typeof u==='string'?u:(u&&u.url)||'';if(__CAP__&&(s.indexOf('/api/')===0||s.indexOf('/ics/')===0)){o.headers=Object.assign({},o.headers||{},{'Authorization':'Bearer '+__CAP__});}return f(u,o);};})();
 const $=s=>document.querySelector(s);
-const TABS=['calendar','tasks','review','activity','ask','security','prompts','incidents'];
+const TABS=['calendar','tasks','review','activity','ask','security','prompts','policies','incidents'];
 const esc=s=>{const d=document.createElement('div');d.textContent=s||'';return d.innerHTML;};
 const when=e=>e.all_day?((e.due||e.start)+' · all day'):((e.start||e.due)+(e.end?(' – '+e.end.slice(11)):''));
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
@@ -167,6 +175,7 @@ document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
   if(t==='incidents') loadIncidents();
   if(t==='security'){loadKill();loadMCP();}
   if(t==='prompts') loadPrompts();
+  if(t==='policies') loadPolicies();
 });
 async function doAsk(){
   const q=$('#askq').value.trim();const c=$('#askOut');if(!q){c.innerHTML='';return;}
@@ -207,6 +216,23 @@ async function activatePrompt(name){
   await postJSON('/api/prompts/activate',{name:name,text:ta.value});loadPrompts();
 }
 async function resetPrompt(name){await postJSON('/api/prompts/reset',{name:name});loadPrompts();}
+async function loadPolicies(){
+  const c=$('#policyList');if(!c)return;const d=await getJSON('/api/policies');const ps=d.policies||[];
+  if(!ps.length){c.innerHTML='<p class="mut">no policies registered</p>';return;}
+  c.innerHTML=ps.map(p=>{
+    const governed=p.version>0;
+    return '<div class="ev"><div><b>'+esc(p.name)+'</b> <span class="pill '+(governed?'pass':'')+'">v'+p.version+'</span> <span class="mut">'+esc(p.hash)+' · '+(p.items||[]).length+' entries</span>'+
+      '<br><textarea id="pol_'+esc(p.name)+'" rows="5" style="width:100%;margin-top:6px" placeholder="one entry per line">'+esc((p.items||[]).join('\n'))+'</textarea>'+
+      '<div style="margin-top:6px"><button class="go" onclick="activatePolicy(\''+esc(p.name)+'\')">Activate new version</button>'+
+      (governed?(' <button class="ghost" onclick="resetPolicy(\''+esc(p.name)+'\')">Reset to default</button>'):'')+'</div></div></div>';
+  }).join('');
+}
+async function activatePolicy(name){
+  const ta=$('#pol_'+name);if(!ta)return;
+  const items=ta.value.split('\n').map(s=>s.trim()).filter(Boolean);
+  await postJSON('/api/policies/activate',{name:name,items:items});loadPolicies();
+}
+async function resetPolicy(name){await postJSON('/api/policies/reset',{name:name});loadPolicies();}
 
 async function getJSON(u){try{return await (await fetch(u)).json();}catch(e){return {};}}
 

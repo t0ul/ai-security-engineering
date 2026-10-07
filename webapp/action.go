@@ -58,8 +58,9 @@ func (s *Server) action(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Egress allowlist (deny-by-default): the link from the untrusted doc must
-	// resolve to an allow-listed, non-internal host or it is refused here.
-	if err := s.Egress.Check(item.URL); err != nil {
+	// resolve to an allow-listed, non-internal host or it is refused here. The
+	// allowlist resolves live from the governed Policies (C8).
+	if err := s.egressPolicy().Check(item.URL); err != nil {
 		writeJSON(w, map[string]any{"ok": false, "url": item.URL, "refused": err.Error()})
 		return
 	}

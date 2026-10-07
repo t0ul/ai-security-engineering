@@ -69,6 +69,13 @@ type Server struct {
 	// version, and rolls back to the shipped default. Nil = no Prompts tab.
 	Prompts *controlplane.Prompts
 
+	// Policies, when set, is the governed policy-allowlist resolver (C8): egress /
+	// exec / guardrail allowlists as versioned, hashed, rollback-able artifacts.
+	// The action egress check resolves its allowlist from here at request time, so
+	// a governed change takes effect with no redeploy. Nil = no Policies tab and
+	// the static Egress is used.
+	Policies *controlplane.Policies
+
 	// pending holds issued-but-unconfirmed HITL approvals, keyed by nonce (ASI09:
 	// evidence-first, single-use, clickjack/forgery-resistant confirm).
 	mu   sync.Mutex
@@ -119,6 +126,11 @@ func (s *Server) Handler() http.Handler {
 		mux.HandleFunc("/api/prompts/activate", csrf(s.authz(controlplane.ActionWrite, "prompts", s.promptsActivate)))
 		mux.HandleFunc("/api/prompts/reset", csrf(s.authz(controlplane.ActionWrite, "prompts", s.promptsReset)))
 	}
+	if s.Policies != nil {
+		mux.HandleFunc("/api/policies", s.policiesList)
+		mux.HandleFunc("/api/policies/activate", csrf(s.authz(controlplane.ActionWrite, "policy", s.policiesActivate)))
+		mux.HandleFunc("/api/policies/reset", csrf(s.authz(controlplane.ActionWrite, "policy", s.policiesReset)))
+	}
 	if s.InboxPath != "" {
 		mux.HandleFunc("/api/drop", csrf(s.authz(controlplane.ActionWrite, "inbox", s.drop)))
 	}
@@ -161,6 +173,18 @@ func csrf(h http.HandlerFunc) http.HandlerFunc {
 
 func isLoopbackHost(h string) bool {
 	return h == "127.0.0.1" || h == "localhost" || h == "::1"
+}
+
+// egressPolicy resolves the action-link allowlist live from the governed Policies
+// (C8) when set, keeping every other netpolicy field (DNS pinning, the
+// private/IMDS deny-by-default) intact — a governed widening still cannot reach
+// link-local/RFC1918. Falls back to the static Egress.
+func (s *Server) egressPolicy() netpolicy.Policy {
+	p := s.Egress
+	if s.Policies != nil {
+		p.Allow = s.Policies.Items("egress")
+	}
+	return p
 }
 
 // authz gates a handler on a capability Grant scoped to {action, resource,

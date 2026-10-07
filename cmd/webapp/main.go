@@ -225,12 +225,23 @@ func main() {
 		"coder":     controlplane.CoderSystemPrompt,
 		"extractor": extractor.ExtractionPrompt,
 	}
+	// Governed policy allowlists (C8): egress hosts + exec argv[0]s as versioned,
+	// hashed, rollback-able artifacts. The action egress check resolves its
+	// allowlist from here live; deny-by-default (private/IMDS, argcheck) is
+	// unaffected by a widening.
+	policyDefaults := map[string][]string{
+		"egress": allowHosts,
+		"exec":   controlplane.DefaultAllowedCommands,
+	}
 	var prompts *controlplane.Prompts
+	var policies *controlplane.Policies
 	if inv, ierr := cpstore.Open(filepath.Join(*drop, "inventory.db")); ierr == nil {
 		defer inv.Close()
 		prompts = controlplane.GovernedPrompts(promptDefaults, inv, audit)
+		policies = controlplane.GovernedPolicies(policyDefaults, inv, audit)
 	} else {
 		prompts = controlplane.NewPrompts(promptDefaults)
+		policies = controlplane.NewPolicies(policyDefaults)
 	}
 
 	srv := &http.Server{
@@ -239,7 +250,7 @@ func main() {
 			AuditPath: auditPath, OutboxDir: cfg.Outbox, InboxPath: cfg.Inbox,
 			Egress: egress, Fetch: fetch, Verifier: verifier, Safety: safety, Search: search,
 			Authz: authz, OperatorToken: opToken, Audit: audit,
-			MCP: mcpList, MCPApprove: mcpApprove, Prompts: prompts,
+			MCP: mcpList, MCPApprove: mcpApprove, Prompts: prompts, Policies: policies,
 		}).Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}

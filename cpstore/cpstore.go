@@ -25,7 +25,8 @@ CREATE TABLE IF NOT EXISTS prompts(name TEXT, version TEXT, hash TEXT, text TEXT
 CREATE TABLE IF NOT EXISTS approvals(id TEXT, proposer TEXT, approver TEXT, perm TEXT, note TEXT, version INTEGER, at DATETIME DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS mcp_pins(server TEXT, hash TEXT, approved_by TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS eval_scores(label TEXT, f1 REAL, at DATETIME DEFAULT CURRENT_TIMESTAMP);
-CREATE TABLE IF NOT EXISTS admin_audit(actor TEXT, action TEXT, detail TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);`
+CREATE TABLE IF NOT EXISTS admin_audit(actor TEXT, action TEXT, detail TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS policies(name TEXT, version TEXT, hash TEXT, items TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);`
 
 // Open creates/opens the inventory at path (":memory:" for ephemeral).
 func Open(path string) (*Store, error) {
@@ -47,6 +48,13 @@ func (s *Store) Close() error { return s.db.Close() }
 // RecordPrompt stores a versioned, hashed system-prompt artifact.
 func (s *Store) RecordPrompt(name, version, hash, text string) error {
 	_, err := s.db.Exec(`INSERT INTO prompts(name,version,hash,text) VALUES(?,?,?,?)`, name, version, hash, text)
+	return err
+}
+
+// RecordPolicy stores a versioned, hashed policy-allowlist artifact (items is the
+// newline-joined allowlist: egress hosts, exec argv[0]s, guardrail topics, ...).
+func (s *Store) RecordPolicy(name, version, hash, items string) error {
+	_, err := s.db.Exec(`INSERT INTO policies(name,version,hash,items) VALUES(?,?,?,?)`, name, version, hash, items)
 	return err
 }
 
@@ -115,6 +123,32 @@ func (s *Store) ListPrompts(limit int) ([]PromptRow, error) {
 	var out []PromptRow
 	for rows.Next() {
 		var p PromptRow
+		if err := rows.Scan(&p.Name, &p.Version, &p.Hash, &p.At); err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
+// PolicyRow is a recorded policy activation (items omitted from the list view).
+type PolicyRow struct {
+	Name    string
+	Version string
+	Hash    string
+	At      time.Time
+}
+
+// ListPolicies returns recent policy activations, newest first.
+func (s *Store) ListPolicies(limit int) ([]PolicyRow, error) {
+	rows, err := s.db.Query(`SELECT name,version,hash,at FROM policies ORDER BY at DESC, rowid DESC LIMIT ?`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []PolicyRow
+	for rows.Next() {
+		var p PolicyRow
 		if err := rows.Scan(&p.Name, &p.Version, &p.Hash, &p.At); err != nil {
 			return nil, err
 		}
