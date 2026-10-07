@@ -149,7 +149,7 @@ invariant a plain unit test can't (undefended ASR 100% so the attack is *real*,
 defended 0%, optional "is it wired" integration check), and emit an OWASP
 coverage grid. `redteam` becomes `add.Technique`s; `scorecard` runs on
 `add.Evaluate`. Hook: "I showed you how to do it by hand; here's how to make it a
-library your team drops into `go test`." Proof: 29 techniques, 17 OWASP risks,
+library your team drops into `go test`." Proof: 30 techniques, 17 OWASP risks,
 0 regressed — same guarantees, far less boilerplate, gaps now visible.
 
 **Post 15 · Capstone I — full-chain defense** (M12, ASI08/10) ✅
@@ -266,14 +266,17 @@ action fires the side effect twice. Defend: tool-boundary dedup by action-id
 `DuplicateSideEffect` ADD case 100→0. Hook: "a retry should never cost you twice."
 (Version-precondition / ack-gap handling layers on next.)
 
-**Post 27 · Context compaction & summarization injection** ⬜
-Build: token-budget compaction — running summary + eviction/sliding-window before
-each model turn. Break: a poisoned message steers or survives the summary, or
-compaction silently drops a safety-relevant line (an injected instruction gets
-"laundered" into the trusted summary). Defend: summarize untrusted content inside
-the CaMeL quarantine, re-scan the summary (guard/gumpers), keep provenance on
-compacted spans. Hook: "the summary is trusted context — so the attacker wants to
-write it."
+**Post 27 · Context compaction & summarization injection** ✅
+Build: the `compaction` package — running-summary + sliding-window under a token
+budget (`Compact` evicts older turns, keeps the recent ones verbatim). Break: an
+injected instruction in an untrusted turn gets "laundered" into the trusted
+running summary. Defend: provenance partition — trusted and untrusted turns are
+summarized *separately*, the untrusted summary stays `Trusted=false` and is run
+through `guard.Sanitize`, so the injection never crosses into trusted standing
+context. Proof: the `SummarizationInjection` ADD case 100→0 + `compaction` tests.
+Integration point is the multi-turn orchestrator's context assembly (the
+single-shot email app has nothing to compact). Hook: "the summary is trusted
+context — so the attacker wants to write it."
 
 **Post 28 · Eval methodology: pass@k, LLM-as-judge & the flywheel** (M11, model-blocked) ⬜
 Build: `pass@k`/`pass^k` reliability scoring over k samples (quantify

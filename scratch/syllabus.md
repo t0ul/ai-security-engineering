@@ -329,10 +329,11 @@ under-indexes; each is taught with its security control, ADD-style.
 - ✅ **Exactly-once side effects.** `durable.Do` idempotency key: the first success
   is cached, a replay returns it, a failure is retryable — a retried tool never
   double-sends or double-refunds (`DuplicateSideEffect`). Next: version preconditions.
-- **Context compaction & summarization injection.** Running-summary / eviction /
-  sliding-window compaction before each model turn; summarize untrusted content
-  inside the CaMeL quarantine, re-scan the summary, keep provenance on compacted
-  spans (`SummarizationInjection`).
+- ✅ **Context compaction & summarization injection.** `compaction` pkg:
+  running-summary / sliding-window under a token budget; trusted and untrusted
+  turns are summarized *separately*, the untrusted summary stays provenance-
+  untrusted and guard-sanitized, so an injected instruction is never laundered
+  into trusted standing context (`SummarizationInjection`).
 - **Eval methodology (model-blocked).** pass@k / pass^k reliability scoring,
   LLM-as-judge with a judge-manipulation defense (`JudgeManipulation`), online
   evals / a data flywheel from the review queue, an eval-trend observability tab.

@@ -58,7 +58,7 @@ each engineering topic, and (2) do we add the security control it needs. Status:
 | --- | --- | --- | --- |
 | 1 | ✅ **DONE — Durable execution + resume-verify** (`durable` pkg: hash-chained step log, `Do` replays cached steps across reopen) | Resume replays completed steps; `Open`/`Verify` fails closed on a tampered checkpoint (`ResumeIntoTamperedState` ADD case, ASI10). Wired in cmd/webapp (action fetch; tamper on boot → start fresh + audit). | ~~HIGH~~ done |
 | 2 | ✅ **DONE — Exactly-once side effects** (`durable.Do` idempotency key: first success cached, replay returns it, failure retryable) | A duplicated/replayed action never re-fires the effect (`DuplicateSideEffect` ADD case, ASI08). Wired on the action-fetch tool boundary; extends the single-use HITL nonce. Version-precondition/ack-gap can layer on later. | ~~HIGH~~ done |
-| 3 | **Context compaction / summarization under token limits** (running summary, token counting, recursive compaction, eviction, sliding window) | Not built (short single-email tasks). Missing security control: **summarization injection** (malicious text steers/survives the summary; compaction silently drops a safety-relevant line). No ADD case. | MED |
+| 3 | ✅ **DONE — Context compaction + summarization-injection defense** (`compaction` pkg: running-summary + sliding-window under a token budget) | Provenance-partitioned: trusted/untrusted turns summarized separately, the untrusted summary stays `Trusted=false` + guard-sanitized, so an injected instruction can't be laundered into trusted context (`SummarizationInjection` ADD case, LLM01). Package + ADD shipped; integration point is the multi-turn orchestrator's context assembly (the single-shot email webapp has nothing to compact — not fake-wired). | ~~MED~~ done |
 | 4 | **LLM-as-judge / model-graded evals** (judge schema, score+reasoning, multi-turn judging) | We're deterministic-only. Missing control: **judge manipulation / eval-gaming** (prompt-inject the judge to pass). | MED (model-blocked) |
 | 5 | **pass@k / pass^k reliability evals** | We score once, deterministically. No quantification of non-deterministic reliability over k samples. | MED |
 | 6 | **Observability dashboard / OpenTelemetry + eval-over-time trend** | gledger+ir+scorecard exist; no metrics trend / OTel export / console Eval tab. C7 (console Eval tab) planned. | MED |
@@ -78,9 +78,11 @@ each engineering topic, and (2) do we add the security control it needs. Status:
 
 ## Verdict
 On **security depth** we exceed every course (injection, exfil, SSRF, sandbox,
-identity/authZ, MCP, RAG, provenance, HITL, kill switch, ADD). The two HIGH
+identity/authZ, MCP, RAG, provenance, HITL, kill switch, ADD). The three offline
 reliability holes are now **closed**: durable execution + resume-verify (#1) and
-exactly-once side effects (#2) ship in the `durable` package with ADD invariants
-(`ResumeIntoTamperedState`, `DuplicateSideEffect`) and are wired into the app.
-Remaining: context compaction + summarization-injection (#3, offline, MED) and the
-model-blocked eval methodology (#4–#6).
+exactly-once side effects (#2) in the `durable` package, and context compaction +
+summarization-injection defense (#3) in the `compaction` package — each with an
+ADD invariant (`ResumeIntoTamperedState`, `DuplicateSideEffect`,
+`SummarizationInjection`). Remaining is the model-blocked eval methodology (#4–#6:
+pass@k, LLM-as-judge + judge-manipulation, online-eval flywheel, eval-trend tab),
+which waits for the live LLM path (C5/C7).

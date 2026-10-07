@@ -147,10 +147,10 @@ ASR 100% → defended 0%.
 - ✅ `DuplicateSideEffect` (exactly-once, ASI08): a replayed/duplicated action
   fires the side effect twice. Defend: `durable.Do` idempotency-key dedup (first
   success cached, failure retryable). Shipped. Follow-on: version preconditions.
-- `SummarizationInjection` (context compaction): an injected instruction gets
-  laundered into (or a safety line dropped from) the running summary. Defend:
-  summarize untrusted content inside the CaMeL quarantine, re-scan the summary
-  (guard/gumpers), keep provenance on compacted spans.
+- ✅ `SummarizationInjection` (context compaction, LLM01): an injected instruction
+  gets laundered into the running summary. Defend: `compaction.Compactor`
+  provenance partition — untrusted turns summarized separately, kept Trusted=false,
+  guard.Sanitize'd, never promoted to trusted context. Shipped (`compaction` pkg).
 - `JudgeManipulation` (LLM-as-judge, model-blocked): prompt-inject the judge to
   pass a bad output. Defend: judge-input encapsulation + a deterministic
   cross-check (the ensemble pattern). Needs the live LLM path (C5/C7).
