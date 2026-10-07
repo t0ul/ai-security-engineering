@@ -6,6 +6,7 @@ package webapp
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/url"
@@ -19,6 +20,7 @@ import (
 	"github.com/t0ul/ai-security-engineering/netpolicy"
 	"github.com/t0ul/ai-security-engineering/provenance"
 	"github.com/t0ul/ai-security-engineering/redteam"
+	"github.com/t0ul/gledger"
 	"github.com/t0ul/gorauder"
 )
 
@@ -42,6 +44,19 @@ type Server struct {
 	// Search, when set, answers Ask-School queries over the (PII-scrubbed)
 	// retrieval corpus. Nil = the Ask tab returns nothing.
 	Search func(query string, k int) ([]SearchHit, error)
+
+	// Authz, when set, turns the console into an authZ'd API: every mutating or
+	// data-listing endpoint requires a capability Grant (C4b). The operator
+	// holds one broad grant (OperatorToken); the agent and tools get narrower
+	// ones. Nil = the gate is a no-op, so the loopback household app runs
+	// unauthenticated. Verify is fail-closed and the kill switch (Authority.
+	// Halted) revokes every grant, so Halt kills in-flight side effects too.
+	Authz *controlplane.Authority
+	// OperatorToken is the base64url(JSON) operator Grant injected into the page
+	// so the browser presents it on every /api and /ics request. Empty = none.
+	OperatorToken string
+	// Audit, when set, records every refused capability for the admin trail.
+	Audit *gledger.AuditLog
 
 	// pending holds issued-but-unconfirmed HITL approvals, keyed by nonce (ASI09:
 	// evidence-first, single-use, clickjack/forgery-resistant confirm).
@@ -78,15 +93,19 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/review", s.review)
 	mux.HandleFunc("/api/activity", s.activity)
 	mux.HandleFunc("/api/safety", s.safetyState)
+	// The kill switch is deliberately OUTSIDE the capability gate: engaging Halt
+	// revokes every grant, so a gated killswitch could never be disengaged.
 	mux.HandleFunc("/api/killswitch", csrf(s.killswitch))
-	mux.HandleFunc("/api/ask", s.ask)
+	// Ask lists the retrieval corpus — ActionList, the data-residency-sensitive
+	// endpoint (a frontier reader must not harvest it).
+	mux.HandleFunc("/api/ask", s.authz(controlplane.ActionList, "corpus", s.ask))
 	if s.InboxPath != "" {
-		mux.HandleFunc("/api/drop", csrf(s.drop))
+		mux.HandleFunc("/api/drop", csrf(s.authz(controlplane.ActionWrite, "inbox", s.drop)))
 	}
 	if s.OutboxDir != "" {
-		mux.HandleFunc("/api/accept", csrf(s.accept))
-		mux.HandleFunc("/api/action", csrf(s.action))
-		mux.HandleFunc("/ics/", s.serveICS) // .ics only — NOT the whole outbox (sidecars hold PII)
+		mux.HandleFunc("/api/accept", csrf(s.authz(controlplane.ActionWrite, "calendar", s.accept)))
+		mux.HandleFunc("/api/action", csrf(s.authz(controlplane.ActionExport, "link", s.action))) // egress
+		mux.HandleFunc("/ics/", s.serveICS)                                                        // .ics only — NOT the whole outbox (sidecars hold PII)
 	}
 	mux.HandleFunc("/", s.index)
 	return mux
@@ -122,6 +141,64 @@ func csrf(h http.HandlerFunc) http.HandlerFunc {
 
 func isLoopbackHost(h string) bool {
 	return h == "127.0.0.1" || h == "localhost" || h == "::1"
+}
+
+// authz gates a handler on a capability Grant scoped to {action, resource,
+// tenant "public"}. When Authz is unset the gate is a no-op (the household
+// loopback app runs unauthenticated). The caller presents the Grant as
+// "Authorization: Bearer <base64url(JSON)>". Fail-closed: a missing, malformed,
+// unsigned, expired, out-of-scope, or revoked Grant is refused, and Authority.
+// Halted (the kill switch) revokes all grants so Halt stops in-flight work.
+func (s *Server) authz(action, resource string, h http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if s.Authz == nil {
+			h(w, r)
+			return
+		}
+		g, ok := bearerGrant(r)
+		if !ok {
+			s.denyAudit(action, resource, "missing capability")
+			http.Error(w, "missing capability", http.StatusUnauthorized)
+			return
+		}
+		if _, err := s.Authz.Verify(g, controlplane.Capability{Action: action, Resource: resource, Tenant: "public"}); err != nil {
+			s.denyAudit(action, resource, err.Error())
+			http.Error(w, "capability refused: "+err.Error(), http.StatusForbidden)
+			return
+		}
+		h(w, r)
+	}
+}
+
+func (s *Server) denyAudit(action, resource, reason string) {
+	if s.Audit != nil {
+		s.Audit.Emit(gledger.NewTraceID(), "authz", "deny", gledger.F{"action": action, "resource": resource, "reason": reason})
+	}
+}
+
+// bearerGrant extracts a capability Grant from the Authorization: Bearer header.
+func bearerGrant(r *http.Request) (controlplane.Grant, bool) {
+	h := r.Header.Get("Authorization")
+	raw, ok := strings.CutPrefix(h, "Bearer ")
+	if !ok {
+		return controlplane.Grant{}, false
+	}
+	b, err := base64.URLEncoding.DecodeString(strings.TrimSpace(raw))
+	if err != nil {
+		return controlplane.Grant{}, false
+	}
+	var g controlplane.Grant
+	if json.Unmarshal(b, &g) != nil {
+		return controlplane.Grant{}, false
+	}
+	return g, true
+}
+
+// EncodeToken renders a Grant as the base64url(JSON) bearer token the page and
+// API clients present. Used by the host to mint the operator token.
+func EncodeToken(g controlplane.Grant) string {
+	b, _ := json.Marshal(g)
+	return base64.URLEncoding.EncodeToString(b)
 }
 
 type scoreRow struct {
@@ -176,7 +253,9 @@ func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Write([]byte(dashboardHTML))
+	// Inject the operator capability token so the page's fetch wrapper presents
+	// it. base64url has no quote/backslash, so it is safe inside the JS string.
+	w.Write([]byte(strings.Replace(dashboardHTML, "__CAP_TOKEN__", s.OperatorToken, 1)))
 }
 
 // safetyState reports the current kill-switch level.

@@ -65,6 +65,18 @@ func main() {
 	// Kill switch (M18): Pause halts processing of new drops; the console toggles it.
 	safety := controlplane.NewSafety(audit)
 	pipe.Halted = func() bool { return !safety.AllowRequest() }
+
+	// Non-human identity + capability authZ (C4b): the console becomes an authZ'd
+	// API. Every mutating/listing endpoint verifies a capability Grant signed by
+	// the agent key. One broad operator Grant drives the UI; engaging Halt revokes
+	// every grant (Authority.Halted), so in-flight side effects die — not just new
+	// drops paused. Tools/agent get narrower grants as those paths are wired (C4d/e).
+	authz := controlplane.NewAuthority(signer, verifier)
+	authz.Halted = func() bool { return safety.Level() >= controlplane.LevelHalt }
+	var opToken string
+	if g, gerr := authz.Issue(controlplane.Capability{Subject: "operator", Action: controlplane.Scope, Resource: controlplane.Scope, Tenant: controlplane.Scope}, 30*24*time.Hour); gerr == nil {
+		opToken = webapp.EncodeToken(g)
+	}
 	var search func(string, int) ([]webapp.SearchHit, error)
 	if corpus, cerr := rag.Open(filepath.Join(*drop, "corpus.db")); cerr == nil {
 		defer corpus.Close()
@@ -122,6 +134,7 @@ func main() {
 		Handler: (&webapp.Server{
 			AuditPath: auditPath, OutboxDir: cfg.Outbox, InboxPath: cfg.Inbox,
 			Egress: egress, Fetch: fetch, Verifier: verifier, Safety: safety, Search: search,
+			Authz: authz, OperatorToken: opToken, Audit: audit,
 		}).Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}

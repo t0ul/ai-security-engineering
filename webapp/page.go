@@ -135,6 +135,11 @@ const dashboardHTML = `<!doctype html>
   </section>
 </main>
 <script>
+// Capability token (C4b): when the server runs as an authZ'd API it injects the
+// operator Grant here, and this wrapper attaches it to every same-origin API/ICS
+// request. Empty (household mode) = no header, unchanged behavior.
+const __CAP__="__CAP_TOKEN__";
+(function(){const f=window.fetch.bind(window);window.fetch=(u,o)=>{o=o||{};const s=typeof u==='string'?u:(u&&u.url)||'';if(__CAP__&&(s.indexOf('/api/')===0||s.indexOf('/ics/')===0)){o.headers=Object.assign({},o.headers||{},{'Authorization':'Bearer '+__CAP__});}return f(u,o);};})();
 const $=s=>document.querySelector(s);
 const TABS=['calendar','tasks','review','activity','ask','security','incidents'];
 const esc=s=>{const d=document.createElement('div');d.textContent=s||'';return d.innerHTML;};
