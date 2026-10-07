@@ -256,8 +256,14 @@ so the bridge can't silently un-wire.
   allowlist is active (a lifecycle/audit property, unit-tested); the enforcement
   it feeds is already covered by `SSRF`/`ActionLinkExfil` (egress) and
   `AllowlistBypass` (exec).
-- **C9 — Budgets/limits + key pointers**: rate/token/concurrency/spend governed;
-  keys referenced by pointer (never stored in config).
+- **C9 — Budgets/limits + key pointers** ✅: `controlplane.Budgets` resolver
+  (`BudgetConfig` rate/max_tokens/concurrency/spend + `KeyRef`; governed lifecycle
+  + `GovernedBudgets` over cpstore `RecordBudget`/`LatestBudget`, audited, rehydrated)
+  + console **Budgets tab**. **Key pointers**: config stores `KeyRef` = the
+  env-var NAME, never the secret; the console shows the pointer + whether it
+  resolves (`key_set` from `os.Getenv`), never the value. **Enforcement**: the
+  "api" `RatePerMin` is a real in-app fixed-window limiter in the authz gate (429
+  when exceeded — live-smoked 200→429); token/spend stay gateway-side (gouncer).
 - **C10 — Known-good bundle** ✅: `controlplane.Bundle` + `Snapshot(label, prompts,
   sampling, policies)` captures the active value of every knob class;
   `Bundle.Apply` restores them all by re-activating (so the rollback is itself
