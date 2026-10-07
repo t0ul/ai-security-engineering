@@ -44,6 +44,7 @@ const dashboardHTML = `<!doctype html>
     <button data-tab="tasks">Tasks</button>
     <button data-tab="review">Review</button>
     <button data-tab="activity">Activity</button>
+    <button data-tab="ask">Ask school</button>
     <button data-tab="security">Security</button>
     <button data-tab="incidents">Incidents</button>
   </nav>
@@ -98,6 +99,14 @@ const dashboardHTML = `<!doctype html>
     </div>
   </section>
 
+  <section id="ask" class="hide">
+    <div class="card">
+      <strong>Ask school</strong> <span class="mut">— search your past emails &amp; the handbook (what you've dropped)</span>
+      <div style="margin-top:8px"><input id="askq" placeholder="e.g. nurse, phone policy, book fair" style="width:70%"><button class="go" onclick="doAsk()">Search</button></div>
+      <div id="askOut" style="margin-top:10px"></div>
+    </div>
+  </section>
+
   <section id="security" class="hide">
     <div class="card">
       <strong>Kill switch</strong> <span class="mut">— halt the agent (M18)</span>
@@ -127,7 +136,7 @@ const dashboardHTML = `<!doctype html>
 </main>
 <script>
 const $=s=>document.querySelector(s);
-const TABS=['calendar','tasks','review','activity','security','incidents'];
+const TABS=['calendar','tasks','review','activity','ask','security','incidents'];
 const esc=s=>{const d=document.createElement('div');d.textContent=s||'';return d.innerHTML;};
 const when=e=>e.all_day?((e.due||e.start)+' · all day'):((e.start||e.due)+(e.end?(' – '+e.end.slice(11)):''));
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
@@ -141,6 +150,14 @@ document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
   if(t==='incidents') loadIncidents();
   if(t==='security') loadKill();
 });
+async function doAsk(){
+  const q=$('#askq').value.trim();const c=$('#askOut');if(!q){c.innerHTML='';return;}
+  c.innerHTML='<span class="mut">searching…</span>';
+  const d=await getJSON('/api/ask?q='+encodeURIComponent(q));const hits=d.hits||[];
+  if(!hits.length){c.innerHTML='<p class="mut">no matches — drop more emails to build the corpus</p>';return;}
+  c.innerHTML=hits.map(h=>'<div class="ev"><div><b>'+esc(h.source)+'</b>'+(h.untrusted?' <span class="kind warn">untrusted</span>':'')+'<br><span class="mut">'+esc(h.snippet)+'</span></div></div>').join('');
+}
+document.addEventListener('keydown',e=>{if(e.key==='Enter'&&document.activeElement&&document.activeElement.id==='askq')doAsk();});
 async function loadKill(){const d=await getJSON('/api/safety');const p=$('#klevel');if(p){p.textContent=d.level;p.className='pill '+(d.level==='none'?'pass':'fail');}}
 async function setKill(l){await postJSON('/api/killswitch',{level:l});loadKill();}
 

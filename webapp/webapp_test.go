@@ -363,6 +363,27 @@ func TestKillSwitchGatesSideEffects(t *testing.T) {
 	}
 }
 
+func TestAskSearchesCorpus(t *testing.T) {
+	var gotQuery string
+	srv := httptest.NewServer((&webapp.Server{
+		Search: func(q string, k int) ([]webapp.SearchHit, error) {
+			gotQuery = q
+			return []webapp.SearchHit{{Source: "handbook.txt", Snippet: "the nurse is in Room 219", Untrusted: true}}, nil
+		},
+	}).Handler())
+	defer srv.Close()
+
+	resp, _ := http.Get(srv.URL + "/api/ask?q=nurse")
+	defer resp.Body.Close()
+	var out struct {
+		Hits []webapp.SearchHit `json:"hits"`
+	}
+	json.NewDecoder(resp.Body).Decode(&out)
+	if gotQuery != "nurse" || len(out.Hits) != 1 || !strings.Contains(out.Hits[0].Snippet, "Room 219") {
+		t.Fatalf("ask did not search the corpus: q=%q hits=%+v", gotQuery, out.Hits)
+	}
+}
+
 func TestScorecardAPIAllPass(t *testing.T) {
 	srv := httptest.NewServer((&webapp.Server{}).Handler())
 	defer srv.Close()

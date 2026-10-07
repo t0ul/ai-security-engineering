@@ -65,10 +65,24 @@ func main() {
 	// Kill switch (M18): Pause halts processing of new drops; the console toggles it.
 	safety := controlplane.NewSafety(audit)
 	pipe.Halted = func() bool { return !safety.AllowRequest() }
+	var search func(string, int) ([]webapp.SearchHit, error)
 	if corpus, cerr := rag.Open(filepath.Join(*drop, "corpus.db")); cerr == nil {
 		defer corpus.Close()
 		pipe.Index = func(traceID, source, rawText string) error {
-			return corpus.Add(rag.Doc{ID: traceID, Text: rawText, Prov: rag.Untrusted})
+			return corpus.Add(rag.Doc{ID: source, Text: rawText, Prov: rag.Untrusted}) // readable source in Ask results
+		}
+		// Ask-School: lexical search over the scrubbed corpus (M8 — recalled text
+		// is untrusted data). "public" tenant: this is a single-household app.
+		search = func(q string, k int) ([]webapp.SearchHit, error) {
+			chunks, err := corpus.Query("public", q, k)
+			if err != nil {
+				return nil, err
+			}
+			out := make([]webapp.SearchHit, 0, len(chunks))
+			for _, c := range chunks {
+				out = append(out, webapp.SearchHit{Source: c.DocID, Snippet: webapp.Snippet(c.Text), Untrusted: c.Prov == rag.Untrusted})
+			}
+			return out, nil
 		}
 	}
 
@@ -107,7 +121,7 @@ func main() {
 		Addr: *addr,
 		Handler: (&webapp.Server{
 			AuditPath: auditPath, OutboxDir: cfg.Outbox, InboxPath: cfg.Inbox,
-			Egress: egress, Fetch: fetch, Verifier: verifier, Safety: safety,
+			Egress: egress, Fetch: fetch, Verifier: verifier, Safety: safety, Search: search,
 		}).Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}

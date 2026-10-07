@@ -39,6 +39,9 @@ type Server struct {
 	// Safety, when set, is the layered kill switch (M18): Pause refuses new
 	// processing/drops; BlockTools refuses accept/action side effects.
 	Safety *controlplane.Safety
+	// Search, when set, answers Ask-School queries over the (PII-scrubbed)
+	// retrieval corpus. Nil = the Ask tab returns nothing.
+	Search func(query string, k int) ([]SearchHit, error)
 
 	// pending holds issued-but-unconfirmed HITL approvals, keyed by nonce (ASI09:
 	// evidence-first, single-use, clickjack/forgery-resistant confirm).
@@ -76,6 +79,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/activity", s.activity)
 	mux.HandleFunc("/api/safety", s.safetyState)
 	mux.HandleFunc("/api/killswitch", csrf(s.killswitch))
+	mux.HandleFunc("/api/ask", s.ask)
 	if s.InboxPath != "" {
 		mux.HandleFunc("/api/drop", csrf(s.drop))
 	}
