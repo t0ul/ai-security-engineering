@@ -28,7 +28,7 @@ type liveCase struct {
 // regression), never because a live model happened to resist an attack on its own.
 func TestLiveScorecard(t *testing.T) {
 	requireLive(t)
-	cases := []liveCase{liveInjection(), liveHallucination()}
+	cases := []liveCase{liveInjection(), liveHallucination(), livePromptLeak(), liveExfilURL(), livePIIEcho()}
 
 	t.Logf("%-26s %-8s %-12s %-10s", "technique", "owasp", "undefended", "defended")
 	for _, c := range cases {
