@@ -25,6 +25,69 @@ func TestSanitizeFieldStripsExfil(t *testing.T) {
 	}
 }
 
+func TestWriteTaskAsVTodo(t *testing.T) {
+	out, _, err := ics.Write([]schema.Event{
+		{Kind: schema.KindTask, Title: "Buy popcorn for the school fundraiser",
+			Due: "2026-09-29", AllDay: true, Notes: "homeroom asked each family to bring 2 bags"},
+	}, "cal")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"BEGIN:VTODO", "X-KIND:task", "DUE;VALUE=DATE:20260929",
+		"STATUS:NEEDS-ACTION", "SUMMARY:Buy popcorn", "BEGIN:VALARM", "END:VTODO"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("task .ics missing %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "BEGIN:VEVENT") {
+		t.Error("a task must not be a VEVENT")
+	}
+}
+
+func TestWriteActionKeepsValidURL(t *testing.T) {
+	out, _, err := ics.Write([]schema.Event{
+		{Kind: schema.KindAction, Title: "Accept classroom photo-sharing invite",
+			Due: "2026-09-20", AllDay: true, URL: "https://class.example/join?code=abc"},
+	}, "cal")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "URL:https://class.example/join?code=abc") {
+		t.Errorf("action URL not preserved:\n%s", out)
+	}
+	if !strings.Contains(out, "X-KIND:action") || !strings.Contains(out, "BEGIN:VTODO") {
+		t.Errorf("action not emitted as a VTODO:\n%s", out)
+	}
+}
+
+func TestWriteActionDropsNonHTTPURL(t *testing.T) {
+	out, _, err := ics.Write([]schema.Event{
+		{Kind: schema.KindAction, Title: "Open attachment", Due: "2026-09-20", AllDay: true,
+			URL: "file:///etc/passwd"},
+	}, "cal")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out, "file:///etc/passwd") || strings.Contains(out, "URL:") {
+		t.Errorf("non-http(s) URL must be dropped:\n%s", out)
+	}
+}
+
+func TestWriteHeadsUpIsAllDay(t *testing.T) {
+	out, _, err := ics.Write([]schema.Event{
+		{Kind: schema.KindHeadsUp, Title: "Guest author visiting", Start: "2026-10-13"},
+	}, "cal")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "X-KIND:heads_up") || !strings.Contains(out, "DTSTART;VALUE=DATE:20261013") {
+		t.Errorf("heads-up should be an all-day VEVENT:\n%s", out)
+	}
+	if !strings.Contains(out, "TRIGGER:-PT15H") {
+		t.Errorf("heads-up should alarm the day before:\n%s", out)
+	}
+}
+
 func TestWriteAllDayAndTimed(t *testing.T) {
 	events := []schema.Event{
 		{Title: "Picture Day", Start: "2026-10-10", AllDay: true, Confidence: 1},

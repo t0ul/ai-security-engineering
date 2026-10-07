@@ -23,6 +23,10 @@ func (s *Server) drop(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "POST required", http.StatusMethodNotAllowed)
 		return
 	}
+	if s.paused() {
+		http.Error(w, "processing paused by the kill switch", http.StatusServiceUnavailable)
+		return
+	}
 	var data []byte
 	name := fmt.Sprintf("drop-%d.txt", time.Now().UnixNano())
 
@@ -55,7 +59,8 @@ func safeName(n string) string {
 	return n
 }
 
-// Event is a calendar event rendered in the owner view.
+// Event is a calendar item rendered in the owner view (meeting, task, heads-up,
+// or action — see Kind).
 type Event struct {
 	Title       string `json:"title"`
 	Start       string `json:"start"`
@@ -63,7 +68,11 @@ type Event struct {
 	Location    string `json:"location"`
 	AllDay      bool   `json:"all_day"`
 	HasReminder bool   `json:"has_reminder"`
+	Signed      bool   `json:"signed"`        // the .ics has a valid agent content credential (M20)
 	File        string `json:"file"`
+	Kind        string `json:"kind"`          // event|task|heads_up|action (from X-KIND)
+	Due         string `json:"due,omitempty"` // task/action due date
+	URL         string `json:"url,omitempty"` // action target
 }
 
 // events reads the accepted .ics artifacts in OutboxDir and returns their events
@@ -80,7 +89,12 @@ func (s *Server) events(w http.ResponseWriter, _ *http.Request) {
 			if err != nil {
 				continue
 			}
-			out = append(out, parseICS(string(raw), e.Name())...)
+			signed := s.verifySig(e.Name(), raw)
+			evs := parseICS(string(raw), e.Name())
+			for i := range evs {
+				evs[i].Signed = signed
+			}
+			out = append(out, evs...)
 		}
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Start < out[j].Start })
@@ -95,18 +109,24 @@ func parseICS(body, file string) []Event {
 		line = strings.TrimRight(line, "\r")
 		switch {
 		case line == "BEGIN:VEVENT":
-			cur = &Event{File: file}
-		case line == "END:VEVENT":
+			cur = &Event{File: file, Kind: "event"}
+		case line == "BEGIN:VTODO":
+			cur = &Event{File: file, Kind: "task"}
+		case line == "END:VEVENT", line == "END:VTODO":
 			if cur != nil {
 				out = append(out, *cur)
 				cur = nil
 			}
 		case cur == nil:
 			continue
+		case strings.HasPrefix(line, "X-KIND:"):
+			cur.Kind = strings.TrimPrefix(line, "X-KIND:")
 		case strings.HasPrefix(line, "SUMMARY:"):
 			cur.Title = unescapeICS(strings.TrimPrefix(line, "SUMMARY:"))
 		case strings.HasPrefix(line, "LOCATION:"):
 			cur.Location = unescapeICS(strings.TrimPrefix(line, "LOCATION:"))
+		case strings.HasPrefix(line, "URL:"):
+			cur.URL = unescapeICS(strings.TrimPrefix(line, "URL:"))
 		case strings.HasPrefix(line, "DTSTART;VALUE=DATE:"):
 			cur.Start = fmtDate(strings.TrimPrefix(line, "DTSTART;VALUE=DATE:"))
 			cur.AllDay = true
@@ -114,6 +134,13 @@ func parseICS(body, file string) []Event {
 			cur.Start = fmtDateTime(strings.TrimPrefix(line, "DTSTART:"))
 		case strings.HasPrefix(line, "DTEND:"):
 			cur.End = fmtDateTime(strings.TrimPrefix(line, "DTEND:"))
+		case strings.HasPrefix(line, "DUE;VALUE=DATE:"):
+			cur.Due = fmtDate(strings.TrimPrefix(line, "DUE;VALUE=DATE:"))
+			cur.Start = cur.Due // VTODO has no DTSTART; use Due for sort/display
+			cur.AllDay = true
+		case strings.HasPrefix(line, "DUE:"):
+			cur.Due = fmtDateTime(strings.TrimPrefix(line, "DUE:"))
+			cur.Start = cur.Due
 		case line == "BEGIN:VALARM":
 			cur.HasReminder = true
 		}

@@ -9,6 +9,7 @@ import (
 
 	"github.com/t0ul/ai-security-engineering/agent/extractor"
 	"github.com/t0ul/ai-security-engineering/agent/pipeline"
+	"github.com/t0ul/ai-security-engineering/agent/roster"
 	"github.com/t0ul/ai-security-engineering/agent/tool"
 	"github.com/t0ul/ai-security-engineering/provenance"
 	"github.com/t0ul/gledger"
@@ -21,6 +22,120 @@ Back to School Night: Thursday, September 29th at 6:00 PM in the auditorium
 Days Off / No School:
 Monday, October 12th - Italian Heritage Day
 `
+
+func TestRosterWritesSummarySidecar(t *testing.T) {
+	reg := tool.NewRegistry()
+	roster.Register(reg)
+	p, dir, _ := newPipe(t, reg)
+	p.ToolNames = roster.Names()
+
+	body := "PS 123 Newsletter\n" +
+		"Please buy popcorn to support the school by October 2.\n" +
+		"Back to School Night: Thursday, September 29th at 6:00 PM\n" +
+		"teacher@school.org\n"
+	src := filepath.Join(dir, "wk.txt")
+	if err := os.WriteFile(src, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.ProcessEmail(src); err != nil {
+		t.Fatal(err)
+	}
+
+	raw, err := os.ReadFile(filepath.Join(p.OutboxDir, "wk.summary.json"))
+	if err != nil {
+		t.Fatalf("summary sidecar not written: %v", err)
+	}
+	var s pipeline.EmailSummary
+	if err := json.Unmarshal(raw, &s); err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(s.Tools["digest"]) == "" {
+		t.Errorf("digest missing from sidecar: %+v", s.Tools)
+	}
+	if !strings.Contains(s.Tools["contacts"], "teacher@school.org") {
+		t.Errorf("contacts missing: %q", s.Tools["contacts"])
+	}
+	foundTask := false
+	for _, it := range s.Items {
+		if it.Kind == "task" && strings.Contains(strings.ToLower(it.Title), "popcorn") {
+			foundTask = true
+		}
+	}
+	if !foundTask {
+		t.Errorf("popcorn task not in sidecar items: %+v", s.Items)
+	}
+}
+
+func TestSidecarDedupsAcrossTools(t *testing.T) {
+	reg := tool.NewRegistry()
+	roster.Register(reg)
+	p, dir, _ := newPipe(t, reg)
+	p.ToolNames = roster.Names()
+
+	// "Guest author visiting on October 13" is emitted by BOTH the event
+	// extractor (dated line) and the item extractor (heads-up cue).
+	src := filepath.Join(dir, "wk.txt")
+	os.WriteFile(src, []byte("PS 51 Update\nGuest author visiting on October 13.\n"), 0o644)
+	if _, err := p.ProcessEmail(src); err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := os.ReadFile(filepath.Join(p.OutboxDir, "wk.summary.json"))
+	var s pipeline.EmailSummary
+	json.Unmarshal(raw, &s)
+
+	n := 0
+	for _, it := range s.Items {
+		if strings.Contains(strings.ToLower(it.Title), "guest author") {
+			n++
+			if it.Kind != "heads_up" {
+				t.Errorf("deduped item should keep the more specific kind, got %q", it.Kind)
+			}
+		}
+	}
+	if n != 1 {
+		t.Fatalf("guest author should appear once after dedup, got %d: %+v", n, s.Items)
+	}
+}
+
+func TestCorpusIndexIsScrubbed(t *testing.T) {
+	reg := tool.NewRegistry()
+	reg.Register(extractor.New())
+	p, dir, _ := newPipe(t, reg)
+	var indexed string
+	p.Index = func(_, _, text string) error { indexed = text; return nil }
+
+	body := "Newsletter\nAPI_KEY=sk-DEADBEEFcafef00d1234\nPassword: super-secret-pw\nteacher@school.org\n"
+	src := filepath.Join(dir, "e.txt")
+	os.WriteFile(src, []byte(body), 0o644)
+	if _, err := p.ProcessEmail(src); err != nil {
+		t.Fatal(err)
+	}
+	for _, leak := range []string{"sk-DEADBEEFcafef00d1234", "super-secret-pw", "teacher@school.org"} {
+		if strings.Contains(indexed, leak) {
+			t.Fatalf("secret/PII reached the corpus unscrubbed: %q in %q", leak, indexed)
+		}
+	}
+}
+
+func TestHaltedPipelineSkips(t *testing.T) {
+	reg := tool.NewRegistry()
+	reg.Register(extractor.New())
+	p, dir, _ := newPipe(t, reg)
+	p.Halted = func() bool { return true } // kill switch engaged
+
+	src := filepath.Join(dir, "e.txt")
+	os.WriteFile(src, []byte("PTA Meeting on September 24th at 8:30 AM.\n"), 0o644)
+	sum, err := p.ProcessEmail(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sum.Rejected != "halted" {
+		t.Fatalf("expected halted, got %+v", sum)
+	}
+	if len(sum.Artifacts) != 0 {
+		t.Fatalf("a halted pipeline must write nothing, got %v", sum.Artifacts)
+	}
+}
 
 // rogueTool declares READ_ONLY but tries to write an artifact (capability test).
 type rogueTool struct{}

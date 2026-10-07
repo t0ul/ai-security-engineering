@@ -12,12 +12,15 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/t0ul/ai-security-engineering/agent/guard"
+	"github.com/t0ul/ai-security-engineering/agent/schema"
 	"github.com/t0ul/ai-security-engineering/agent/tool"
 	"github.com/t0ul/ai-security-engineering/provenance"
 	"github.com/t0ul/gledger"
+	"github.com/t0ul/goflage"
 )
 
 // MaxBytes is the oversized-input DoS guard for the long-running agent (M10).
@@ -32,6 +35,20 @@ type Summary struct {
 	Warnings  []string `json:"warnings"`
 	Rejected  string   `json:"rejected,omitempty"`
 	Bytes     int64    `json:"bytes,omitempty"`
+}
+
+// EmailSummary is the per-email derived sidecar the pipeline writes to the
+// outbox as <stem>.summary.json. It is NOT a tool artifact — read-only tools may
+// not write files (M6) — so the trusted pipeline persists their text plus the
+// extracted items, letting the owner UI surface digest / contacts / action-items
+// / tasks without re-running anything. Contacts are PII and already audited by
+// the contacts tool's own capability.
+type EmailSummary struct {
+	Source      string            `json:"source"`
+	TraceID     string            `json:"trace_id"`
+	Tools       map[string]string `json:"tools"`                  // read-only tool name -> text
+	Items       []schema.Event    `json:"items"`                  // events + tasks/heads-ups/actions (Kind-tagged)
+	NeedsReview []schema.Event    `json:"needs_review,omitempty"` // low-confidence / warned items
 }
 
 // Pipeline wires a tool registry to an audit log and an outbox.
@@ -50,6 +67,89 @@ type Pipeline struct {
 	// next to each emitted artifact, so a consumer can verify the agent produced
 	// it unaltered (M20 output authenticity).
 	Signer *provenance.Signer
+	// Halted, when set and returning true, stops the pipeline before any work —
+	// the operator kill switch (M18). Fail-closed: a halted drop is audited and
+	// skipped (the raw file is still archived).
+	Halted func() bool
+}
+
+var nonAlnum = regexp.MustCompile(`[^a-z0-9]+`)
+
+func normTitle(s string) string {
+	return strings.Join(strings.Fields(nonAlnum.ReplaceAllString(strings.ToLower(s), " ")), " ")
+}
+
+func dateOf(e schema.Event) string {
+	if e.Due != "" {
+		return e.Due
+	}
+	return e.Start
+}
+
+// titlesMatch treats two same-date items as the same when one normalized title
+// contains the other (the event extractor trims the date phrase, the item
+// extractor keeps the whole line, so one is a prefix/substring of the other).
+func titlesMatch(a, b string) bool {
+	if a == "" || b == "" {
+		return a == b
+	}
+	return a == b || strings.Contains(a, b) || strings.Contains(b, a)
+}
+
+var firstWeekday = regexp.MustCompile(`(?i)^\s*(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b`)
+var reAlphaWord = regexp.MustCompile(`[A-Za-z]{4,}`)
+var dateWordSet = map[string]bool{
+	"monday": true, "tuesday": true, "wednesday": true, "thursday": true, "friday": true, "saturday": true, "sunday": true,
+	"january": true, "february": true, "march": true, "april": true, "june": true, "july": true,
+	"august": true, "september": true, "october": true, "november": true, "december": true,
+}
+
+// isBareDateTitle reports whether a title is just a date phrase with no real
+// event name ("Monday, September 28th") — the regex extractors sometimes emit
+// these from stray dated lines; they are noise, not events.
+func isBareDateTitle(title string) bool {
+	for _, w := range reAlphaWord.FindAllString(strings.ToLower(title), -1) {
+		if !dateWordSet[w] {
+			return false
+		}
+	}
+	return true
+}
+
+// looksLikeFragment reports whether an event title is a mid-sentence fragment
+// ("went smoothly. See below…") rather than a name — a real event title starts
+// with a capital letter or digit, not lowercase.
+func looksLikeFragment(title string) bool {
+	for _, r := range strings.TrimSpace(title) {
+		return r >= 'a' && r <= 'z'
+	}
+	return false
+}
+
+func timedStart(e schema.Event) bool { return strings.Contains(e.Start, "T") }
+
+// titleQuality scores a title: a raw date phrase ("Thursday, October 1st…") or a
+// one-word title is low quality; a real name ("Evacuation Drills") is high.
+func titleQuality(title string) int {
+	if firstWeekday.MatchString(title) || len(strings.Fields(title)) < 2 {
+		return 0
+	}
+	return 1
+}
+
+// kindRank prefers the more specific/actionable kind when two tools collide on
+// the same item.
+func kindRank(kind string) int {
+	switch kind {
+	case schema.KindAction:
+		return 4
+	case schema.KindTask:
+		return 3
+	case schema.KindHeadsUp:
+		return 2
+	default: // event
+		return 1
+	}
 }
 
 // ProcessEmail runs the full pipeline for one file.
@@ -60,6 +160,11 @@ func (p *Pipeline) ProcessEmail(path string) (Summary, error) {
 		return Summary{}, err
 	}
 	p.Audit.Emit(trace, "request", "start", gledger.F{"source": source})
+
+	if p.Halted != nil && p.Halted() {
+		p.Audit.Emit(trace, "request", "killswitch_halt", gledger.F{"source": source})
+		return Summary{TraceID: trace, Source: source, Rejected: "halted"}, nil
+	}
 
 	fi, err := os.Stat(path)
 	if err != nil {
@@ -77,14 +182,19 @@ func (p *Pipeline) ProcessEmail(path string) (Summary, error) {
 	}
 	text := string(raw)
 
-	// Persist the raw (untrusted) email into the retrieval corpus before any
-	// sanitization — the corpus holds the real content; defense is applied at
-	// retrieval time (rag.Assemble). The on-disk copy remains the backup.
+	// Scrub secrets/PII BEFORE indexing into the retrieval corpus (M3): the corpus
+	// is broadly queryable, so credentials/API keys/emails/IPs must not land in it
+	// in the clear. The on-disk raw file (processed/) stays the backup; defense at
+	// retrieval (rag.Assemble) still applies on top.
 	if p.Index != nil {
-		if err := p.Index(trace, source, text); err != nil {
+		scrubbed, findings := goflage.New().Scrub(text)
+		if len(findings) > 0 {
+			p.Audit.Emit(trace, "pii", "scrubbed", gledger.F{"source": source, "entities": findings})
+		}
+		if err := p.Index(trace, source, scrubbed); err != nil {
 			p.Audit.Emit(trace, "index", "error", gledger.F{"source": source, "error": err.Error()})
 		} else {
-			p.Audit.Emit(trace, "index", "stored", gledger.F{"source": source, "bytes": len(text)})
+			p.Audit.Emit(trace, "index", "stored", gledger.F{"source": source, "bytes": len(scrubbed)})
 		}
 	}
 
@@ -105,6 +215,7 @@ func (p *Pipeline) ProcessEmail(path string) (Summary, error) {
 	}
 	stem := strings.TrimSuffix(source, filepath.Ext(source))
 	summary := Summary{TraceID: trace, Source: source, Artifacts: []string{}, Warnings: []string{}}
+	sidecar := EmailSummary{Source: source, TraceID: trace, Tools: map[string]string{}}
 
 	for _, name := range names {
 		t, ok := p.Registry.Get(name)
@@ -145,9 +256,67 @@ func (p *Pipeline) ProcessEmail(path string) (Summary, error) {
 			}
 		}
 
+		// Collect items for the sidecar, deduped across tools: the event and the
+		// item extractor can both emit the same dated line. Same title+date =
+		// one item; keep the more specific kind (action > task > heads_up > event).
+		for _, ev := range res.Events {
+			// Drop noise: an "event" whose title is only a date phrase, or a
+			// mid-sentence fragment, isn't a real event.
+			if ev.ResolvedKind() == schema.KindEvent && (isBareDateTitle(ev.Title) || looksLikeFragment(ev.Title)) {
+				continue
+			}
+			nt, d := normTitle(ev.Title), dateOf(ev)
+			dup := -1
+			for j := range sidecar.Items {
+				ex := sidecar.Items[j]
+				// Same item if titles match on the same date, OR two timed events
+				// land on the exact same date+time (same meeting, different wording).
+				if (dateOf(ex) == d && titlesMatch(nt, normTitle(ex.Title))) ||
+					(timedStart(ev) && timedStart(ex) && ev.Start == ex.Start) {
+					dup = j
+					break
+				}
+			}
+			if dup >= 0 {
+				ex := sidecar.Items[dup]
+				// Keep the better item: more specific kind, then the cleaner title
+				// (a raw "Thursday, Oct 1st at 10:08 AM" loses to "Evacuation Drills").
+				newRank, exRank := kindRank(ev.ResolvedKind()), kindRank(ex.ResolvedKind())
+				if newRank > exRank || (newRank == exRank && titleQuality(ev.Title) > titleQuality(ex.Title)) {
+					sidecar.Items[dup] = ev
+				}
+				continue
+			}
+			sidecar.Items = append(sidecar.Items, ev)
+		}
+		if res.Capability == tool.ReadOnly && strings.TrimSpace(res.Text) != "" {
+			sidecar.Tools[name] = res.Text
+		}
+
 		summary.Events += len(res.Events)
 		summary.Warnings = append(summary.Warnings, res.Warnings...)
 		p.Audit.Emit(trace, name, "result", gledger.F{"events": len(res.Events), "warnings": res.Warnings})
+	}
+
+	// Review queue is computed from the deduped item set.
+	for _, it := range sidecar.Items {
+		if it.NeedsReview() {
+			sidecar.NeedsReview = append(sidecar.NeedsReview, it)
+		}
+	}
+
+	// Write the derived per-email sidecar (pipeline-owned, not a tool artifact).
+	if len(sidecar.Tools) > 0 || len(sidecar.Items) > 0 {
+		if b, err := json.MarshalIndent(sidecar, "", "  "); err == nil {
+			sp := filepath.Join(p.OutboxDir, stem+".summary.json")
+			// Not added to summary.Artifacts: that list is the user-acceptable .ics
+			// outputs; the sidecar is derived state the UI reads, audited here.
+			if err := os.WriteFile(sp, b, 0o644); err == nil {
+				p.Audit.Emit(trace, "pipeline", "summary_written", gledger.F{
+					"file": filepath.Base(sp), "tools": len(sidecar.Tools),
+					"items": len(sidecar.Items), "needs_review": len(sidecar.NeedsReview)})
+			}
+		}
 	}
 
 	p.Audit.Emit(trace, "request", "end",

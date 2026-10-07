@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/t0ul/ai-security-engineering/rag"
+	"github.com/t0ul/goflage"
 )
 
 func main() {
@@ -47,7 +48,10 @@ func main() {
 		if err != nil {
 			continue
 		}
-		if err := corpus.Add(rag.Doc{ID: e.Name(), Tenant: "", Text: string(raw), Prov: rag.Untrusted}); err != nil {
+		// Scrub secrets/PII before (re)indexing — same guard as the live pipeline,
+		// so a rebuild can't reintroduce credentials the processed/ backup holds.
+		scrubbed, _ := goflage.New().Scrub(string(raw))
+		if err := corpus.Add(rag.Doc{ID: e.Name(), Tenant: "", Text: scrubbed, Prov: rag.Untrusted}); err != nil {
 			fmt.Fprintf(os.Stderr, "reindex: %s: %v\n", e.Name(), err)
 			continue
 		}

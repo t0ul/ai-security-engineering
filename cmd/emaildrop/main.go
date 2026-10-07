@@ -23,8 +23,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/t0ul/ai-security-engineering/agent/extractor"
 	"github.com/t0ul/ai-security-engineering/agent/pipeline"
+	"github.com/t0ul/ai-security-engineering/agent/roster"
 	"github.com/t0ul/ai-security-engineering/agent/tool"
 	"github.com/t0ul/ai-security-engineering/agent/watcher"
 	"github.com/t0ul/ai-security-engineering/rag"
@@ -54,14 +54,14 @@ func run() error {
 	}
 
 	reg := tool.NewRegistry()
-	reg.Register(extractor.New())
+	roster.Register(reg)
 
 	auditPath := envOr("AUDIT_LOG", filepath.Join(cfg.Logs, "audit.jsonl"))
 	audit, err := gledger.Open(auditPath, "watcher")
 	if err != nil {
 		return err
 	}
-	pipe := &pipeline.Pipeline{Registry: reg, Audit: audit, OutboxDir: cfg.Outbox, DefaultYear: 2026}
+	pipe := &pipeline.Pipeline{Registry: reg, Audit: audit, OutboxDir: cfg.Outbox, DefaultYear: time.Now().Year(), ToolNames: roster.Names()}
 
 	// Index processed emails into the SQLite RAG corpus (queryable, persistent).
 	// The raw file archived to processed/ stays the source of truth; this index

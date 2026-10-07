@@ -11,6 +11,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"net/url"
 	"regexp"
 	"strings"
 	"time"
@@ -68,7 +69,10 @@ func formatDT(value string, allDay bool) (string, error) {
 
 func uid() string {
 	b := make([]byte, 16)
-	_, _ = rand.Read(b)
+	if _, err := rand.Read(b); err != nil {
+		// Fail to a time-based id rather than an all-zero (colliding) UID.
+		return fmt.Sprintf("%d@email-to-calendar", time.Now().UnixNano())
+	}
 	return hex.EncodeToString(b) + "@email-to-calendar"
 }
 
@@ -84,58 +88,157 @@ func Write(events []schema.Event, calname string) (string, int, error) {
 		"X-WR-CALNAME:" + escape(calname),
 	}
 	for _, ev := range events {
-		titleSrc := ev.Title
-		if titleSrc == "" {
-			titleSrc = "Untitled"
+		var r int
+		var err error
+		switch ev.ResolvedKind() {
+		case schema.KindTask, schema.KindAction:
+			r, err = writeVTodo(&lines, ev, now) // a to-do / actionable item
+		default:
+			r, err = writeVEvent(&lines, ev, now) // event or heads-up
 		}
-		title, r1 := SanitizeField(titleSrc)
-		location, r2 := SanitizeField(ev.Location)
-		removedTotal += r1 + r2
-
-		lines = append(lines, "BEGIN:VEVENT", "UID:"+uid(), "DTSTAMP:"+now)
-		if ev.AllDay {
-			dt, err := formatDT(ev.Start, true)
-			if err != nil {
-				return "", removedTotal, err
-			}
-			lines = append(lines, "DTSTART;VALUE=DATE:"+dt)
-		} else {
-			dt, err := formatDT(ev.Start, false)
-			if err != nil {
-				return "", removedTotal, err
-			}
-			lines = append(lines, "DTSTART:"+dt)
-			if ev.End != "" {
-				de, err := formatDT(ev.End, false)
-				if err != nil {
-					return "", removedTotal, err
-				}
-				lines = append(lines, "DTEND:"+de)
-			}
+		if err != nil {
+			return "", removedTotal, err
 		}
-		lines = append(lines, "SUMMARY:"+escape(title))
-		if location != "" {
-			lines = append(lines, "LOCATION:"+escape(location))
-		}
-		if len(ev.Warnings) > 0 {
-			desc, r3 := SanitizeField(strings.Join(ev.Warnings, " | "))
-			removedTotal += r3
-			lines = append(lines, "DESCRIPTION:"+escape("⚠ "+desc))
-		}
-		// Reminder (inert DISPLAY alarm): 30 min before a timed event, or 9am on
-		// the day for an all-day event. iCalendar-native — no extra infrastructure.
-		trigger := "-PT30M"
-		if ev.AllDay {
-			trigger = "PT9H" // 9 hours after 00:00 = 9am
-		}
-		lines = append(lines,
-			"BEGIN:VALARM",
-			"ACTION:DISPLAY",
-			"DESCRIPTION:"+escape(title),
-			"TRIGGER:"+trigger,
-			"END:VALARM")
-		lines = append(lines, "END:VEVENT")
+		removedTotal += r
 	}
 	lines = append(lines, "END:VCALENDAR")
 	return strings.Join(lines, "\r\n") + "\r\n", removedTotal, nil
+}
+
+// writeVEvent emits a VEVENT for a meeting (KindEvent) or a heads-up
+// (KindHeadsUp, forced all-day with a day-before alarm).
+func writeVEvent(lines *[]string, ev schema.Event, now string) (int, error) {
+	title, r1 := SanitizeField(orUntitled(ev.Title))
+	location, r2 := SanitizeField(ev.Location)
+	removed := r1 + r2
+
+	headsUp := ev.ResolvedKind() == schema.KindHeadsUp
+	allDay := ev.AllDay || headsUp
+
+	*lines = append(*lines, "BEGIN:VEVENT", "UID:"+uid(), "DTSTAMP:"+now, "X-KIND:"+ev.ResolvedKind())
+	if allDay {
+		dt, err := formatDT(ev.Start, true)
+		if err != nil {
+			return removed, err
+		}
+		*lines = append(*lines, "DTSTART;VALUE=DATE:"+dt)
+	} else {
+		dt, err := formatDT(ev.Start, false)
+		if err != nil {
+			return removed, err
+		}
+		*lines = append(*lines, "DTSTART:"+dt)
+		if ev.End != "" {
+			de, err := formatDT(ev.End, false)
+			if err != nil {
+				return removed, err
+			}
+			*lines = append(*lines, "DTEND:"+de)
+		}
+	}
+	*lines = append(*lines, "SUMMARY:"+escape(title))
+	if location != "" {
+		*lines = append(*lines, "LOCATION:"+escape(location))
+	}
+	removed += appendDescription(lines, ev)
+
+	// Inert DISPLAY alarm: 30m before a timed event; 9am for an all-day event;
+	// 9am the day before for a heads-up (so you have time to prepare).
+	trigger := "-PT30M"
+	if headsUp {
+		trigger = "-PT15H" // 15h before 00:00 = 09:00 the previous day
+	} else if allDay {
+		trigger = "PT9H"
+	}
+	appendAlarm(lines, title, trigger)
+	*lines = append(*lines, "END:VEVENT")
+	return removed, nil
+}
+
+// writeVTodo emits a VTODO for a task (KindTask) or an actionable item
+// (KindAction, which also carries a validated URL).
+func writeVTodo(lines *[]string, ev schema.Event, now string) (int, error) {
+	title, removed := SanitizeField(orUntitled(ev.Title))
+
+	due := ev.Due
+	if due == "" {
+		due = ev.Start
+	}
+	*lines = append(*lines, "BEGIN:VTODO", "UID:"+uid(), "DTSTAMP:"+now, "X-KIND:"+ev.ResolvedKind())
+	if due != "" {
+		if ev.AllDay {
+			dt, err := formatDT(due, true)
+			if err != nil {
+				return removed, err
+			}
+			*lines = append(*lines, "DUE;VALUE=DATE:"+dt)
+		} else {
+			dt, err := formatDT(due, false)
+			if err != nil {
+				return removed, err
+			}
+			*lines = append(*lines, "DUE:"+dt)
+		}
+	}
+	*lines = append(*lines, "SUMMARY:"+escape(title), "STATUS:NEEDS-ACTION")
+	removed += appendDescription(lines, ev)
+
+	// Action URL: kept (the link is the whole point), but ONLY if it is a valid
+	// http(s) URL — so it is NOT run through SanitizeField's link stripper. The
+	// click itself is egress-gated by netpolicy + fetched in the VM at action
+	// time (see APP-FEATURES-PLAN A6); this only records a well-formed target.
+	if ev.ResolvedKind() == schema.KindAction && ev.URL != "" {
+		if u, err := url.Parse(strings.TrimSpace(ev.URL)); err == nil &&
+			(u.Scheme == "http" || u.Scheme == "https") && u.Host != "" {
+			*lines = append(*lines, "URL:"+escape(ev.URL))
+		}
+	}
+
+	// An alarm is only meaningful relative to a DUE date; a dateless to-do just
+	// sits in the list with no reminder.
+	if due != "" {
+		trigger := "-PT30M"
+		if ev.AllDay {
+			trigger = "-PT15H" // 09:00 the day before the due date
+		}
+		appendAlarm(lines, title, trigger)
+	}
+	*lines = append(*lines, "END:VTODO")
+	return removed, nil
+}
+
+// appendDescription writes a DESCRIPTION from Notes + any warnings (sanitized).
+func appendDescription(lines *[]string, ev schema.Event) int {
+	removed := 0
+	var parts []string
+	if ev.Notes != "" {
+		n, r := SanitizeField(ev.Notes)
+		removed += r
+		parts = append(parts, n)
+	}
+	if len(ev.Warnings) > 0 {
+		w, r := SanitizeField(strings.Join(ev.Warnings, " | "))
+		removed += r
+		parts = append(parts, "⚠ "+w)
+	}
+	if len(parts) > 0 {
+		*lines = append(*lines, "DESCRIPTION:"+escape(strings.Join(parts, " — ")))
+	}
+	return removed
+}
+
+func appendAlarm(lines *[]string, title, trigger string) {
+	*lines = append(*lines,
+		"BEGIN:VALARM",
+		"ACTION:DISPLAY",
+		"DESCRIPTION:"+escape(title),
+		"TRIGGER:"+trigger,
+		"END:VALARM")
+}
+
+func orUntitled(s string) string {
+	if s == "" {
+		return "Untitled"
+	}
+	return s
 }
