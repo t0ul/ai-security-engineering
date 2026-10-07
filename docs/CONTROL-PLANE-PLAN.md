@@ -21,7 +21,7 @@ Implementation is t's (dev-caveman); this is the architecture.
 | **Egress/exec policy** (netpolicy allowlist, argv allowlist, action-link allowlist) | `controlplane.Policies` resolver + `GovernedPolicies` in cmd/webapp | egress resolves live at action time ✅ (C8); exec allowlist governed artifact | **console Policies tab ✅ (C8)** — list/version/hash/activate/reset | `RecordPolicy` + gledger audit ✅ |
 | **Budgets/limits** (rate, token, concurrency, per-caller) | gouncer gateway | gateway-side, not plane | ❌ | ❌ |
 | **Keys/virtual keys** | gouncer | gateway-side | ❌ | ❌ (secrets stay out of config; pointers only) |
-| **Eval scores + thresholds** (F1 gate, ASR gate, per-label latest) | `eval.ScoreEvents`; `cmd/livecheck`→`RecordEval`; `cpstore.LatestEval`; `mlops.PromoteWithLatestEval` | standalone; not tied to changes | ❌ | partial (livecheck only) |
+| **Eval scores + thresholds** (F1 gate, ASR gate, per-label latest) | `eval.ScoreEvents`; `cmd/livecheck`→`RecordEval`; `cpstore.LatestEval`/`ListEvals` | **console Eval tab + Run + shadow-eval Test (C7)** ✅ | **Eval tab ✅** | persisted + shown |
 | **Promotion gate** (eval+ADD on activate) | `controlplane.PromotionGate` (C3) | not wired to real closures | ❌ | — |
 | **Safety level / kill switch** | `Governance.SetKillSwitch`, `Safety` | ✅ | ✅ | ✅ |
 | **Identity / authZ (NHI)** | `controlplane.Authority` + capability `Grant` (C4a) + `webapp` authz gate (C4b) + tool NHIs + residency policy + MCP gateway (C4e) — **C4 complete** | on the API path ✅ + each tool is a scoped NHI; MCP (gustoms) on the app path ✅ | ❌ console tab (C6) | denials audited to gledger ✅ |
@@ -225,14 +225,19 @@ so the bridge can't silently un-wire.
   registry-as-governed-config (add servers via propose/approve) when a 2nd MCP
   server exists; durable `RecordPin` for the app gateway (its pin is deterministic
   from the shipped manifest, so not needed for the single in-process tool).
-- **C7 — Eval-tweak loop** 🟡 (live-doable now — the live eval harness works:
-  `eval.Score(label, true)` runs real extraction and `cpstore.RecordEval` persists
-  F1). Build: a **shadow eval** of a candidate prompt/sampling/model change (run
-  the live eval + the ADD suite off to the side), surface the **F1 + ASR delta**,
-  and gate promotion on `PromotionGate.Allow()` (F1 ≥ baseline AND ASR = 0). Console
-  **Prompts/Models tab gets a "Test" button** that runs the shadow eval and shows
-  the delta *before* activate, plus an **Eval tab** (F1/P/R per label + ASR trend
-  from cpstore). This is the "tweak a prompt and see if it's safe" workbench.
+- **C7 — Eval-tweak loop** 🟡→mostly ✅: shipped the console surface — an **Eval
+  tab** (`/api/eval` lists persisted F1 from `cpstore.ListEvals`; **Run eval now**
+  = `/api/eval/run` runs `eval.Score` live and records it) and a **"Test" button**
+  on each prompt (`/api/prompts/test` = shadow eval: set the candidate as the live
+  extractor prompt via `extractor.SetExtractionPrompt`, run the eval + the ADD
+  suite, and return F1 vs baseline + ASR + the `PromotionGate` verdict **without
+  activating**). The extractor now honors the governed/candidate prompt
+  (`ActivePrompt()`), and activating the "extractor" prompt drives extraction (a C5
+  down payment). Honest edges: the webapp doesn't run gouncer, so Run/Test are live
+  only when a gateway is up at :4000 (else regex fallback, clearly messaged); shadow
+  eval applies to the `extractor` prompt (planner/coder drive the orchestrator).
+  Remaining: an **ASR trend** line + embedding/pointing-at a gateway so the console
+  Run is live without a separate `livecheck`.
 - **C8 — Policies as governed artifacts** ✅: `controlplane.Policies` resolver
   (`List`/`Activate`/`Reset`/`Verify`, order-independent `HashPolicy`) +
   `GovernedPolicies` over the cpstore inventory (`RecordPolicy` + gledger audit).
