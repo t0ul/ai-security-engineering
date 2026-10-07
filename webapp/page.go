@@ -46,6 +46,7 @@ const dashboardHTML = `<!doctype html>
     <button data-tab="activity">Activity</button>
     <button data-tab="ask">Ask school</button>
     <button data-tab="security">Security</button>
+    <button data-tab="prompts">Prompts</button>
     <button data-tab="incidents">Incidents</button>
   </nav>
 </header>
@@ -130,6 +131,13 @@ const dashboardHTML = `<!doctype html>
     </div>
   </section>
 
+  <section id="prompts" class="hide">
+    <div class="card">
+      <strong>Prompts</strong> <span class="mut">— governed system prompts (M14): versioned, hashed, rollback to default. Resolved by the LLM planner/coder/extractor when enabled.</span>
+      <div id="promptList"><span class="mut">loading…</span></div>
+    </div>
+  </section>
+
   <section id="incidents" class="hide">
     <div class="card">
       <strong>Incidents</strong> <span class="mut">— click a trace to replay it on tamper-evident evidence</span>
@@ -145,7 +153,7 @@ const dashboardHTML = `<!doctype html>
 const __CAP__="__CAP_TOKEN__";
 (function(){const f=window.fetch.bind(window);window.fetch=(u,o)=>{o=o||{};const s=typeof u==='string'?u:(u&&u.url)||'';if(__CAP__&&(s.indexOf('/api/')===0||s.indexOf('/ics/')===0)){o.headers=Object.assign({},o.headers||{},{'Authorization':'Bearer '+__CAP__});}return f(u,o);};})();
 const $=s=>document.querySelector(s);
-const TABS=['calendar','tasks','review','activity','ask','security','incidents'];
+const TABS=['calendar','tasks','review','activity','ask','security','prompts','incidents'];
 const esc=s=>{const d=document.createElement('div');d.textContent=s||'';return d.innerHTML;};
 const when=e=>e.all_day?((e.due||e.start)+' · all day'):((e.start||e.due)+(e.end?(' – '+e.end.slice(11)):''));
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
@@ -158,6 +166,7 @@ document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
   if(t==='activity') loadActivity();
   if(t==='incidents') loadIncidents();
   if(t==='security'){loadKill();loadMCP();}
+  if(t==='prompts') loadPrompts();
 });
 async function doAsk(){
   const q=$('#askq').value.trim();const c=$('#askOut');if(!q){c.innerHTML='';return;}
@@ -182,6 +191,22 @@ async function loadMCP(){
   }).join('');
 }
 async function approveMCP(name){await postJSON('/api/mcp/approve',{server:name});loadMCP();}
+async function loadPrompts(){
+  const c=$('#promptList');if(!c)return;const d=await getJSON('/api/prompts');const ps=d.prompts||[];
+  if(!ps.length){c.innerHTML='<p class="mut">no prompts registered</p>';return;}
+  c.innerHTML=ps.map(p=>{
+    const governed=p.version>0;
+    return '<div class="ev"><div><b>'+esc(p.name)+'</b> <span class="pill '+(governed?'pass':'')+'">v'+p.version+'</span> <span class="mut">'+esc(p.hash)+'</span>'+
+      '<br><textarea id="pt_'+esc(p.name)+'" rows="5" style="width:100%;margin-top:6px">'+esc(p.text)+'</textarea>'+
+      '<div style="margin-top:6px"><button class="go" onclick="activatePrompt(\''+esc(p.name)+'\')">Activate new version</button>'+
+      (governed?(' <button class="ghost" onclick="resetPrompt(\''+esc(p.name)+'\')">Reset to default</button>'):'')+'</div></div></div>';
+  }).join('');
+}
+async function activatePrompt(name){
+  const ta=$('#pt_'+name);if(!ta)return;
+  await postJSON('/api/prompts/activate',{name:name,text:ta.value});loadPrompts();
+}
+async function resetPrompt(name){await postJSON('/api/prompts/reset',{name:name});loadPrompts();}
 
 async function getJSON(u){try{return await (await fetch(u)).json();}catch(e){return {};}}
 

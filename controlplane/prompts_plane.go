@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"sort"
 	"sync"
 
 	"github.com/t0ul/ai-security-engineering/cpstore"
@@ -87,6 +88,44 @@ func (p *Prompts) Activate(name, text string) PromptVersion {
 // pin check). On a mismatch the caller fails closed to the default.
 func (p *Prompts) Verify(name, wantHash string) bool {
 	return p.Get(name).Hash == wantHash
+}
+
+// List returns the current (active or default) prompt for every known logical
+// name, sorted — the console's prompt inventory.
+func (p *Prompts) List() []PromptVersion {
+	p.mu.RLock()
+	names := map[string]struct{}{}
+	for n := range p.defaults {
+		names[n] = struct{}{}
+	}
+	for n := range p.active {
+		names[n] = struct{}{}
+	}
+	p.mu.RUnlock()
+	ordered := make([]string, 0, len(names))
+	for n := range names {
+		ordered = append(ordered, n)
+	}
+	sort.Strings(ordered)
+	out := make([]PromptVersion, 0, len(ordered))
+	for _, n := range ordered {
+		out = append(out, p.Get(n))
+	}
+	return out
+}
+
+// Reset reverts name to the shipped default (version 0) — rollback to the
+// guaranteed known-good when an activated prompt misbehaves. The reset is
+// recorded through OnActivate for the audit trail. Returns the default version.
+func (p *Prompts) Reset(name string) PromptVersion {
+	p.mu.Lock()
+	delete(p.active, name)
+	p.mu.Unlock()
+	pv := p.Get(name)
+	if p.OnActivate != nil {
+		p.OnActivate(pv)
+	}
+	return pv
 }
 
 // GovernedPrompts is a resolver whose activations are durably persisted

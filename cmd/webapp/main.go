@@ -23,11 +23,13 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/t0ul/ai-security-engineering/agent/extractor"
 	"github.com/t0ul/ai-security-engineering/agent/pipeline"
 	"github.com/t0ul/ai-security-engineering/agent/roster"
 	"github.com/t0ul/ai-security-engineering/agent/tool"
 	"github.com/t0ul/ai-security-engineering/agent/watcher"
 	"github.com/t0ul/ai-security-engineering/controlplane"
+	"github.com/t0ul/ai-security-engineering/cpstore"
 	"github.com/t0ul/ai-security-engineering/netpolicy"
 	"github.com/t0ul/ai-security-engineering/provenance"
 	"github.com/t0ul/ai-security-engineering/rag"
@@ -197,13 +199,30 @@ func main() {
 		return toolGW.Approve(context.Background(), gledger.NewTraceID(), server)
 	}
 
+	// Governed prompts (C2): the console lists/activates/rolls-back the system
+	// prompts the LLM planner/coder/extractor resolve at runtime. Activations are
+	// versioned, hashed, audited to gledger, and persisted to the cpstore
+	// inventory so they survive restarts and are attributable.
+	promptDefaults := map[string]string{
+		"planner":   controlplane.PlannerSystemPrompt,
+		"coder":     controlplane.CoderSystemPrompt,
+		"extractor": extractor.ExtractionPrompt,
+	}
+	var prompts *controlplane.Prompts
+	if inv, ierr := cpstore.Open(filepath.Join(*drop, "inventory.db")); ierr == nil {
+		defer inv.Close()
+		prompts = controlplane.GovernedPrompts(promptDefaults, inv, audit)
+	} else {
+		prompts = controlplane.NewPrompts(promptDefaults)
+	}
+
 	srv := &http.Server{
 		Addr: *addr,
 		Handler: (&webapp.Server{
 			AuditPath: auditPath, OutboxDir: cfg.Outbox, InboxPath: cfg.Inbox,
 			Egress: egress, Fetch: fetch, Verifier: verifier, Safety: safety, Search: search,
 			Authz: authz, OperatorToken: opToken, Audit: audit,
-			MCP: mcpList, MCPApprove: mcpApprove,
+			MCP: mcpList, MCPApprove: mcpApprove, Prompts: prompts,
 		}).Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}

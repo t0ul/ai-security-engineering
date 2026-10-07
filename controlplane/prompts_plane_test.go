@@ -74,3 +74,28 @@ func TestOrchestratorResolvesGovernedPrompt(t *testing.T) {
 		t.Fatal("coder should still resolve to its default until activated")
 	}
 }
+
+func TestPromptsListAndReset(t *testing.T) {
+	p := NewPrompts(map[string]string{"planner": "P-default", "coder": "C-default"})
+	// List shows every known name at its default (version 0).
+	if got := p.List(); len(got) != 2 || got[0].Name != "coder" || got[1].Name != "planner" {
+		t.Fatalf("List should return both names sorted, got %+v", got)
+	}
+	// Activate a new planner version, then confirm List reflects it.
+	pv := p.Activate("planner", "P-v1")
+	if pv.Version != 1 {
+		t.Fatalf("first activation should be version 1, got %d", pv.Version)
+	}
+	for _, v := range p.List() {
+		if v.Name == "planner" && (v.Version != 1 || v.Text != "P-v1") {
+			t.Fatalf("List should show the active planner v1, got %+v", v)
+		}
+	}
+	// Reset rolls back to the shipped default (version 0).
+	if got := p.Reset("planner"); got.Version != 0 || got.Text != "P-default" {
+		t.Fatalf("Reset should restore the default, got %+v", got)
+	}
+	if p.Text("planner") != "P-default" {
+		t.Fatal("after Reset, Text should be the default")
+	}
+}

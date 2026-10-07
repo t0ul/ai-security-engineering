@@ -64,6 +64,11 @@ type Server struct {
 	MCP        func() []MCPServer
 	MCPApprove func(server string) error
 
+	// Prompts, when set, is the governed prompt resolver (C2): the console lists
+	// each model's active/default system prompt, activates a new versioned+hashed
+	// version, and rolls back to the shipped default. Nil = no Prompts tab.
+	Prompts *controlplane.Prompts
+
 	// pending holds issued-but-unconfirmed HITL approvals, keyed by nonce (ASI09:
 	// evidence-first, single-use, clickjack/forgery-resistant confirm).
 	mu   sync.Mutex
@@ -108,6 +113,11 @@ func (s *Server) Handler() http.Handler {
 	if s.MCP != nil {
 		mux.HandleFunc("/api/mcp", s.mcpList)
 		mux.HandleFunc("/api/mcp/approve", csrf(s.authz(controlplane.ActionWrite, "mcp", s.mcpApprove)))
+	}
+	if s.Prompts != nil {
+		mux.HandleFunc("/api/prompts", s.promptsList)
+		mux.HandleFunc("/api/prompts/activate", csrf(s.authz(controlplane.ActionWrite, "prompts", s.promptsActivate)))
+		mux.HandleFunc("/api/prompts/reset", csrf(s.authz(controlplane.ActionWrite, "prompts", s.promptsReset)))
 	}
 	if s.InboxPath != "" {
 		mux.HandleFunc("/api/drop", csrf(s.authz(controlplane.ActionWrite, "inbox", s.drop)))
