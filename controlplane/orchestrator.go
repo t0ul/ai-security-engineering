@@ -24,10 +24,10 @@ const haltMessage = "Execution halted by security controls."
 var (
 	commandRe      = regexp.MustCompile(`COMMAND:\s*(.+)`)
 	commandLineRe  = regexp.MustCompile(`(?im)^\s*COMMAND:.*$`)
-	imageRe        = regexp.MustCompile(`!\[.*?\]\(.*?\)`)                                  // inline image
-	refImageRe     = regexp.MustCompile(`!\[[^\]]*\]\[[^\]]*\]`)                            // reference-style image
-	htmlImgRe      = regexp.MustCompile(`(?i)<img\b[^>]*>`)                                 // raw <img>
-	autolinkRe     = regexp.MustCompile(`<(?i:https?|ftp)://[^>\s]+>`)                      // autolink
+	imageRe        = regexp.MustCompile(`!\[.*?\]\(.*?\)`)                                      // inline image
+	refImageRe     = regexp.MustCompile(`!\[[^\]]*\]\[[^\]]*\]`)                                // reference-style image
+	htmlImgRe      = regexp.MustCompile(`(?i)<img\b[^>]*>`)                                     // raw <img>
+	autolinkRe     = regexp.MustCompile(`<(?i:https?|ftp)://[^>\s]+>`)                          // autolink
 	activeSchemeRe = regexp.MustCompile(`(?i)\]\(\s*(?:javascript|data|vbscript|file):[^)]*\)`) // active-scheme link
 )
 

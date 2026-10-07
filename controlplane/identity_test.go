@@ -60,7 +60,7 @@ func TestOverScopedUseRejected(t *testing.T) {
 	// escalated to list (confused deputy / over-scoped use).
 	g, _ := a.Issue(Capability{Subject: "agent", Action: ActionRead, Resource: "calendar", Tenant: "public"}, time.Hour)
 	for _, want := range []Capability{
-		{Action: ActionRead, Resource: "corpus", Tenant: "public"}, // wrong resource
+		{Action: ActionRead, Resource: "corpus", Tenant: "public"},   // wrong resource
 		{Action: ActionList, Resource: "calendar", Tenant: "public"}, // escalated action
 		{Action: ActionRead, Resource: "calendar", Tenant: "staff"},  // wrong tenant
 	} {
@@ -174,9 +174,9 @@ func TestResidencyPolicy(t *testing.T) {
 		}
 	}
 	allow := []Capability{
-		{Subject: "frontier-planner", Action: ActionRead, Resource: "contacts"},  // read, not harvest
-		{Subject: "frontier-planner", Action: ActionList, Resource: "corpus"},    // scrubbed/declassified
-		{Subject: "local-agent", Action: ActionExport, Resource: "contacts"},     // on-host, data stays
+		{Subject: "frontier-planner", Action: ActionRead, Resource: "contacts"}, // read, not harvest
+		{Subject: "frontier-planner", Action: ActionList, Resource: "corpus"},   // scrubbed/declassified
+		{Subject: "local-agent", Action: ActionExport, Resource: "contacts"},    // on-host, data stays
 	}
 	for _, c := range allow {
 		if err := pol(c); err != nil {

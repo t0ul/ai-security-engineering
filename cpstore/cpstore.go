@@ -12,6 +12,7 @@ package cpstore
 
 import (
 	"database/sql"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -26,7 +27,8 @@ CREATE TABLE IF NOT EXISTS approvals(id TEXT, proposer TEXT, approver TEXT, perm
 CREATE TABLE IF NOT EXISTS mcp_pins(server TEXT, hash TEXT, approved_by TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS eval_scores(label TEXT, f1 REAL, at DATETIME DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS admin_audit(actor TEXT, action TEXT, detail TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);
-CREATE TABLE IF NOT EXISTS policies(name TEXT, version TEXT, hash TEXT, items TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);`
+CREATE TABLE IF NOT EXISTS policies(name TEXT, version TEXT, hash TEXT, items TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS config(key TEXT PRIMARY KEY, value TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);`
 
 // Open creates/opens the inventory at path (":memory:" for ephemeral).
 func Open(path string) (*Store, error) {
@@ -49,6 +51,62 @@ func (s *Store) Close() error { return s.db.Close() }
 func (s *Store) RecordPrompt(name, version, hash, text string) error {
 	_, err := s.db.Exec(`INSERT INTO prompts(name,version,hash,text) VALUES(?,?,?,?)`, name, version, hash, text)
 	return err
+}
+
+// SetConfig upserts a single configuration value by key (JSON or scalar). The DB
+// is the source of truth for all runtime config; shipped consts are only the
+// fail-closed default when a key is absent.
+func (s *Store) SetConfig(key, value string) error {
+	_, err := s.db.Exec(`INSERT INTO config(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value, at=CURRENT_TIMESTAMP`, key, value)
+	return err
+}
+
+// GetConfig reads a configuration value by key.
+func (s *Store) GetConfig(key string) (string, bool, error) {
+	row := s.db.QueryRow(`SELECT value FROM config WHERE key=?`, key)
+	var v string
+	switch err := row.Scan(&v); err {
+	case nil:
+		return v, true, nil
+	case sql.ErrNoRows:
+		return "", false, nil
+	default:
+		return "", false, err
+	}
+}
+
+// LatestPromptText returns the most recent persisted prompt text for name, so the
+// resolver can rehydrate the active prompt on boot (the DB is the source of truth).
+func (s *Store) LatestPromptText(name string) (text string, ok bool, err error) {
+	row := s.db.QueryRow(`SELECT text FROM prompts WHERE name=? ORDER BY at DESC, rowid DESC LIMIT 1`, name)
+	switch e := row.Scan(&text); e {
+	case nil:
+		return text, true, nil
+	case sql.ErrNoRows:
+		return "", false, nil
+	default:
+		return "", false, e
+	}
+}
+
+// LatestPolicyItems returns the most recent persisted allowlist for name (stored
+// newline-joined), so the resolver can rehydrate an active policy on boot.
+func (s *Store) LatestPolicyItems(name string) (items []string, ok bool, err error) {
+	row := s.db.QueryRow(`SELECT items FROM policies WHERE name=? ORDER BY at DESC, rowid DESC LIMIT 1`, name)
+	var joined string
+	switch e := row.Scan(&joined); e {
+	case nil:
+		for _, it := range strings.Split(joined, "\n") {
+			if it != "" {
+				items = append(items, it)
+			}
+		}
+		return items, true, nil
+	case sql.ErrNoRows:
+		return nil, false, nil
+	default:
+		return nil, false, e
+	}
 }
 
 // RecordPolicy stores a versioned, hashed policy-allowlist artifact (items is the

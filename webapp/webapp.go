@@ -79,9 +79,11 @@ type Server struct {
 	// the static Egress is used.
 	Policies *controlplane.Policies
 
-	// ProfilePath, when set, is the household child-profile JSON (R1) that
-	// personalizes the daily timeline (R3). Operator-set; never from an email.
-	ProfilePath string
+	// ProfileLoad/ProfileSave, when set, read/write the household child profile
+	// (R1) in the governed DB — config lives in the store, not a file or a const.
+	// Operator-set, host-only, never from an email. Enables the My Week tab.
+	ProfileLoad func() Profile
+	ProfileSave func(Profile) error
 
 	// Eval surfaces (C7): EvalHistory lists persisted F1 scores (the trend card);
 	// EvalRun runs the eval live and persists it; PromptTest shadow-evals a
@@ -153,7 +155,7 @@ func (s *Server) Handler() http.Handler {
 	if s.PromptTest != nil {
 		mux.HandleFunc("/api/prompts/test", csrf(s.authz(controlplane.ActionWrite, "prompts", s.promptsTest)))
 	}
-	if s.ProfilePath != "" {
+	if s.ProfileLoad != nil {
 		mux.HandleFunc("/api/timeline", s.timeline)
 		mux.HandleFunc("/api/profile", s.profileGet)
 		mux.HandleFunc("/api/profile/save", csrf(s.authz(controlplane.ActionWrite, "profile", s.profileSave)))

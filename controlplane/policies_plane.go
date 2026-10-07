@@ -111,6 +111,15 @@ func (p *Policies) Activate(name string, items []string) PolicyVersion {
 	return pv
 }
 
+// Rehydrate restores a persisted active allowlist loaded from the governed store
+// on boot, without firing OnActivate (a reload, not a new activation).
+func (p *Policies) Rehydrate(name string, items []string) {
+	cp := append([]string(nil), items...)
+	p.mu.Lock()
+	p.active[name] = PolicyVersion{Name: name, Version: 1, Hash: HashPolicy(cp), Items: cp}
+	p.mu.Unlock()
+}
+
 // Reset reverts name to the shipped default (version 0) — rollback to known-good.
 func (p *Policies) Reset(name string) PolicyVersion {
 	p.mu.Lock()

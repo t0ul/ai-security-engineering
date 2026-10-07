@@ -3,7 +3,6 @@ package webapp
 import (
 	"encoding/json"
 	"net/http"
-	"os"
 )
 
 // Child is one kid's profile — the key that personalizes the daily timeline (R1).
@@ -25,33 +24,27 @@ type Profile struct {
 	Children []Child `json:"children"`
 }
 
-// loadProfile reads the profile JSON (empty profile if absent/unreadable).
+// loadProfile reads the household profile from the governed store (empty if none).
 func (s *Server) loadProfile() Profile {
-	var p Profile
-	if s.ProfilePath == "" {
-		return p
+	if s.ProfileLoad != nil {
+		return s.ProfileLoad()
 	}
-	raw, err := os.ReadFile(s.ProfilePath)
-	if err != nil {
-		return p
-	}
-	_ = json.Unmarshal(raw, &p)
-	return p
+	return Profile{}
 }
 
 func (s *Server) profileGet(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, s.loadProfile())
 }
 
-// profileSave writes the household profile (0600). CSRF + authz(write/profile)
-// guard this route; the data stays on the host (no egress).
+// profileSave persists the household profile to the DB (host-only, no egress).
+// CSRF + authz(write/profile) guard this route.
 func (s *Server) profileSave(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "POST required", http.StatusMethodNotAllowed)
 		return
 	}
-	if s.ProfilePath == "" {
-		http.Error(w, "no profile path configured", http.StatusNotFound)
+	if s.ProfileSave == nil {
+		http.Error(w, "no profile store configured", http.StatusNotFound)
 		return
 	}
 	var p Profile
@@ -59,8 +52,7 @@ func (s *Server) profileSave(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad profile", http.StatusBadRequest)
 		return
 	}
-	raw, _ := json.MarshalIndent(p, "", "  ")
-	if err := os.WriteFile(s.ProfilePath, raw, 0o600); err != nil {
+	if err := s.ProfileSave(p); err != nil {
 		http.Error(w, "save failed: "+err.Error(), http.StatusInternalServerError)
 		return
 	}

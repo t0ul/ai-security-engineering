@@ -12,6 +12,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -271,6 +272,37 @@ func main() {
 		}
 	}
 
+	// DB is the source of truth (not consts/files): rehydrate the active prompts,
+	// policies, and the child profile persisted by a prior session from cpstore on
+	// boot. The shipped consts remain only the fail-closed default when the DB has
+	// no row for a knob.
+	var profileLoad func() webapp.Profile
+	var profileSave func(webapp.Profile) error
+	if inv != nil {
+		for _, n := range []string{"planner", "coder", "extractor"} {
+			if text, ok, _ := inv.LatestPromptText(n); ok {
+				prompts.Rehydrate(n, text)
+			}
+		}
+		for _, n := range []string{"egress", "exec"} {
+			if items, ok, _ := inv.LatestPolicyItems(n); ok {
+				policies.Rehydrate(n, items)
+			}
+		}
+		extractor.SetExtractionPrompt(prompts.Text("extractor"))
+		profileLoad = func() webapp.Profile {
+			var p webapp.Profile
+			if v, ok, _ := inv.GetConfig("profile"); ok {
+				_ = json.Unmarshal([]byte(v), &p)
+			}
+			return p
+		}
+		profileSave = func(p webapp.Profile) error {
+			raw, _ := json.Marshal(p)
+			return inv.SetConfig("profile", string(raw))
+		}
+	}
+
 	// Eval surfaces (C7): the Eval card + a "Test" button that shadow-evals a
 	// candidate extractor prompt before activation. Live eval and shadow eval
 	// mutate process-global state (EXTRACT_MODE, the extractor prompt override), so
@@ -357,7 +389,7 @@ func main() {
 			Authz: authz, OperatorToken: opToken, Audit: audit,
 			MCP: mcpList, MCPApprove: mcpApprove, Prompts: prompts, Policies: policies,
 			EvalHistory: evalHistory, EvalRun: evalRun, PromptTest: promptTest,
-			ProfilePath: filepath.Join(*drop, "profile.json"),
+			ProfileLoad: profileLoad, ProfileSave: profileSave,
 		}).Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}

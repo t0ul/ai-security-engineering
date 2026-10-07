@@ -114,6 +114,15 @@ func (p *Prompts) List() []PromptVersion {
 	return out
 }
 
+// Rehydrate restores a persisted active prompt loaded from the governed store on
+// boot. Unlike Activate it does NOT fire OnActivate (it is a reload of what was
+// already persisted, not a new activation), so it never writes a duplicate row.
+func (p *Prompts) Rehydrate(name, text string) {
+	p.mu.Lock()
+	p.active[name] = PromptVersion{Name: name, Version: 1, Hash: HashPrompt(text), Text: text}
+	p.mu.Unlock()
+}
+
 // Reset reverts name to the shipped default (version 0) — rollback to the
 // guaranteed known-good when an activated prompt misbehaves. The reset is
 // recorded through OnActivate for the audit trail. Returns the default version.
