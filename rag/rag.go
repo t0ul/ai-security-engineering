@@ -69,6 +69,22 @@ func Open(path string) (*Store, error) {
 	return &Store{db: db}, nil
 }
 
+// OpenReadOnly opens an EXISTING index read-only: the SQLite connection is in
+// mode=ro, so the retrieval path physically cannot write the corpus. Least
+// privilege (C4d) — a bug or an injection on the read path can never mutate or
+// poison the index, and write-denial is enforced by the engine, not by app
+// discipline. The table must already exist (created by a writable Open); tenant
+// scoping on Query is still the app-layer ACL. Pair a read-only Store for search
+// with a writable one for ingestion.
+func OpenReadOnly(path string) (*Store, error) {
+	db, err := sql.Open("sqlite", "file:"+path+"?mode=ro&_pragma=busy_timeout(2000)")
+	if err != nil {
+		return nil, err
+	}
+	db.SetMaxOpenConns(1)
+	return &Store{db: db}, nil
+}
+
 // Close releases the database.
 func (s *Store) Close() error { return s.db.Close() }
 

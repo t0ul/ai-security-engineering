@@ -77,16 +77,26 @@ func main() {
 	if g, gerr := authz.Issue(controlplane.Capability{Subject: "operator", Action: controlplane.Scope, Resource: controlplane.Scope, Tenant: controlplane.Scope}, 30*24*time.Hour); gerr == nil {
 		opToken = webapp.EncodeToken(g)
 	}
+	corpusPath := filepath.Join(*drop, "corpus.db")
 	var search func(string, int) ([]webapp.SearchHit, error)
-	if corpus, cerr := rag.Open(filepath.Join(*drop, "corpus.db")); cerr == nil {
+	if corpus, cerr := rag.Open(corpusPath); cerr == nil {
 		defer corpus.Close()
 		pipe.Index = func(traceID, source, rawText string) error {
 			return corpus.Add(rag.Doc{ID: source, Text: rawText, Prov: rag.Untrusted}) // readable source in Ask results
 		}
+		// Retrieval runs on a SEPARATE read-only handle (C4d least privilege): Ask
+		// can query but the engine refuses any write, so a bug or injection on the
+		// read path cannot mutate or poison the corpus. Falls back to the writable
+		// handle only if the read-only open fails.
+		reader := corpus
+		if ro, rerr := rag.OpenReadOnly(corpusPath); rerr == nil {
+			defer ro.Close()
+			reader = ro
+		}
 		// Ask-School: lexical search over the scrubbed corpus (M8 — recalled text
 		// is untrusted data). "public" tenant: this is a single-household app.
 		search = func(q string, k int) ([]webapp.SearchHit, error) {
-			chunks, err := corpus.Query("public", q, k)
+			chunks, err := reader.Query("public", q, k)
 			if err != nil {
 				return nil, err
 			}

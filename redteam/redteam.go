@@ -183,6 +183,7 @@ func Cases() []Case {
 		AIDRUncontained(), DatasetPoisoning(), MultiAgentCollusion(),
 		AllowlistBypass(), ActionLinkExfil(),
 		ExtractionInjection(), HallucinationReconcile(),
+		RevokedTokenStillWorks(),
 	}
 }
 
@@ -224,6 +225,7 @@ var riskByName = map[string]string{
 	"action-link-exfil":     "LLM05",
 	"extraction-injection":  "LLM01",
 	"hallucination-reconcile": "LLM09",
+	"revoked-token-still-works": "ASI10",
 }
 
 // Techniques exposes the red-team cases as ADD techniques — the attack library
