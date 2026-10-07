@@ -151,3 +151,10 @@ Live path proven this session: cmd/livecheck + livetest F1=1.00/1.00; live ADD s
 - ⬜ **C5** sampling + model-swap plane: logical `extractor` model binding (route extraction to its own gouncer model), `rt.Sampling` (temp/top_p/stop/seed governed; seed→reproducible), GBNF/response_format grammar JSON on extraction. Gated by promotion gate; model swap re-evals grants (C4e residency).
 - ⬜ **C7** eval-tweak loop: shadow eval (live eval + ADD) of a candidate, F1/ASR delta surfaced, gate on promote; console Test button + Eval trend tab (F1/P/R + ASR over time from cpstore).
 - ⬜ **Reliability eval methodology**: pass@k/pass^k over k live samples; LLM-as-judge scorer + `JudgeManipulation` ADD case; online-eval/data-flywheel from the review queue.
+
+## Eval methodology (2026-10-07) — pass@k + judge done
+- ✅ `pass@k`/`pass^k`: `eval.PassK(label,k,min,useTool)` + `livetest.TestLivePassK` (pass@3=pass^3=true, F1=[1,1,1] — the extractor is reliable at temp 0.1).
+- ✅ LLM-as-judge: `JudgeManipulation` ADD case (eval-gaming via prompt-injecting the judge; defended judge treats output as DATA, scores by rubric) 100%→0%. 31 techniques total.
+- ✅ Pedagogy doc: `docs/WHY-CONTROLS.md` (no control without a proven attack + the ledger); `cmd/scorecard` is the living before→after list.
+- ⬜ Online eval / data-flywheel: feed the review-queue accept/reject back into the eval set + an ASR/F1 trend line in the console Eval tab.
+- Note: stronger live-injection payload attempted; the extractor's instruction-hierarchy system prompt resists injection even undefended (a control in itself), so injection's live undefended stays false — honest. The `-tags live` run prints the live scorecard (no separate CLI needed).

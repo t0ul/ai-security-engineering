@@ -3,6 +3,12 @@
 A Go library that makes proving an attack as natural as writing a unit test. It
 rides `go test`; it is not a scanner, a CLI, or a product.
 
+> **The rule: no control without a proven attack.** Every control ships as a pair
+> — the attack landing *without* it (undefended ASR 100% → the threat is real) and
+> the same attack *failing with* it (defended 0%). That before→after is the *why*
+> behind every security feature. The full control↔attack↔evidence ledger is
+> `docs/WHY-CONTROLS.md`; the living list is `go run ./cmd/scorecard`.
+
 > **Two layers — offline (default) and live (`-tags live`).**
 >
 > **Offline** (default `go test ./...`, `cmd/scorecard`): each case is a white-box,

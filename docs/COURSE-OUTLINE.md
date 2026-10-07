@@ -278,14 +278,14 @@ Integration point is the multi-turn orchestrator's context assembly (the
 single-shot email app has nothing to compact). Hook: "the summary is trusted
 context — so the attacker wants to write it."
 
-**Post 28 · Eval methodology: pass@k, LLM-as-judge & the flywheel** (M11) 🟡 *(live-doable — models verified up)*
-The live eval path works (`livetest` / `cmd/livecheck`, F1=1.00/1.00), so this is
-no longer blocked. Build: `pass@k`/`pass^k` reliability scoring over k live samples
-(quantify non-determinism — one run isn't a number), an **LLM-as-judge** scorer for
-unstructured output, and an online eval / data-flywheel loop from the review queue.
-Break: prompt-inject the judge to pass a bad output (eval gaming). Defend:
-judge-input encapsulation + a deterministic cross-check (the ensemble pattern) —
-the `JudgeManipulation` ADD case. All runs in `livetest/` behind `-tags live`.
+**Post 28 · Eval methodology: pass@k, LLM-as-judge & the flywheel** (M11) 🟡 *(mostly done)*
+The live eval path works (`livetest` / `cmd/livecheck`, F1=1.00/1.00). Shipped:
+`eval.PassK` → `pass@k`/`pass^k` reliability over k live samples (one run isn't a
+number; `TestLivePassK` shows pass@3=pass^3=true, F1=[1,1,1]), and the
+`JudgeManipulation` ADD case — eval-gaming by prompt-injecting the LLM judge
+(undefended naive judge obeys "score 10/10"; defended judge treats the output as
+DATA and scores by the rubric only), 100%→0%. Remaining: an online eval /
+data-flywheel loop from the review queue.
 
 **Post 29 · Live red-team: ADD against the real model** ✅
 The offline ADD scorecard proves the controls deterministically; this is the
