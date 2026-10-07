@@ -258,8 +258,15 @@ so the bridge can't silently un-wire.
   `AllowlistBypass` (exec).
 - **C9 — Budgets/limits + key pointers**: rate/token/concurrency/spend governed;
   keys referenced by pointer (never stored in config).
-- **C10 — Known-good bundle**: atomic snapshot/rollback across ALL knob classes;
-  console "roll back to <version>" for the whole plane.
+- **C10 — Known-good bundle** ✅: `controlplane.Bundle` + `Snapshot(label, prompts,
+  sampling, policies)` captures the active value of every knob class;
+  `Bundle.Apply` restores them all by re-activating (so the rollback is itself
+  governed/audited/persisted and fires the extractor hooks). Stored in cpstore
+  (`SaveBundle`/`GetBundle`/`ListBundles`); console **Config snapshots** card
+  (Security tab): name a snapshot, list them, one-click "roll back to this" for
+  the whole plane. gledger-audited (`bundle` saved/rolled_back). Unit-tested +
+  live-smoked (broke a prompt → rolled back → reverted). The capstone of the
+  governed-knob set.
 
 ## Course mapping
 M14 (governed control plane + RBAC + four-eyes) · M15 (admin audit + versioned
