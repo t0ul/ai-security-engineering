@@ -48,6 +48,10 @@ type Server struct {
 	// Index, when set with Fetch, powers safe handbook link enrichment (R6): it
 	// adds fetched (untrusted, PII-scrubbed) text to the retrieval corpus.
 	Index func(source, text string) error
+	// Feedback / FlywheelStats, when set, capture operator accept/reject decisions
+	// as durable ground-truth (the data-flywheel) and report the running tallies.
+	Feedback      func(decision, source, title string)
+	FlywheelStats func() (accepts, rejects int)
 
 	// Authz, when set, turns the console into an authZ'd API: every mutating or
 	// data-listing endpoint requires a capability Grant (C4b). The operator
@@ -180,6 +184,9 @@ func (s *Server) Handler() http.Handler {
 		mux.HandleFunc("/api/policies/activate", csrf(s.authz(controlplane.ActionWrite, "policy", s.policiesActivate)))
 		mux.HandleFunc("/api/policies/reset", csrf(s.authz(controlplane.ActionWrite, "policy", s.policiesReset)))
 	}
+	if s.FlywheelStats != nil {
+		mux.HandleFunc("/api/flywheel", s.flywheel)
+	}
 	if s.EvalHistory != nil {
 		mux.HandleFunc("/api/eval", s.evalList)
 		mux.HandleFunc("/api/eval/run", csrf(s.authz(controlplane.ActionWrite, "eval", s.evalRunHandler)))
@@ -202,6 +209,7 @@ func (s *Server) Handler() http.Handler {
 	}
 	if s.OutboxDir != "" {
 		mux.HandleFunc("/api/accept", csrf(s.authz(controlplane.ActionWrite, "calendar", s.accept)))
+		mux.HandleFunc("/api/reject", csrf(s.authz(controlplane.ActionWrite, "calendar", s.reject)))
 		mux.HandleFunc("/api/action", csrf(s.authz(controlplane.ActionExport, "link", s.action))) // egress
 	}
 	if s.Fetch != nil && s.Index != nil {

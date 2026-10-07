@@ -31,7 +31,8 @@ CREATE TABLE IF NOT EXISTS policies(name TEXT, version TEXT, hash TEXT, items TE
 CREATE TABLE IF NOT EXISTS config(key TEXT PRIMARY KEY, value TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS sampling(name TEXT, version TEXT, hash TEXT, config TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS bundles(label TEXT, config TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);
-CREATE TABLE IF NOT EXISTS budgets(name TEXT, version TEXT, hash TEXT, config TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);`
+CREATE TABLE IF NOT EXISTS budgets(name TEXT, version TEXT, hash TEXT, config TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS feedback(source TEXT, title TEXT, decision TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);`
 
 // Open creates/opens the inventory at path (":memory:" for ephemeral).
 func Open(path string) (*Store, error) {
@@ -76,6 +77,23 @@ func (s *Store) GetConfig(key string) (string, bool, error) {
 	default:
 		return "", false, err
 	}
+}
+
+// RecordFeedback stores an operator accept/reject decision on an extracted item —
+// the data-flywheel's ground-truth signal: real use teaches the system which
+// extractions were right (M19 data governance / the improvement loop).
+func (s *Store) RecordFeedback(source, title, decision string) error {
+	_, err := s.db.Exec(`INSERT INTO feedback(source,title,decision) VALUES(?,?,?)`, source, title, decision)
+	return err
+}
+
+// FeedbackStats returns the accept/reject tallies accumulated from real use.
+func (s *Store) FeedbackStats() (accepts, rejects int, err error) {
+	row := s.db.QueryRow(`SELECT
+		COALESCE(SUM(CASE WHEN decision='accept' THEN 1 ELSE 0 END),0),
+		COALESCE(SUM(CASE WHEN decision='reject' THEN 1 ELSE 0 END),0) FROM feedback`)
+	err = row.Scan(&accepts, &rejects)
+	return accepts, rejects, err
 }
 
 // RecordBudget stores a versioned, hashed budget config (JSON) for a name.

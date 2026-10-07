@@ -160,7 +160,46 @@ func (s *Server) doAccept(w http.ResponseWriter, file string, item schema.Event)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	if s.Feedback != nil { // data-flywheel: an accept is ground-truth that this extraction was right
+		s.Feedback("accept", file, item.Title)
+	}
 	writeJSON(w, map[string]any{"ok": true, "file": outName})
+}
+
+// reject records that an extracted item was wrong — the negative half of the
+// data-flywheel. No side effect beyond the durable feedback signal.
+func (s *Server) reject(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST required", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		File  string `json:"file"`
+		Index int    `json:"index"`
+	}
+	if json.NewDecoder(r.Body).Decode(&req) != nil || !safeSidecar(req.File) {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	item, ok := s.loadItem(req.File, req.Index)
+	if !ok {
+		http.Error(w, "no such item", http.StatusBadRequest)
+		return
+	}
+	if s.Feedback != nil {
+		s.Feedback("reject", req.File, item.Title)
+	}
+	writeJSON(w, map[string]any{"ok": true})
+}
+
+// flywheel reports the accept/reject tallies accumulated from real use.
+func (s *Server) flywheel(w http.ResponseWriter, _ *http.Request) {
+	accepts, rejects := s.FlywheelStats()
+	rate := 0.0
+	if total := accepts + rejects; total > 0 {
+		rate = float64(accepts) / float64(total)
+	}
+	writeJSON(w, map[string]any{"accepts": accepts, "rejects": rejects, "accept_rate": rate})
 }
 
 func safeSidecar(n string) bool {

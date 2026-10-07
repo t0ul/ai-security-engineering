@@ -347,6 +347,20 @@ func main() {
 		}
 	}
 
+	// Data-flywheel: operator accept/reject decisions are durable ground-truth.
+	var feedback func(decision, source, title string)
+	var flywheelStats func() (int, int)
+	if inv != nil {
+		feedback = func(decision, source, title string) {
+			_ = inv.RecordFeedback(source, title, decision)
+			audit.Emit(gledger.NewTraceID(), "feedback", decision, gledger.F{"source": source, "title": title})
+		}
+		flywheelStats = func() (int, int) {
+			a, r, _ := inv.FeedbackStats()
+			return a, r
+		}
+	}
+
 	// Known-good bundles (C10): snapshot the whole governed plane under a label and
 	// roll it all back in one step. Needs the DB.
 	var bundleList func() []webapp.BundleInfo
@@ -465,6 +479,7 @@ func main() {
 		Handler: (&webapp.Server{
 			AuditPath: auditPath, OutboxDir: cfg.Outbox, InboxPath: cfg.Inbox,
 			Egress: egress, Fetch: fetch, Verifier: verifier, Safety: safety, Search: search, Index: enrichIndex,
+			Feedback: feedback, FlywheelStats: flywheelStats,
 			Authz: authz, OperatorToken: opToken, Audit: audit,
 			MCP: mcpList, MCPApprove: mcpApprove, Prompts: prompts, Policies: policies, Sampling: sampling, Budgets: budgets,
 			EvalHistory: evalHistory, EvalRun: evalRun, PromptTest: promptTest,

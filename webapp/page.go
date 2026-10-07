@@ -195,6 +195,7 @@ const dashboardHTML = `<!doctype html>
     <div class="card">
       <strong>Eval</strong> <span class="mut">— ground-truth F1 on the labeled emails (M11). The promotion gate = F1 ≥ baseline AND ADD ASR = 0.</span>
       <div style="margin-top:8px"><button class="go" onclick="runEval()">Run eval now</button> <span id="evalMode" class="mut"></span></div>
+      <div id="flywheel" style="margin-top:8px" class="mut"></div>
       <div id="evalHistory" style="margin-top:8px"><span class="mut">loading…</span></div>
     </div>
   </section>
@@ -374,7 +375,14 @@ async function saveProfile(){
   const r=await postJSON('/api/profile/save',body);
   if(m)m.textContent=r.ok?'saved':'save failed';loadWeek('today');
 }
+async function loadFlywheel(){
+  const c=$('#flywheel');if(!c)return;const d=await getJSON('/api/flywheel');
+  if(d.accepts===undefined){c.textContent='';return;}
+  const total=(d.accepts||0)+(d.rejects||0);
+  c.innerHTML='<b>Data flywheel</b> — operator feedback: '+(d.accepts||0)+' accepted · '+(d.rejects||0)+' rejected'+(total?(' · accept rate '+Math.round((d.accept_rate||0)*100)+'%'):'')+' <span class="mut">(real-use ground truth feeding the eval set)</span>';
+}
 async function loadEval(){
+  loadFlywheel();
   const c=$('#evalHistory');if(!c)return;const d=await getJSON('/api/eval');const h=d.history||[];
   if(!h.length){c.innerHTML='<p class="mut">no eval scores yet — click Run eval now (needs the model path up), or run cmd/livecheck</p>';return;}
   c.innerHTML='<table><thead><tr><th>label</th><th>F1</th><th>when</th></tr></thead><tbody>'+
@@ -416,6 +424,7 @@ async function loadEvents(){
     c.appendChild(div);});
 }
 async function postJSON(url,body){return fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});}
+async function rejectItem(file,index,btn){btn.disabled=true;const r=await postJSON('/api/reject',{file,index});btn.textContent=r.ok?'rejected ✓':'err';}
 async function accept(file,index,btn){
   const d=await (await postJSON('/api/accept',{file,index})).json(); // phase 1: evidence + nonce
   if(!d.confirm_required){btn.textContent='error';return;}
@@ -427,7 +436,8 @@ async function accept(file,index,btn){
 function itemRow(i){
   const div=document.createElement('div');div.className='ev';
   const right=(i.due||i.start)?'<a class="go" href="/ics/'+encodeURIComponent((i.file||'').replace(/\.summary\.json$/,'')+'.items.ics')+'" download>Accept .ics</a>':'';
-  const btn='<button class="ghost" onclick="accept(\''+esc(i.file)+'\','+i.index+',this)">Add this</button>';
+  const btn='<button class="ghost" onclick="accept(\''+esc(i.file)+'\','+i.index+',this)">Add this</button> '+
+    '<button class="ghost" onclick="rejectItem(\''+esc(i.file)+'\','+i.index+',this)">Not real</button>';
   div.innerHTML='<div><span class="kind">'+esc(i.kind||'item')+'</span> <b>'+esc(i.title)+'</b><br><span class="mut">'+esc((i.due||i.start)?when(i):'no date')+'</span></div><div>'+btn+'</div>';
   return div;
 }
