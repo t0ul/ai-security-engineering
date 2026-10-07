@@ -3,6 +3,16 @@
 A Go library that makes proving an attack as natural as writing a unit test. It
 rides `go test`; it is not a scanner, a CLI, or a product.
 
+> **Expectation — ADD is OFFLINE and does NOT call a live model.** Each case is a
+> white-box, in-process pair of `gorauder.TargetFunc` closures: an *undefended*
+> target that lets the attack land (ASR 100%) and a *defended* target running the
+> real control (ASR 0%). This proves the **controls** deterministically, fast, in
+> CI, with no llama/qwen running. "Scorecard green" means the controls hold against
+> the attack patterns — it does **not** mean the attacks were run against a live
+> model. The live-model path is separate (the eval F1 gate `cmd/livecheck` + the
+> LLM extractor, which call the gouncer gateway). Run `go run ./cmd/preflight` to
+> see what's offline vs live and whether the models are downloaded/serving.
+
 ## Name
 Package `add` (Attack-Driven Development). Reads naturally in tests —
 `add.Run(t, tech)`, `add.Gate(t)` — the way `require`/`assert`/`is` do. Fleet

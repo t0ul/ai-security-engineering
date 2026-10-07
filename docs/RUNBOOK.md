@@ -7,6 +7,16 @@ the course repo root unless noted:
 ~/Desktop/AI-Security-Engineering/ai-security-engineering
 ```
 
+## Offline vs live (read first)
+- **Offline** (no model, always runnable): `go test ./...` and the ADD red-team
+  scorecard `go run ./cmd/scorecard`. ADD cases are white-box in-process
+  attack/defense pairs — they prove the controls deterministically and **do not
+  call a live model**. Green ≠ "beaten against llama/qwen".
+- **Live** (needs the models serving): the eval F1 gate `cmd/livecheck` and the
+  LLM extractor/ensemble, which call the gouncer gateway.
+- **Step 0 — preflight:** `go run ./cmd/preflight` reports whether the GGUFs are
+  downloaded and whether the ports answer, and prints exactly what to run next.
+
 ## Topology & ports
 
 ```
