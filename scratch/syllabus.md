@@ -317,6 +317,27 @@ data poisoning, insider operator, etc.). Governance map expands here beyond OWAS
 **The console:** inventory browser (prompts / tools / MCP servers / models / policies / keys as versioned artifacts); sign/approve with four-eyes (approve an MCP server or model promotion; re-approve on content change); flip a guardrail/gateway policy gated by RBAC + SoD; one-click rollback to a known-good set; break-glass with heightened logging; side-by-side tamper-evident admin audit + runtime `trace_id` viewer; the layered kill switch (pause → block tools → halt). Doubles as the live demo of clickjacking-resistant, evidence-first approval UX.
 **Status:** ⏳ Pending (new) — the integrative platform deliverable
 
+## Track III — AI-Engineering Reliability (both hats)
+A robust practitioner is **both** an AI engineer and an AI security engineer. These
+reliability topics (benchmarked against the Scott Moss AI-engineering courses —
+full gap audit in `docs/COURSE-COVERAGE.md`) are where a security-first build
+under-indexes; each is taught with its security control, ADD-style.
+- **Durable execution & resume-verify.** Checkpoint each step (model turn + tool
+  call) for crash/rate-limit resume with cached results; the resume path verifies
+  the gledger hash-chain so a tampered checkpoint fails closed (`ResumeIntoTamperedState`).
+- **Exactly-once side effects.** Idempotency keys / action-ids, version
+  preconditions, safe retries, side-effect/ack-gap handling, so a retried tool
+  never double-sends or double-refunds (`DuplicateSideEffect`).
+- **Context compaction & summarization injection.** Running-summary / eviction /
+  sliding-window compaction before each model turn; summarize untrusted content
+  inside the CaMeL quarantine, re-scan the summary, keep provenance on compacted
+  spans (`SummarizationInjection`).
+- **Eval methodology (model-blocked).** pass@k / pass^k reliability scoring,
+  LLM-as-judge with a judge-manipulation defense (`JudgeManipulation`), online
+  evals / a data flywheel from the review queue, an eval-trend observability tab.
+**Status:** ⏳ Planned — see `docs/COURSE-COVERAGE.md` and blog Posts 25–28. Not a
+rewrite of Tracks I/II; it rounds out the engineering half of the discipline.
+
 ## Architecture Decision — Go-Native Security Toolkit ("the fleet")
 
 **Decided 2026-10-06, revised same day (v3).** The earlier split — "the Build & Harden agent stays

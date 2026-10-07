@@ -131,3 +131,15 @@ output, one capability, own labels). Demonstrates least-privilege per tool.
 
 ## Parked ideas (2026-10-07)
 - ⏸️ **Drosophila connectome / GNN** (non-LLM model): not the agent brain. Optional only — a bonus red-team post on GNN/graph poisoning, using a published fly-brain sim as (1) a detonation-chamber target ("run the untrusted sim in the egress-denied VM") and (2) a supply-chain artifact-verification example (safetensors/hash/provenance before load). Reuses VM + artifact checks; doesn't touch the main spine. Revisit after Track II.
+
+## AI-engineering reliability gaps (2026-10-07) — from docs/COURSE-COVERAGE.md
+Both hats: AI security engineer AND AI engineer. Gaps vs the Scott Moss courses
+(ai-engineering-fundamentals / harness-engineering / agents-v2 / background-agents).
+Each is offline-doable except where noted. Blog: Posts 25–28 in docs/COURSE-OUTLINE.md.
+- ⬜ **HIGH — durable execution + resume-verify**: checkpoint agent steps (model turn + tool call) for crash/rate-limit resume with cached results; resume path verifies the gledger hash-chain (reject a tampered checkpoint). ADD case `ResumeIntoTamperedState`.
+- ⬜ **HIGH — exactly-once side effects**: idempotency keys / action-ids, version preconditions, safe retries, side-effect/ack-gap. Tool boundary dedup (extends the single-use HITL nonce). ADD case `DuplicateSideEffect`.
+- ⬜ **MED — context compaction + summarization injection**: running-summary/eviction/sliding-window compaction before each model turn; summarize untrusted content inside the CaMeL quarantine + re-scan the summary + provenance on compacted spans. ADD case `SummarizationInjection`.
+- ⬜ **MED (model-blocked) — eval methodology**: pass@k/pass^k reliability scoring; LLM-as-judge scorer + `JudgeManipulation` ADD case; online eval / data-flywheel from the review queue. Ties to C7.
+- ⬜ **MED (model-blocked) — observability trend**: console Eval tab (F1/P/R + ASR over time), OTel export option. Ties to C7.
+- ⬜ **LOW** — RAG query-rewriting (note: rewriter is itself an injection surface); tool-selection precision eval; TOON/token-efficient context serialization; streaming output + incremental output-handling.
+Non-goals (not gaps): managed frameworks (OpenAI Agents SDK/Mastra/Voltagent), Cloudflare Durable Objects, Braintrust/Laminar SaaS, TS/React, arbitrary-code "code mode" (we run an argv allowlist by design).

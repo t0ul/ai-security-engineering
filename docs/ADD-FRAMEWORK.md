@@ -137,3 +137,20 @@ UNKNOWN inputs that break a control. Both live in `add`, over the same controls:
   something else render it.
 - Keep the core under a few hundred lines. If it grows, the oracle/coverage
   parts are where complexity is allowed; the runner is not.
+
+## Planned cases — AI-engineering reliability (both hats, docs/COURSE-COVERAGE.md)
+New `add.Technique`s to add as the reliability track lands (blog Posts 25–28).
+Each keeps the invariant: undefended ASR 100% → defended 0%.
+- `ResumeIntoTamperedState` (durable execution): a forged/edited checkpoint is
+  replayed on resume. Defend: resume verifies the gledger hash-chain before
+  replaying a step; a tampered checkpoint fails closed.
+- `DuplicateSideEffect` (exactly-once): a replayed/duplicated action fires the
+  side effect twice. Defend: action-id/idempotency-key dedup + version
+  preconditions at the tool boundary (extends the single-use HITL nonce).
+- `SummarizationInjection` (context compaction): an injected instruction gets
+  laundered into (or a safety line dropped from) the running summary. Defend:
+  summarize untrusted content inside the CaMeL quarantine, re-scan the summary
+  (guard/gumpers), keep provenance on compacted spans.
+- `JudgeManipulation` (LLM-as-judge, model-blocked): prompt-inject the judge to
+  pass a bad output. Defend: judge-input encapsulation + a deterministic
+  cross-check (the ensemble pattern). Needs the live LLM path (C5/C7).

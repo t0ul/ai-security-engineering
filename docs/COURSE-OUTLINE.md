@@ -242,6 +242,42 @@ everything above by clicking. Built on `controlplane.ConsoleServer` +
 
 ---
 
+## Part 6 — AI-engineering reliability (the other hat)
+These close the gap between *AI security engineer* and *AI engineer*: reliability
+topics the Scott Moss courses teach that we under-indexed (see
+`docs/COURSE-COVERAGE.md`). Each still ships the ADD beat — the security control
+is the hook, not an afterthought.
+
+**Post 25 · Durable execution & resume-verify** (M18-adjacent) ⬜
+Build: checkpoint each agent step (model turn + tool call) to a durable log so a
+crash/rate-limit resumes from the last good step with cached results, not a
+restart. Break: resume the agent into a *tampered* checkpoint. Defend: the resume
+path verifies the gledger hash-chain before replaying a step — a forged/edited
+checkpoint fails closed. Hook: "durable execution that can't be rewound into a lie."
+
+**Post 26 · Exactly-once side effects** (reliability-as-security) ⬜
+Build: idempotency keys / action-ids, version preconditions, safe retries, and
+side-effect/ack-gap handling so a retried tool call never double-sends or
+double-refunds. Break: a replayed/duplicated action fires the side effect twice.
+Defend: action-id dedup + precondition checks at the tool boundary (ties to the
+single-use HITL nonce we already have). Hook: "a retry should never cost you twice."
+
+**Post 27 · Context compaction & summarization injection** ⬜
+Build: token-budget compaction — running summary + eviction/sliding-window before
+each model turn. Break: a poisoned message steers or survives the summary, or
+compaction silently drops a safety-relevant line (an injected instruction gets
+"laundered" into the trusted summary). Defend: summarize untrusted content inside
+the CaMeL quarantine, re-scan the summary (guard/gumpers), keep provenance on
+compacted spans. Hook: "the summary is trusted context — so the attacker wants to
+write it."
+
+**Post 28 · Eval methodology: pass@k, LLM-as-judge & the flywheel** (M11, model-blocked) ⬜
+Build: `pass@k`/`pass^k` reliability scoring over k samples (quantify
+non-determinism), an LLM-as-judge scorer for unstructured output, and an online
+eval / data-flywheel loop from the review queue. Break: prompt-inject the judge to
+pass a bad output (eval gaming). Defend: judge-input encapsulation + a deterministic
+cross-check (the ensemble pattern). Needs the live LLM path (C5/C7).
+
 ## Why this order (dependencies)
 - Observability (Post 2) comes before the attack posts because the audit log is
   how you *show* each attack landing and then failing.

@@ -78,3 +78,6 @@ scratch/*
 
 # governed control-plane demo logs
 controlplane/logs/
+
+# local reference, not a project doc
+docs/course.txt
