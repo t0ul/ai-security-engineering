@@ -214,6 +214,29 @@ func Score(labelPath string, useTool bool) (Report, error) {
 	return ScoreEvents(label.SourceEmail, label.Events, pred), nil
 }
 
+// PassK scores a label k times and reports reliability under non-determinism (a
+// single run is not a number when the extractor path calls an LLM): passAtK is
+// true if ANY run clears min F1 (best case), passPowK is true only if ALL k runs
+// clear it (the one you actually ship on), and f1s are the per-run scores. Use
+// useTool=true for the LLM path.
+func PassK(labelPath string, k int, min float64, useTool bool) (passAtK, passPowK bool, f1s []float64, err error) {
+	if k < 1 {
+		k = 1
+	}
+	passPowK = true
+	for i := 0; i < k; i++ {
+		rep, serr := Score(labelPath, useTool)
+		if serr != nil {
+			return false, false, f1s, serr
+		}
+		f1s = append(f1s, rep.F1)
+		ok := rep.F1 >= min-1e-9
+		passAtK = passAtK || ok
+		passPowK = passPowK && ok
+	}
+	return passAtK, passPowK, f1s, nil
+}
+
 // String renders the Report the way eval.py printed it.
 func (r Report) String() string {
 	var b strings.Builder

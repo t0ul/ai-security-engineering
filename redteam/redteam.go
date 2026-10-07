@@ -185,7 +185,7 @@ func Cases() []Case {
 		ExtractionInjection(), HallucinationReconcile(),
 		RevokedTokenStillWorks(),
 		DuplicateSideEffect(), ResumeIntoTamperedState(),
-		SummarizationInjection(),
+		SummarizationInjection(), JudgeManipulation(),
 	}
 }
 
@@ -231,6 +231,7 @@ var riskByName = map[string]string{
 	"duplicate-side-effect":     "ASI08",
 	"resume-tampered-state":     "ASI10",
 	"summarization-injection":   "LLM01",
+	"judge-manipulation":        "LLM09",
 }
 
 // Techniques exposes the red-team cases as ADD techniques — the attack library

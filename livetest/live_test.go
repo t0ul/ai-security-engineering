@@ -78,6 +78,27 @@ func TestLiveEvalF1(t *testing.T) {
 	}
 }
 
+// TestLivePassK quantifies the non-determinism a single eval run hides: it scores
+// the richer label k times and reports pass@k (any run clears the gate) and
+// pass^k (every run does). Gates leniently on pass@k so a flaky model doesn't
+// fail CI, and logs pass^k as the reliability signal.
+func TestLivePassK(t *testing.T) {
+	requireLive(t)
+	const (
+		label = "testdata/emaildrop/labels/1.json"
+		k     = 3
+		gate  = 0.87
+	)
+	passAtK, passPowK, f1s, err := eval.PassK(label, k, gate, true)
+	if err != nil {
+		t.Fatalf("passK: %v", err)
+	}
+	t.Logf("pass@%d=%v  pass^%d=%v  per-run F1=%v (gate>=%.2f)", k, passAtK, k, passPowK, f1s, gate)
+	if !passAtK {
+		t.Errorf("no run of %d cleared the F1 gate %.2f: %v", k, gate, f1s)
+	}
+}
+
 // chdirToRoot walks up from the test's working directory to the dir holding go.mod.
 func chdirToRoot() error {
 	wd, err := os.Getwd()
