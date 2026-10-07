@@ -24,6 +24,7 @@ Implementation is t's (dev-caveman); this is the architecture.
 | **Eval scores + thresholds** (F1 gate, ASR gate, per-label latest) | `eval.ScoreEvents`; `cmd/livecheck`→`RecordEval`; `cpstore.LatestEval`; `mlops.PromoteWithLatestEval` | standalone; not tied to changes | ❌ | partial (livecheck only) |
 | **Promotion gate** (eval+ADD on activate) | `controlplane.PromotionGate` (C3) | not wired to real closures | ❌ | — |
 | **Safety level / kill switch** | `Governance.SetKillSwitch`, `Safety` | ✅ | ✅ | ✅ |
+| **Identity / authZ (NHI)** | `controlplane.Authority` + capability `Grant` (C4a ✅, on the provenance signer) | primitive ✅; not yet on the API/tool path | ❌ | signed + audited on issue/deny (C4b) |
 | **RBAC / four-eyes** | goverlord roles + dual control | ✅ | partial | ✅ |
 | **Generic config map** | `Governance` (propose/approve/rollback/history) | ✅ mechanism, **~nothing reads it** | ✅ | ✅ (approvals, admin) |
 
@@ -95,6 +96,58 @@ rollback) · **Models/Sampling** (bindings + temp/tokens, gated edit) · **MCP**
 guardrail allowlists, gated edit) · **Eval** (F1/P/R per label over time, ASR
 trend) · **Budgets** (rate/token/spend) · existing **Governance/Audit/Kill**.
 
+## Non-human identity & capability authZ — the C4 keystone
+The app is being built as an **authZ'd API**, not just a loopback parse tool, so
+it can teach **non-human identity (NHI)** and **MCP security** and make the kill
+switch a real containment demo. Every actor that is not a human — the agent, each
+tool, each MCP server, the RAG reader — is an NHI: a named Subject that must
+present a signed, scoped, short-lived **capability `Grant`** to do anything with a
+side effect. Grants reuse the agent's existing ed25519 provenance signer, so an
+NHI credential and an `.ics` content credential share one trust root — no new key
+management. (`controlplane.Authority` / `Grant` / `Capability`, C4a ✅.)
+
+**Scoping is data-residency-aware — three axes, not one:**
+1. **Action granularity** — `read` (one named item) ≠ `list`/`enumerate` (the
+   whole set — the *harvest* primitive) ≠ `export`/`send` (egress). Exfil needs
+   enumerate + export, so those stay privileged apart from read. `/list/contacts`
+   is dangerous because it is the harvest, not a read.
+2. **Resource classification** — public (handbook) / internal / confidential-PII
+   (contacts, raw email bodies, student data).
+3. **Consumer trust tier** — where the Subject's *bound model* runs: on-host-local
+   (data never leaves the Mac) vs off-host-frontier (data ships to a third party).
+   The same read scope that is safe for a local model is an exfil vector for a
+   frontier one.
+
+**The rule (at issuance, fail-closed — `Authority.IssuePolicy`):** a grant is
+mintable only if the consumer tier is cleared for the resource classification. A
+frontier-bound Subject is denied any confidential resource and any `list`/`export`
+over one; it may receive only public or **goflage-scrubbed (declassified)** data.
+goflage is the declassifier at the tier boundary. Corollary: swapping a Subject's
+model binding local→frontier (a governed C5 change) is a **grant-invalidating
+event** — the swap must `Revoke` the Subject so no outstanding grant silently
+starts leaking. You cannot raise data egress by editing a model binding.
+
+**Kill switch with teeth:** `Authority.Halted` wired to `Safety` ≥ `LevelHalt`
+revokes *every* grant at once. An in-flight action (a VM fetch mid-request) dies
+on its next capability check, not just new drops paused. The demo: fire an action
+link, hit kill, watch the token rejected mid-flight.
+
+**Honest caveats (no theater):** single-household loopback app — do **not** fake
+human SSO/login forms; the interesting identities here are non-human. Human
+operator = one minimal local admin credential; loopback stays the perimeter.
+SQLite has no DB roles, so RAG write-denial is engine-enforced (`?mode=ro`) but
+tenant scoping is app-layer — label which is which. Auth is additive: drop a
+`.txt`, it still just works.
+
+**ADD cases (red-team the identity layer), each `undefended 100%→defended 0%`:**
+`StolenAgentToken` (replay/exfil → bound to scope+TTL+key), `OverScopedToken`
+(confused deputy → `ErrGrantScope`), `RevokedTokenStillWorks` (kill engaged,
+in-flight grant honored → must fail), `FrontierContactsExfil` (frontier identity
+mints `list contacts` → refused at issuance / revoked on swap), `CrossTenantRead`
+(RAG query leaks another tenant → denied), `UnpinnedMCPServer` (swapped manifest
+hash → rejected by gustoms pin). Each also gets an ADD `Wired` integration target
+so the bridge can't silently un-wire.
+
 ## Phases (t implements; each offline-testable unless noted)
 - **C1 — Prompt resolver** ✅ (orchestrator). `controlplane.Prompts`
   (Get/Activate/Verify, versioned+hashed, OnActivate hook). Extractor → C5.
@@ -105,9 +158,27 @@ trend) · **Budgets** (rate/token/spend) · existing **Governance/Audit/Kill**.
   closed) + `ActivatePrompt`; `ExtractionInjection` + `HallucinationReconcile`
   ADD cases; `agent/ensemble` reconciler. Remaining: wire the REAL eval/redteam
   closures into the gate (needs a cmd that imports both, to avoid a cycle).
-- **C4 — `controlplane.Runtime`**: one typed resolver over the governed store for
-  prompts + sampling + policies + model bindings, with pin-verify + fail-closed
-  defaults; make the agent read ALL knobs from it.
+- **C4 — NHI identity + capability authZ (keystone, offline)**: the app becomes
+  an authZ'd API where every non-human actor presents a scoped, signed, expiring
+  capability `Grant`. Also carries the C1 resolver idea forward — the governed
+  `Runtime` that issues/scopes credentials is the same plane that resolves
+  prompts/sampling/policies. Sub-phases:
+  - **C4a — capability token** ✅: `controlplane.Authority`/`Grant`/`Capability`
+    on the provenance signer — issue (TTL + scope), verify (sig → halt/revoke →
+    expiry → scope, fail-closed), `Revoke`/`Reinstate`, `Halted` hook, action
+    granularity (`ActionRead`/`List`/`Write`/`Export`), data-residency
+    `IssuePolicy`. Unit-tested incl. the frontier `/list/contacts` refusal.
+  - **C4b — authZ gate on the app**: every `/api/*` and each tool call verifies a
+    grant scoped to `{action, resource, tenant}`; issue/deny audited to gledger;
+    one minimal local admin credential for the console.
+  - **C4c — kill switch = revocation**: wire `Authority.Halted` to `Safety` ≥
+    `LevelHalt`; Halt revokes the agent credential (+ drops MCP pins in C6) so
+    in-flight work dies. `RevokedTokenStillWorks` ADD case as the invariant.
+  - **C4d — RAG least privilege**: open the corpus `?mode=ro` for the retrieval
+    path (engine-enforced no-write) + tenant scope (app-layer); `CrossTenantRead`
+    ADD case.
+  - **C4e — scoped MCP tokens**: gustoms on the app path, per-call
+    audience-bound tokens, governed TTL/scope; `UnpinnedMCPServer` ADD case.
 - **C5 — Sampling + model-swap plane**: `rt.Sampling`, logical `extractor`,
   grammar-constrained JSON; sampling/model changes gated.
 - **C6 — MCP governance**: persist pins (`RecordPin`), registry-as-config,

@@ -100,7 +100,8 @@ Build the **gustoms** MCP gateway (registry allowlist, manifest pin / rug-pull
 defense, per-call authZ) and expose each roster tool as its own scoped MCP tool.
 Break: a shadow MCP server + a silently-swapped manifest + a spoofed peer.
 Defend: pinning + mutual auth + per-agent identity. Proof: rug-pull & a2a ASR
-100%→0%; the `cmd/mcpdemo` run.
+100%→0%; the `cmd/mcpdemo` run. (The per-call scoped MCP tokens land on the *app*
+path in Post 18b, as capability grants bound to one audience.)
 
 ## Part 3 — The hard problems: data, retrieval, supply chain, the trifecta
 **Post 10 · RAG & memory security** (M8/M20-memory, LLM04/08/ASI06) ✅
@@ -176,6 +177,26 @@ configs/policy/keys, operator RBAC, four-eyes on changes, break-glass. Break: a
 lone/compromised operator swaps a prompt. Defend: RBAC + two-person +
 hash-pinned approvals.
 
+**Post 18b · Non-human identity: the agent gets a wallet** (M14/M20, LLM02/LLM06/ASI03) 🟡
+The pivot that makes the series *really* interesting: the loopback parse tool
+becomes an **authZ'd API**, and every actor that isn't a human — the agent, each
+tool, each MCP server, the RAG reader — becomes a **non-human identity** holding a
+signed, scoped, short-lived **capability token** (minted on the same ed25519 key
+that already signs the `.ics`). Hook: **"what happens the day I swap my local
+3B model for a frontier endpoint?"** Suddenly a `read` scope that was harmless —
+data never left the Mac — ships my kids' contacts and teachers' emails to a third
+party. So scoping gets three axes, not one: **action granularity** (`read` ≠
+`list`/harvest ≠ `export`/egress — `/list/contacts` is the harvest, not a read),
+**resource classification** (public vs confidential-PII), and **consumer trust
+tier** (on-host-local vs off-host-frontier). Break: a frontier-bound identity
+mints `list contacts`, or a stolen/over-scoped token is replayed against the
+corpus. Defend: capability tokens with fail-closed issuance — a frontier identity
+can only get public or **goflage-scrubbed** data, and a model-swap *revokes* the
+old grants so you can't raise egress by editing a config. Proof: the
+`StolenAgentToken` / `OverScopedToken` / `FrontierContactsExfil` ADD cases
+100%→0%. *(Honest note: single-household loopback — no fake human SSO; the
+interesting identities are the machines.)*
+
 **Post 19 · Admin audit & one-click rollback** (M15) ✅
 Every config change attributable and instantly reversible; hash-chained admin
 audit, versioned artifacts, rollback to a known-good bundle.
@@ -184,7 +205,12 @@ audit, versioned artifacts, rollback to a known-good bundle.
 AI-specific IR playbooks per incident class, the **layered kill switch** (revoke
 → fail-closed → scoped pause/block/halt → AIDR auto-trigger → drain+snapshot),
 degraded mode, and blameless **PIR → permanent CI regression**. Build on the
-existing kill switch / `ir` replay / `aidr`.
+existing kill switch / `ir` replay / `aidr`. The money demo now that identities
+exist (Post 18b): Halt **revokes every capability token**, so an action already
+in flight — a VM fetch mid-request — dies on its next scope check, not just new
+drops paused. Break: `RevokedTokenStillWorks` (a still-valid grant honored after
+Halt). Defend: `Authority.Halted` wired to the kill level. Proof: that ADD case
+100%→0%.
 
 **Post 21 · MLOps, data & privacy governance** (M19) ✅
 Dataset provenance + signing + ingestion validation, promotion eval gates
@@ -218,6 +244,11 @@ everything above by clicking. Built on `controlplane.ConsoleServer` +
 - "Make it real" (16) and productionization (17) come after the full-chain
   capstone (15): you harden, prove, *then* polish into a daily tool.
 - Track II (18–24) governs a system that must already exist.
+- Non-human identity (18b) follows operator RBAC (18): once humans have roles,
+  the machines need them too. It also arms the kill switch (20) — revocation only
+  bites once every actor carries a revocable credential — and puts MCP's scoped
+  tokens (9) on the real app path. Its hook (local→frontier model swap) is why the
+  identity plane and the model-swap plane (control-plane C4/C5) are one story.
 
 ## Blogging notes
 - Each post ships a branch + the ADD test that proves it; the scorecard number is
