@@ -177,7 +177,10 @@ reproducible one-command install. Break: attack the deployment surface itself.
 The control plane as a managed product: versioned inventory of prompts/tool
 configs/policy/keys, operator RBAC, four-eyes on changes, break-glass. Break: a
 lone/compromised operator swaps a prompt. Defend: RBAC + two-person +
-hash-pinned approvals.
+hash-pinned approvals. In the app this lands as the console's **Prompts tab**
+(`GovernedPrompts` over a cpstore inventory: per-model active version + hash,
+activate a new versioned prompt, roll back to the shipped default — each change
+audited and persisted) alongside the **MCP** and **kill switch** tabs.
 
 **Post 18b · Non-human identity: the agent gets a wallet** (M14/M20, LLM02/LLM06/ASI03) ✅
 The pivot that makes the series *really* interesting: the loopback parse tool

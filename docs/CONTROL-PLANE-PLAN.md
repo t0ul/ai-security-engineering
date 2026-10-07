@@ -13,7 +13,7 @@ Implementation is t's (dev-caveman); this is the architecture.
 ## Audit — governed knob inventory (code-verified)
 | Knob | Where it lives now | Governed at runtime? | In console? | Persisted/audited? |
 | --- | --- | --- | --- | --- |
-| **Prompts** (planner/coder/extractor) | consts; `controlplane.Prompts` resolver (C1) | orchestrator ✅, extractor ❌ | ❌ | hook exists, not wired |
+| **Prompts** (planner/coder/extractor) | consts; `controlplane.Prompts` resolver (C1) + `GovernedPrompts` in `cmd/webapp` | orchestrator ✅; extractor resolves when LLM path enabled (C5) | **console Prompts tab ✅ (C2)** — list/version/hash/activate/reset | **`RecordPrompt` wired on the app path ✅** + gledger audit |
 | **Sampling** (temperature/max_tokens/stop/top_p/seed) | hardcoded `CompleteOpts` literals | ❌ | ❌ | ❌ |
 | **Model bindings** (logical→gguf, allowlist) | orchestrator fields; gouncer allowlist | ❌ (fields); no `extractor` | ❌ | ❌ |
 | **MCP registry** (servers, allowed tools, manifest pins, strict) | `gustoms` (Pin/Approve/ManifestHash/**Status**) on the app path via `NewToolGateway` | enforced at Call ✅ | **console MCP tab ✅ (C6)** — list/tools/pin/rug-pull/Approve | `RecordPin` wired in `cmd/mcpdemo`; app gateway pin is deterministic from the shipped manifest |
@@ -151,9 +151,16 @@ so the bridge can't silently un-wire.
 ## Phases (t implements; each offline-testable unless noted)
 - **C1 — Prompt resolver** ✅ (orchestrator). `controlplane.Prompts`
   (Get/Activate/Verify, versioned+hashed, OnActivate hook). Extractor → C5.
-- **C2 — Governed prompt lifecycle + console**: propose→approve→rollback a prompt
-  through `Governance`; wire `OnActivate`→`RecordPrompt`+gledger; console Prompts
-  tab (diff/Test/approve/rollback).
+- **C2 — Governed prompt lifecycle + console** ✅: `Prompts.List`/`Reset` +
+  `GovernedPrompts` wired in `cmd/webapp` over a cpstore inventory, so activations
+  are versioned, content-hashed, audited to gledger, and persisted
+  (`RecordPrompt` — previously dead — now fires on the app path). Console Prompts
+  tab (Security-adjacent): per-model active version + hash, edit→**Activate new
+  version**, **Reset to default** (rollback to shipped known-good). Live smoke:
+  list→activate v1→reset v0, 401 without a capability, inventory.db persisted.
+  Honest scope: single-operator loopback (no four-eyes — that's Track II
+  `Governance`); the **Test** (shadow-eval) button is C7; version-N text rollback
+  (vs reset-to-default) waits on reading historical text back from cpstore.
 - **C3 — Promotion gate + ADD** ✅: `PromotionGate` (eval-F1 + ADD-ASR, fail-
   closed) + `ActivatePrompt`; `ExtractionInjection` + `HallucinationReconcile`
   ADD cases; `agent/ensemble` reconciler. Remaining: wire the REAL eval/redteam
