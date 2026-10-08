@@ -24,6 +24,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -139,11 +140,14 @@ func main() {
 	var sampling *controlplane.Sampling
 	var inv *datastore.Store
 	var reader *rag.Store              // RAG read handle; nil if the corpus failed to open
+	var corpusWritable *rag.Store      // writable corpus handle (for the RAG lab reindex)
+	var ragSemantic atomic.Bool        // true = chat uses semantic (vector) retrieval; shared with the RAG lab
 	var readerGrant controlplane.Grant // the rag-reader NHI grant (C4e)
 	var search func(string, int) ([]domain.SearchHit, error)
 	var enrichIndex func(source, text string) error
 	if corpus, cerr := rag.Open(corpusPath); cerr == nil {
 		defer corpus.Close()
+		corpusWritable = corpus
 		pipe.Index = func(traceID, source, rawText string) error {
 			return corpus.Add(rag.Doc{ID: source, Text: rawText, Prov: rag.Untrusted}) // readable source in Ask results
 		}
@@ -382,6 +386,7 @@ func main() {
 	var modelCatalogSvc server.ModelCatalogStore
 	var eventsSvc server.EventStore
 	var summariesSvc server.SummaryStore
+	var ragLabSvc server.RAGLab
 	if inv != nil {
 		for _, n := range []string{"planner", "coder", "extractor", "chat_system"} {
 			if text, ok, _ := inv.LatestPromptText(n); ok {
@@ -442,6 +447,17 @@ func main() {
 		// once the gateway is ready. -automodels=false (or WEBAPP_AUTOMODELS=false) skips
 		// the auto-start and seeds with offline extraction.
 		modelCatalog, _ := inv.ListModelCatalog()
+		// RAG lab: tune ingestion (chunker/size/overlap/mode/embedder) + reindex. Needs
+		// the writable corpus; embedder options are the catalog models (+ "none").
+		if corpusWritable != nil {
+			embedders := []string{"none"}
+			for _, m := range modelCatalog {
+				embedders = append(embedders, m.Name)
+			}
+			embedMgr := newEmbedManager(ctx, modelstack.BinPath(), *assetsDir, modelCatalog)
+			go func() { <-ctx.Done(); embedMgr.stop() }()
+			ragLabSvc = newRAGLab(inv, corpusWritable, cfg.Processed, embedders, ragApplyEmbed(corpusWritable, reader, embedMgr, &ragSemantic))
+		}
 		startModelsAndSeed := func() {
 			if gatewayReachable(dial) {
 				os.Setenv("EXTRACT_MODE", "llm")
@@ -518,7 +534,7 @@ func main() {
 	// corpus opened — reader nil = no Chat tab. Same reader NHI grant as search.
 	var chatSvc server.ChatService
 	if reader != nil {
-		chatSvc = &chatService{reader: reader, grant: readerGrant, authz: authz, gw: gw, prompts: prompts, sampling: sampling, models: models, retrieval: retrieval}
+		chatSvc = &chatService{reader: reader, grant: readerGrant, authz: authz, gw: gw, prompts: prompts, sampling: sampling, models: models, retrieval: retrieval, semantic: &ragSemantic}
 	}
 
 	srv := &http.Server{
@@ -529,7 +545,7 @@ func main() {
 			Flywheel: flywheelSvc, Chat: chatSvc,
 			Authz: authz, OperatorToken: opToken, AppToken: appToken, Audit: audit,
 			MCP: mcpReg, Prompts: prompts, Policies: policies, Sampling: sampling, Budgets: budgets, Retrieval: retrieval, Grammars: grammars, Models: models,
-			Skills: skillsPlane, SkillCatalog: skillSupply, ModelCatalog: modelCatalogSvc, Events: eventsSvc, Summaries: summariesSvc,
+			Skills: skillsPlane, SkillCatalog: skillSupply, ModelCatalog: modelCatalogSvc, Events: eventsSvc, Summaries: summariesSvc, RAG: ragLabSvc,
 			AssetsDir: *assetsDir, GatewayURL: *gwFlag, GatewayUp: func() bool { return gw != nil && gw.Up() },
 			Eval:    evalSvc,
 			Bundles: bundleSvc,

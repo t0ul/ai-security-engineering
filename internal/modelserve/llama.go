@@ -29,6 +29,49 @@ func LlamaServer(name, bin, host, modelPath string, port, ctxSize int) Server {
 	}
 }
 
+// EmbedServer builds a Server spec for a llama.cpp instance restricted to embeddings
+// (--embeddings + mean pooling), with an embeddings-based readiness probe. Use a
+// dedicated instance (separate from the chat servers) on its own port.
+func EmbedServer(name, bin, host, modelPath string, port, ctxSize int) Server {
+	return Server{
+		Name: name,
+		Bin:  bin,
+		Args: []string{
+			"serve",
+			"-m", modelPath,
+			"--host", host,
+			"--port", strconv.Itoa(port),
+			"--ctx-size", strconv.Itoa(ctxSize),
+			"--embeddings",
+			"--pooling", "mean",
+		},
+		HealthURL: fmt.Sprintf("http://%s:%d/health", host, port),
+		Ready:     EmbeddingReady(host, port),
+	}
+}
+
+// EmbeddingReady returns a probe that succeeds only when the server returns a real
+// embedding vector (llama.cpp answers 503 while the model loads).
+func EmbeddingReady(host string, port int) func(context.Context) bool {
+	url := fmt.Sprintf("http://%s:%d/v1/embeddings", host, port)
+	payload := []byte(`{"model":"probe","input":"ping"}`)
+	client := &http.Client{Timeout: 15 * time.Second}
+	return func(ctx context.Context) bool {
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(payload))
+		if err != nil {
+			return false
+		}
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := client.Do(req)
+		if err != nil {
+			return false
+		}
+		defer resp.Body.Close()
+		_, _ = io.Copy(io.Discard, resp.Body)
+		return resp.StatusCode == http.StatusOK
+	}
+}
+
 // CompletionReady returns a probe that succeeds only when the server answers a
 // minimal chat completion. llama.cpp returns 503 while the model loads, so this
 // gates on genuine generation readiness.

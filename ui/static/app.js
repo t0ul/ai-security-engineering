@@ -3,7 +3,7 @@
 // request. Empty (household mode) = no header, unchanged behavior.
 (function(){const f=window.fetch.bind(window);window.fetch=(u,o)=>{o=o||{};const s=typeof u==='string'?u:(u&&u.url)||'';if(__CAP__&&(s.indexOf('/api/')===0||s.indexOf('/ics/')===0)){o.headers=Object.assign({},o.headers||{},{'Authorization':'Bearer '+__CAP__});}return f(u,o);};})();
 const $=s=>document.querySelector(s);
-const TABS=['chat','calendar','week','tasks','review','activity','ask','security','prompts','sampling','models','runtime','skills','retrieval','grammar','policies','budgets','eval','incidents'];
+const TABS=['chat','calendar','week','tasks','review','activity','ask','security','prompts','sampling','models','runtime','skills','retrieval','rag','grammar','policies','budgets','eval','incidents'];
 const esc=s=>{const d=document.createElement('div');d.textContent=s||'';return d.innerHTML;};
 const when=e=>e.all_day?((e.due||e.start)+' · all day'):((e.start||e.due)+(e.end?(' – '+e.end.slice(11)):''));
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
@@ -23,6 +23,7 @@ document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
   if(t==='sampling') loadSampling();
   if(t==='models'){loadModels();loadModelCatalog();}
   if(t==='runtime') loadRuntime();
+  if(t==='rag') loadRAG();
   if(t==='skills') loadSkills();
   if(t==='retrieval') loadRetrieval();
   if(t==='grammar') loadGrammar();
@@ -34,7 +35,7 @@ document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
 // App = consumer (zero control knobs); Studio = operator (the tuning/governance plane).
 const SURFACES={
   app:['chat','calendar','week','tasks','review','ask'],
-  studio:['security','prompts','sampling','models','runtime','skills','retrieval','grammar','policies','budgets','eval','incidents','activity']
+  studio:['security','prompts','sampling','models','runtime','skills','retrieval','rag','grammar','policies','budgets','eval','incidents','activity']
 };
 (function(){
   const vis=(SURFACES[SURFACE]||TABS);
@@ -206,6 +207,29 @@ async function delModel(name){
   const r=await postJSON('/api/modelcatalog/delete',{name:name});
   if(r.ok){loadModelCatalog();loadModels();}
   else{alert(await r.text());}
+}
+function ragStatsText(s){return s?('corpus: '+s.docs+' docs → '+s.chunks+' chunks · mode '+esc(s.mode)):'';}
+async function loadRAG(){
+  const c=$('#ragStats');const d=await getJSON('/api/rag');const cfg=d.config||{};
+  const chSel=$('#rag_chunker');if(chSel){chSel.innerHTML=(d.chunkers||[]).map(n=>'<option'+(n===cfg.chunker?' selected':'')+'>'+esc(n)+'</option>').join('');}
+  const emSel=$('#rag_embedder');if(emSel){emSel.innerHTML=(d.embedders||[]).map(n=>'<option'+(n===cfg.embedder?' selected':'')+'>'+esc(n)+'</option>').join('');}
+  if($('#rag_mode'))$('#rag_mode').value=cfg.mode||'fts';
+  if($('#rag_size'))$('#rag_size').value=cfg.chunk_size||'';
+  if($('#rag_overlap'))$('#rag_overlap').value=cfg.chunk_overlap||'';
+  if(c)c.textContent=ragStatsText(d.stats);
+}
+function ragConfigFromForm(){return{mode:$('#rag_mode').value,chunker:$('#rag_chunker').value,embedder:$('#rag_embedder').value,chunk_size:parseInt($('#rag_size').value)||0,chunk_overlap:parseInt($('#rag_overlap').value)||0};}
+async function saveRAG(){
+  $('#ragMsg').textContent='saving + reindexing (semantic boots a model, can take a bit)…';
+  const r=await postJSON('/api/rag/save',ragConfigFromForm());
+  if(r.ok){const j=await r.json();$('#ragMsg').textContent='saved ✓';$('#ragStats').textContent=ragStatsText(j.stats);}
+  else{$('#ragMsg').textContent='error: '+(await r.text());}
+}
+async function reindexRAG(){
+  $('#ragMsg').textContent='reindexing…';
+  const r=await postJSON('/api/rag/reindex',{});
+  if(r.ok){const j=await r.json();$('#ragMsg').textContent='reindexed ✓';$('#ragStats').textContent=ragStatsText(j.stats);}
+  else{$('#ragMsg').textContent='error: '+(await r.text());}
 }
 async function loadRuntime(){
   const c=$('#runtimeOut');if(!c)return;const d=await getJSON('/api/runtime');const gw=d.gateway||{};

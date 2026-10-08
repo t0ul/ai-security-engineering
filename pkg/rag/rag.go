@@ -91,6 +91,24 @@ func OpenReadOnly(path string) (*Store, error) {
 // Close releases the database.
 func (s *Store) Close() error { return s.db.Close() }
 
+// Clear removes every document and vector — so a reindex can rebuild the corpus
+// from scratch with a new chunker/embedder instead of accumulating duplicates.
+func (s *Store) Clear() error {
+	if _, err := s.db.Exec(`DELETE FROM docs`); err != nil {
+		return err
+	}
+	_, err := s.db.Exec(`DELETE FROM vectors`)
+	return err
+}
+
+// Stats reports the number of distinct documents and total chunks (rows) in the
+// index — so the RAG lab can show the effect of a chunking change.
+func (s *Store) Stats() (docs, chunks int) {
+	_ = s.db.QueryRow(`SELECT COUNT(DISTINCT id) FROM docs`).Scan(&docs)
+	_ = s.db.QueryRow(`SELECT COUNT(*) FROM docs`).Scan(&chunks)
+	return docs, chunks
+}
+
 // Add indexes (or replaces) a document by id. The text is cleaned (whitespace
 // normalized) and split by the store's Chunker (nil = whole-document); each chunk
 // becomes its own retrievable row under the same document id, so a hit returns the

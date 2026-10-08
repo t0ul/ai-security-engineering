@@ -24,6 +24,7 @@
     <button data-tab="runtime">Runtime</button>
     <button data-tab="skills">Skills</button>
     <button data-tab="retrieval">Retrieval</button>
+    <button data-tab="rag">RAG lab</button>
     <button data-tab="grammar">Grammar</button>
     <button data-tab="policies">Policies</button>
     <button data-tab="budgets">Budgets</button>
@@ -219,6 +220,24 @@
     <div class="card">
       <strong>Retrieval</strong> <span class="mut">— governed RAG read knobs: top-k per corpus. Versioned, hashed, rollback; bundle-referenced. Drives the chat read path live.</span>
       <div id="retrievalList"><span class="mut">loading…</span></div>
+    </div>
+  </section>
+  <section id="rag" class="hide">
+    <div class="card">
+      <strong>RAG lab</strong> <span class="mut">— tune the retrieval ingestion pipeline: clean + chunk + (optionally) embed. Changing any knob re-runs ingestion over the whole corpus (the processed emails are the source of truth). Semantic mode boots a local embeddings model and ranks by cosine; FTS is lexical keyword search.</span>
+      <div class="mgrid" style="margin-top:10px">
+        <label class="mut">Mode<br><select id="rag_mode"><option value="fts">fts (keyword)</option><option value="semantic">semantic (vector)</option></select></label>
+        <label class="mut">Embedder<br><select id="rag_embedder"></select></label>
+        <label class="mut">Chunker<br><select id="rag_chunker"></select></label>
+        <label class="mut">Chunk size<br><input id="rag_size" type="number" placeholder="e.g. 600"></label>
+        <label class="mut">Overlap (fixed)<br><input id="rag_overlap" type="number" placeholder="e.g. 80"></label>
+      </div>
+      <div style="margin-top:10px">
+        <button class="go" onclick="saveRAG()">Save &amp; reindex</button>
+        <button class="ghost" onclick="reindexRAG()">Reindex now</button>
+        <span id="ragMsg" class="mut"></span>
+      </div>
+      <div id="ragStats" style="margin-top:10px" class="mut"></div>
     </div>
   </section>
   <section id="grammar" class="hide">

@@ -135,6 +135,10 @@ type Config struct {
 	// re-scanning + re-parsing every .summary.json per request. Nil = read from JSON.
 	Summaries SummaryStore
 
+	// RAG, when set, is the retrieval experimentation surface (RAG tab): tune the
+	// ingestion config (mode/chunker/size/overlap/embedder) and reindex. Nil = no tab.
+	RAG RAGLab
+
 	// Runtime health inputs (the Runtime tab / cmd/preflight-in-console): the asset
 	// dir holding GGUFs, the gateway URL (display), and a gateway health probe.
 	AssetsDir  string
@@ -337,6 +341,11 @@ func (s *Server) Handler() http.Handler {
 		mux.HandleFunc("POST /api/modelcatalog/upsert", csrf(s.authz(controlplane.ActionWrite, "model", s.modelCatalogUpsert)))
 		mux.HandleFunc("POST /api/modelcatalog/delete", csrf(s.authz(controlplane.ActionWrite, "model", s.modelCatalogDelete)))
 		mux.HandleFunc("/api/runtime", s.runtimeStatus)
+	}
+	if s.RAG != nil {
+		mux.HandleFunc("/api/rag", s.ragGet)
+		mux.HandleFunc("POST /api/rag/save", csrf(s.authz(controlplane.ActionWrite, "rag", s.ragSave)))
+		mux.HandleFunc("POST /api/rag/reindex", csrf(s.authz(controlplane.ActionWrite, "rag", s.ragReindex)))
 	}
 	if s.Skills != nil {
 		mux.HandleFunc("/api/skills", s.skillsList)

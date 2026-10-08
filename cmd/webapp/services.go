@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/t0ul/ai-security-engineering/pkg/agent/eval"
@@ -237,6 +238,7 @@ type chatService struct {
 	sampling  *controlplane.Sampling
 	models    *controlplane.Models
 	retrieval *controlplane.Retrieval
+	semantic  *atomic.Bool // when true, retrieve with vector SemanticQuery instead of FTS
 }
 
 func (c *chatService) Answer(question string, unsafe bool, appData string) (string, []string, error) {
@@ -254,7 +256,19 @@ func (c *chatService) Answer(question string, unsafe bool, appData string) (stri
 			k = rk
 		}
 	}
-	chunks, err := c.reader.Query("public", question, k)
+	// Retrieval mode is operator-governed (RAG lab): semantic (vector) when an
+	// embedder is configured, else lexical FTS. Semantic falls back to FTS on error
+	// (e.g. embedder momentarily down) so chat never hard-fails on a knob change.
+	var chunks []rag.Chunk
+	var err error
+	if c.semantic != nil && c.semantic.Load() {
+		chunks, err = c.reader.SemanticQuery(context.Background(), "public", question, k)
+		if err != nil {
+			chunks, err = c.reader.Query("public", question, k)
+		}
+	} else {
+		chunks, err = c.reader.Query("public", question, k)
+	}
 	if err != nil {
 		return "", nil, err
 	}
