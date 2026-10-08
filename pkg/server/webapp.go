@@ -2,7 +2,7 @@
 // security scorecard from the UI, and browse + replay incidents from the
 // chain-verified audit log. It reuses the same Go components the agent runs on
 // (redteam, ir), so the console and the system under test are one binary.
-package webapp
+package server
 
 import (
 	"context"

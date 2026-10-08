@@ -39,7 +39,7 @@ import (
 	"github.com/t0ul/ai-security-engineering/pkg/provenance"
 	"github.com/t0ul/ai-security-engineering/pkg/rag"
 	"github.com/t0ul/ai-security-engineering/pkg/redteam"
-	"github.com/t0ul/ai-security-engineering/webapp"
+	"github.com/t0ul/ai-security-engineering/pkg/server"
 	"github.com/t0ul/gledger"
 	"github.com/t0ul/goflage"
 	"github.com/t0ul/gorauder"
@@ -95,10 +95,10 @@ func main() {
 	)
 	var opToken string
 	if g, gerr := authz.Issue(controlplane.Capability{Subject: "operator", Action: controlplane.Scope, Resource: controlplane.Scope, Tenant: controlplane.Scope}, 30*24*time.Hour); gerr == nil {
-		opToken = webapp.EncodeToken(g)
+		opToken = server.EncodeToken(g)
 	}
 	corpusPath := filepath.Join(*drop, "corpus.db")
-	var search func(string, int) ([]webapp.SearchHit, error)
+	var search func(string, int) ([]server.SearchHit, error)
 	var chat func(string, bool) (string, []string, error)
 	var enrichIndex func(source, text string) error
 	if corpus, cerr := rag.Open(corpusPath); cerr == nil {
@@ -129,7 +129,7 @@ func main() {
 		readerGrant, _ := authz.Issue(controlplane.Capability{Subject: "rag-reader", Action: controlplane.ActionList, Resource: "corpus", Tenant: "public"}, 30*24*time.Hour)
 		// Ask-School: lexical search over the scrubbed corpus (M8 — recalled text
 		// is untrusted data). "public" tenant: this is a single-household app.
-		search = func(q string, k int) ([]webapp.SearchHit, error) {
+		search = func(q string, k int) ([]server.SearchHit, error) {
 			if _, err := authz.Verify(readerGrant, controlplane.Capability{Action: controlplane.ActionList, Resource: "corpus", Tenant: "public"}); err != nil {
 				return nil, fmt.Errorf("rag-reader capability refused: %w", err)
 			}
@@ -137,9 +137,9 @@ func main() {
 			if err != nil {
 				return nil, err
 			}
-			out := make([]webapp.SearchHit, 0, len(chunks))
+			out := make([]server.SearchHit, 0, len(chunks))
 			for _, c := range chunks {
-				out = append(out, webapp.SearchHit{Source: c.DocID, Snippet: webapp.Snippet(c.Text), Untrusted: c.Prov == rag.Untrusted})
+				out = append(out, server.SearchHit{Source: c.DocID, Snippet: server.Snippet(c.Text), Untrusted: c.Prov == rag.Untrusted})
 			}
 			return out, nil
 		}
@@ -240,8 +240,8 @@ func main() {
 	// MCP governance tab (C6): surface the gateway's servers, their advertised +
 	// allow-listed tools, the approved pin vs the live manifest (rug-pull alert),
 	// and an operator Approve (re-pin). "blocked" reflects the kill switch.
-	mcpList := func() []webapp.MCPServer {
-		var out []webapp.MCPServer
+	mcpList := func() []server.MCPServer {
+		var out []server.MCPServer
 		for _, st := range toolGW.Status(context.Background()) {
 			status := "pinned"
 			switch {
@@ -254,7 +254,7 @@ func main() {
 			case st.Mismatch:
 				status = "rug-pull"
 			}
-			out = append(out, webapp.MCPServer{
+			out = append(out, server.MCPServer{
 				Name: st.Name, Tools: st.Tools, Allowed: st.Allowed,
 				Pinned: shortHash(st.Pinned), Current: shortHash(st.Current), Status: status,
 			})
@@ -338,8 +338,8 @@ func main() {
 	// policies, and the child profile persisted by a prior session from cpstore on
 	// boot. The shipped consts remain only the fail-closed default when the DB has
 	// no row for a knob.
-	var profileLoad func() webapp.Profile
-	var profileSave func(webapp.Profile) error
+	var profileLoad func() server.Profile
+	var profileSave func(server.Profile) error
 	if inv != nil {
 		for _, n := range []string{"planner", "coder", "extractor"} {
 			if text, ok, _ := inv.LatestPromptText(n); ok {
@@ -376,14 +376,14 @@ func main() {
 		if j, ok, _ := inv.GetConfig("extractor_json"); ok && j == "true" {
 			extractor.SetJSONMode(true)
 		}
-		profileLoad = func() webapp.Profile {
-			var p webapp.Profile
+		profileLoad = func() server.Profile {
+			var p server.Profile
 			if v, ok, _ := inv.GetConfig("profile"); ok {
 				_ = json.Unmarshal([]byte(v), &p)
 			}
 			return p
 		}
-		profileSave = func(p webapp.Profile) error {
+		profileSave = func(p server.Profile) error {
 			raw, _ := json.Marshal(p)
 			return inv.SetConfig("profile", string(raw))
 		}
@@ -405,15 +405,15 @@ func main() {
 
 	// Known-good bundles (C10): snapshot the whole governed plane under a label and
 	// roll it all back in one step. Needs the DB.
-	var bundleList func() []webapp.BundleInfo
+	var bundleList func() []server.BundleInfo
 	var bundleSave func(string) error
 	var bundleApply func(string) error
 	if inv != nil {
-		bundleList = func() []webapp.BundleInfo {
+		bundleList = func() []server.BundleInfo {
 			rows, _ := inv.ListBundles(50)
-			out := make([]webapp.BundleInfo, 0, len(rows))
+			out := make([]server.BundleInfo, 0, len(rows))
 			for _, b := range rows {
-				out = append(out, webapp.BundleInfo{Label: b.Label, At: b.At.Format("2006-01-02 15:04")})
+				out = append(out, server.BundleInfo{Label: b.Label, At: b.At.Format("2006-01-02 15:04")})
 			}
 			return out
 		}
@@ -446,25 +446,25 @@ func main() {
 	// we say so.
 	var evalMu sync.Mutex
 	labels := []string{"testdata/emaildrop/labels/3.json", "testdata/emaildrop/labels/1.json"}
-	evalHistory := func() []webapp.EvalResult {
+	evalHistory := func() []server.EvalResult {
 		if inv == nil {
 			return nil
 		}
 		rows, _ := inv.ListEvals(20)
-		out := make([]webapp.EvalResult, 0, len(rows))
+		out := make([]server.EvalResult, 0, len(rows))
 		for _, e := range rows {
-			out = append(out, webapp.EvalResult{Label: e.Label, F1: e.F1, At: e.At.Format("2006-01-02 15:04")})
+			out = append(out, server.EvalResult{Label: e.Label, F1: e.F1, At: e.At.Format("2006-01-02 15:04")})
 		}
 		return out
 	}
-	evalRun := func() ([]webapp.EvalResult, string) {
+	evalRun := func() ([]server.EvalResult, string) {
 		evalMu.Lock()
 		defer evalMu.Unlock()
 		live := gatewayUp()
 		prev := os.Getenv("EXTRACT_MODE")
 		os.Setenv("EXTRACT_MODE", "llm")
 		defer os.Setenv("EXTRACT_MODE", prev)
-		var out []webapp.EvalResult
+		var out []server.EvalResult
 		for _, l := range labels {
 			rep, err := eval.Score(l, true)
 			if err != nil {
@@ -473,13 +473,13 @@ func main() {
 			if inv != nil {
 				_ = inv.RecordEval(rep.Source, rep.F1)
 			}
-			out = append(out, webapp.EvalResult{Label: rep.Source, F1: rep.F1})
+			out = append(out, server.EvalResult{Label: rep.Source, F1: rep.F1})
 		}
 		return out, evalMode(live)
 	}
-	promptTest := func(name, candidate string) webapp.PromptTestResult {
+	promptTest := func(name, candidate string) server.PromptTestResult {
 		if name != "extractor" {
-			return webapp.PromptTestResult{Note: "shadow eval applies to the 'extractor' prompt (the labeled eval path); planner/coder drive the orchestrator demo, not this eval."}
+			return server.PromptTestResult{Note: "shadow eval applies to the 'extractor' prompt (the labeled eval path); planner/coder drive the orchestrator demo, not this eval."}
 		}
 		evalMu.Lock()
 		defer evalMu.Unlock()
@@ -513,12 +513,12 @@ func main() {
 			asrVal = 1.0
 		}
 		gateOK, _ := controlplane.PromotionGate{MinF1: baseline, F1: func() float64 { return f1 }, ASR: func() float64 { return asrVal }}.Allow()
-		return webapp.PromptTestResult{F1: f1, Baseline: baseline, ASRPass: asrPass, GateOK: gateOK, Mode: evalMode(live)}
+		return server.PromptTestResult{F1: f1, Baseline: baseline, ASRPass: asrPass, GateOK: gateOK, Mode: evalMode(live)}
 	}
 
 	srv := &http.Server{
 		Addr: *addr,
-		Handler: (&webapp.Server{
+		Handler: (&server.Server{
 			AuditPath: auditPath, OutboxDir: cfg.Outbox, InboxPath: cfg.Inbox,
 			Egress: egress, Fetch: fetch, Verifier: verifier, Safety: safety, Search: search, Index: enrichIndex,
 			Feedback: feedback, FlywheelStats: flywheelStats, Chat: chat,

@@ -1,4 +1,4 @@
-package webapp_test
+package server_test
 
 import (
 	"context"
@@ -18,7 +18,7 @@ import (
 	"github.com/t0ul/ai-security-engineering/pkg/controlplane"
 	"github.com/t0ul/ai-security-engineering/pkg/netpolicy"
 	"github.com/t0ul/ai-security-engineering/pkg/provenance"
-	"github.com/t0ul/ai-security-engineering/webapp"
+	"github.com/t0ul/ai-security-engineering/pkg/server"
 	"github.com/t0ul/gledger"
 )
 
@@ -27,12 +27,12 @@ func TestEventsAPIReadsICS(t *testing.T) {
 	icsText, _, _ := ics.Write([]schema.Event{schema.New("PTA Meeting", "2026-09-24T08:30:00")}, "cal")
 	os.WriteFile(filepath.Join(dir, "3.events.ics"), []byte(icsText), 0o644)
 
-	srv := httptest.NewServer((&webapp.Server{OutboxDir: dir}).Handler())
+	srv := httptest.NewServer((&server.Server{OutboxDir: dir}).Handler())
 	defer srv.Close()
 	resp, _ := http.Get(srv.URL + "/api/events")
 	defer resp.Body.Close()
 	var out struct {
-		Events []webapp.Event `json:"events"`
+		Events []server.Event `json:"events"`
 	}
 	json.NewDecoder(resp.Body).Decode(&out)
 	if len(out.Events) != 1 || out.Events[0].Title != "PTA Meeting" || !out.Events[0].HasReminder {
@@ -48,16 +48,16 @@ func TestEventsAPIReadsTaskAndAction(t *testing.T) {
 	}, "cal")
 	os.WriteFile(filepath.Join(dir, "1.events.ics"), []byte(icsText), 0o644)
 
-	srv := httptest.NewServer((&webapp.Server{OutboxDir: dir}).Handler())
+	srv := httptest.NewServer((&server.Server{OutboxDir: dir}).Handler())
 	defer srv.Close()
 	resp, _ := http.Get(srv.URL + "/api/events")
 	defer resp.Body.Close()
 	var out struct {
-		Events []webapp.Event `json:"events"`
+		Events []server.Event `json:"events"`
 	}
 	json.NewDecoder(resp.Body).Decode(&out)
 
-	byKind := map[string]webapp.Event{}
+	byKind := map[string]server.Event{}
 	for _, e := range out.Events {
 		byKind[e.Kind] = e
 	}
@@ -89,13 +89,13 @@ func writeSidecar(t *testing.T, dir string) {
 func TestItemsAPIFiltersByKind(t *testing.T) {
 	dir := t.TempDir()
 	writeSidecar(t, dir)
-	srv := httptest.NewServer((&webapp.Server{OutboxDir: dir}).Handler())
+	srv := httptest.NewServer((&server.Server{OutboxDir: dir}).Handler())
 	defer srv.Close()
 
 	resp, _ := http.Get(srv.URL + "/api/items?kind=task")
 	defer resp.Body.Close()
 	var out struct {
-		Items []webapp.Event `json:"items"`
+		Items []server.Event `json:"items"`
 	}
 	json.NewDecoder(resp.Body).Decode(&out)
 	if len(out.Items) != 1 || out.Items[0].Title != "Buy popcorn" {
@@ -106,7 +106,7 @@ func TestItemsAPIFiltersByKind(t *testing.T) {
 func TestSummaryAndReviewAPI(t *testing.T) {
 	dir := t.TempDir()
 	writeSidecar(t, dir)
-	srv := httptest.NewServer((&webapp.Server{OutboxDir: dir}).Handler())
+	srv := httptest.NewServer((&server.Server{OutboxDir: dir}).Handler())
 	defer srv.Close()
 
 	resp, _ := http.Get(srv.URL + "/api/summary?file=wk.summary.json")
@@ -120,7 +120,7 @@ func TestSummaryAndReviewAPI(t *testing.T) {
 	rv, _ := http.Get(srv.URL + "/api/review")
 	defer rv.Body.Close()
 	var out struct {
-		Items []webapp.Event `json:"items"`
+		Items []server.Event `json:"items"`
 	}
 	json.NewDecoder(rv.Body).Decode(&out)
 	if len(out.Items) != 1 || out.Items[0].Title != "Maybe meeting" {
@@ -130,7 +130,7 @@ func TestSummaryAndReviewAPI(t *testing.T) {
 
 func TestSummaryAPIRejectsTraversal(t *testing.T) {
 	dir := t.TempDir()
-	srv := httptest.NewServer((&webapp.Server{OutboxDir: dir}).Handler())
+	srv := httptest.NewServer((&server.Server{OutboxDir: dir}).Handler())
 	defer srv.Close()
 	resp, _ := http.Get(srv.URL + "/api/summary?file=../../etc/passwd")
 	defer resp.Body.Close()
@@ -167,7 +167,7 @@ func hitlConfirm(t *testing.T, url, file string, index int) *http.Response {
 func TestAcceptRequiresHITLConfirm(t *testing.T) {
 	dir := t.TempDir()
 	writeSidecar(t, dir)
-	srv := httptest.NewServer((&webapp.Server{OutboxDir: dir}).Handler())
+	srv := httptest.NewServer((&server.Server{OutboxDir: dir}).Handler())
 	defer srv.Close()
 
 	// Phase 1 alone must NOT write anything.
@@ -187,7 +187,7 @@ func TestAcceptRequiresHITLConfirm(t *testing.T) {
 func TestAcceptForgedNonceRefused(t *testing.T) {
 	dir := t.TempDir()
 	writeSidecar(t, dir)
-	srv := httptest.NewServer((&webapp.Server{OutboxDir: dir}).Handler())
+	srv := httptest.NewServer((&server.Server{OutboxDir: dir}).Handler())
 	defer srv.Close()
 
 	// A confirm with a nonce that was never issued (forged/replayed) is refused.
@@ -225,7 +225,7 @@ func TestActionFetchesAllowlistedURL(t *testing.T) {
 	dir := t.TempDir()
 	writeActionSidecar(t, dir, "https://class.example/join")
 	fetched := ""
-	srv := httptest.NewServer((&webapp.Server{
+	srv := httptest.NewServer((&server.Server{
 		OutboxDir: dir,
 		Egress:    netpolicy.Policy{Allow: []string{"class.example"}, Resolve: func(string) ([]net.IP, error) { return []net.IP{net.ParseIP("93.184.216.34")}, nil }},
 		Fetch:     func(_ context.Context, url string) (string, error) { fetched = url; return "HTTP 200\nhello", nil },
@@ -245,7 +245,7 @@ func TestActionRefusesNonAllowlisted(t *testing.T) {
 	dir := t.TempDir()
 	writeActionSidecar(t, dir, "http://169.254.169.254/latest/meta-data/")
 	called := false
-	srv := httptest.NewServer((&webapp.Server{
+	srv := httptest.NewServer((&server.Server{
 		OutboxDir: dir,
 		Egress:    netpolicy.Policy{}, // deny all
 		Fetch:     func(_ context.Context, _ string) (string, error) { called = true; return "", nil },
@@ -265,7 +265,7 @@ func TestICSServesOnlyICS(t *testing.T) {
 	dir := t.TempDir()
 	writeSidecar(t, dir) // writes wk.summary.json (PII)
 	os.WriteFile(filepath.Join(dir, "wk.events.ics"), []byte("BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n"), 0o644)
-	srv := httptest.NewServer((&webapp.Server{OutboxDir: dir}).Handler())
+	srv := httptest.NewServer((&server.Server{OutboxDir: dir}).Handler())
 	defer srv.Close()
 
 	r1, _ := http.Get(srv.URL + "/ics/wk.summary.json")
@@ -281,7 +281,7 @@ func TestICSServesOnlyICS(t *testing.T) {
 }
 
 func TestCrossOriginPostRefused(t *testing.T) {
-	srv := httptest.NewServer((&webapp.Server{InboxPath: t.TempDir()}).Handler())
+	srv := httptest.NewServer((&server.Server{InboxPath: t.TempDir()}).Handler())
 	defer srv.Close()
 	req, _ := http.NewRequest("POST", srv.URL+"/api/drop", strings.NewReader("text=hi"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -304,13 +304,13 @@ func TestEventsReportProvenance(t *testing.T) {
 	mb, _ := json.Marshal(signer.Sign([]byte(icsText)))
 	os.WriteFile(filepath.Join(dir, "3.events.ics.sig"), mb, 0o644)
 
-	srv := httptest.NewServer((&webapp.Server{OutboxDir: dir, Verifier: provenance.NewVerifier().Trust("email-agent", pub)}).Handler())
+	srv := httptest.NewServer((&server.Server{OutboxDir: dir, Verifier: provenance.NewVerifier().Trust("email-agent", pub)}).Handler())
 	defer srv.Close()
-	get := func() webapp.Event {
+	get := func() server.Event {
 		resp, _ := http.Get(srv.URL + "/api/events")
 		defer resp.Body.Close()
 		var out struct {
-			Events []webapp.Event `json:"events"`
+			Events []server.Event `json:"events"`
 		}
 		json.NewDecoder(resp.Body).Decode(&out)
 		if len(out.Events) != 1 {
@@ -332,7 +332,7 @@ func TestKillSwitchGatesSideEffects(t *testing.T) {
 	dir := t.TempDir()
 	writeSidecar(t, dir)
 	safety := controlplane.NewSafety(nil)
-	srv := httptest.NewServer((&webapp.Server{OutboxDir: dir, InboxPath: t.TempDir(), Safety: safety}).Handler())
+	srv := httptest.NewServer((&server.Server{OutboxDir: dir, InboxPath: t.TempDir(), Safety: safety}).Handler())
 	defer srv.Close()
 	setLevel := func(l int) {
 		r, _ := http.Post(srv.URL+"/api/killswitch", "application/json", strings.NewReader(fmt.Sprintf(`{"level":%d}`, l)))
@@ -365,10 +365,10 @@ func TestKillSwitchGatesSideEffects(t *testing.T) {
 
 func TestAskSearchesCorpus(t *testing.T) {
 	var gotQuery string
-	srv := httptest.NewServer((&webapp.Server{
-		Search: func(q string, k int) ([]webapp.SearchHit, error) {
+	srv := httptest.NewServer((&server.Server{
+		Search: func(q string, k int) ([]server.SearchHit, error) {
 			gotQuery = q
-			return []webapp.SearchHit{{Source: "handbook.txt", Snippet: "the nurse is in Room 219", Untrusted: true}}, nil
+			return []server.SearchHit{{Source: "handbook.txt", Snippet: "the nurse is in Room 219", Untrusted: true}}, nil
 		},
 	}).Handler())
 	defer srv.Close()
@@ -376,7 +376,7 @@ func TestAskSearchesCorpus(t *testing.T) {
 	resp, _ := http.Get(srv.URL + "/api/ask?q=nurse")
 	defer resp.Body.Close()
 	var out struct {
-		Hits []webapp.SearchHit `json:"hits"`
+		Hits []server.SearchHit `json:"hits"`
 	}
 	json.NewDecoder(resp.Body).Decode(&out)
 	if gotQuery != "nurse" || len(out.Hits) != 1 || !strings.Contains(out.Hits[0].Snippet, "Room 219") {
@@ -385,7 +385,7 @@ func TestAskSearchesCorpus(t *testing.T) {
 }
 
 func TestScorecardAPIAllPass(t *testing.T) {
-	srv := httptest.NewServer((&webapp.Server{}).Handler())
+	srv := httptest.NewServer((&server.Server{}).Handler())
 	defer srv.Close()
 	resp, err := http.Get(srv.URL + "/api/scorecard")
 	if err != nil {
@@ -404,7 +404,7 @@ func TestScorecardAPIAllPass(t *testing.T) {
 
 func TestDropWritesToInbox(t *testing.T) {
 	inbox := t.TempDir()
-	srv := httptest.NewServer((&webapp.Server{InboxPath: inbox}).Handler())
+	srv := httptest.NewServer((&server.Server{InboxPath: inbox}).Handler())
 	defer srv.Close()
 	resp, err := http.PostForm(srv.URL+"/api/drop", map[string][]string{"text": {"Back to School Night Sept 29th 6PM"}})
 	if err != nil {
@@ -430,7 +430,7 @@ func TestIncidentsAPI(t *testing.T) {
 	a.Emit(trace, "request", "start", nil)
 	a.Emit(trace, "policy", "gate", gledger.F{"decision": "block"})
 
-	srv := httptest.NewServer((&webapp.Server{AuditPath: path}).Handler())
+	srv := httptest.NewServer((&server.Server{AuditPath: path}).Handler())
 	defer srv.Close()
 	resp, _ := http.Get(srv.URL + "/api/incidents")
 	defer resp.Body.Close()

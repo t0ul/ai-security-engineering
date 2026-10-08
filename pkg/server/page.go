@@ -1,4 +1,4 @@
-package webapp
+package server
 
 const dashboardHTML = `<!doctype html>
 <html lang="en"><head>
