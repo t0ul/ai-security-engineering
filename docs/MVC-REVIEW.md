@@ -5,6 +5,20 @@ now (thin root, `pkg/` libs, `pkg/domain`/`pkg/server`/`ui`). These are the thin
 left that a Go reviewer flags. Ordered by payoff. Each: **what · where · why ·
 fix**. Nothing here is on fire; the top three are the real architecture smells.
 
+## Status (2026-10-08)
+Fixed and committed on `refactor/layout`: **#4** (explicit extraction mode, no
+global env), **#5** (single-source gateway URL), **#6** (bounded bodies), **#7**
+(server timeouts), **#8** (html/template `.gohtml` + `ui/static` split), **#9**
+(outbox cache, caught a real stale-signature bug), **#10** (mux method routing),
+**#11** (DTO boundary documented), **#12** (writeJSON logs, vet clean). **#1** is
+partly done — the gateway/chat domain logic moved to `pkg/gateway` with unit tests.
+
+**Remaining = the dependency-injection redesign** (one coherent change, do together):
+the rest of **#1** (relocate the eval/bundle/profile closures out of `main`), **#2**
+(func-field god-struct → interfaces), **#3** (constructor). These reshape the
+`Server` struct and `main`'s wiring, so they belong in one focused pass rather than
+piecemeal. Plan below.
+
 ## P1 — architecture (worth doing first)
 
 ### 1. The composition root does the work. Controller logic lives in `main`.
@@ -71,5 +85,23 @@ fix**. Nothing here is on fire; the top three are the real architecture smells.
 - **`go vet ./pkg/server/` is not clean** — "using resp before checking for errors" ×4 in [webapp_test.go:34+](pkg/server/webapp_test.go). Fix the tests; keep vet green in CI.
 - **`context.Background()` in [webapp.go:351](pkg/server/webapp.go)** (`defendedASR`) — if that ever runs on a request path, thread `r.Context()` so a client disconnect cancels the work.
 
-## Suggested order
-1, 2, 3 together (they're one refactor: constructor + interfaces + move logic out of `main`). Then 4, 5, 6, 7 (quick, high-value). Then the P3 cleanups as you touch each file. Keep `go build`/`go test ./...`/`go vet`/`cmd/scorecard` green after each — same discipline as the layout refactor.
+## Plan for the remaining DI redesign (#1 cont. + #2 + #3)
+Do it in one focused pass, behavior-preserving, green after each step:
+1. **Split `Server` fields.** Move the ~25 dependency fields into an embedded
+   `Config` struct; leave the internal state (`mu`/`pend`, `rl*`, `ev*`) on
+   `Server`. Handlers keep using `s.X` (promotion), so only the type def changes.
+   The `rl*` fields sit mid-struct today — relocate them to the internal group.
+2. **Constructor (#3).** `func New(Config) *Server` — eager-init `pend`, drop the
+   lazy `if s.pend == nil` in `confirm.go`, validate obvious mis-wirings (e.g.
+   `ProfileSave` set without `ProfileLoad`). Route `main` + the 19 test literals
+   through it (`server.New(server.Config{OutboxDir: dir})`).
+3. **Interfaces (#2).** Replace the heterogeneous func-fields with a few named
+   interfaces — `ChatService`, `EvalService`, `PromptStore`, a grouped
+   `ControlPlane` for the governed planes. Presence becomes a typed capability,
+   not an `if s.X != nil`. Add one fake per interface and unit-test a handler.
+4. **Move logic (#1 cont.).** Relocate the `evalRun`/`promptTest`/`bundle*`/
+   `profile*` closures from `main` onto the service types that now back those
+   interfaces. `main` ends as: read config → build deps → `server.New` → serve.
+
+Keep `go build`/`go test ./...`/`go vet`/`cmd/scorecard` (32/0) green after each
+step — same discipline as the layout refactor.
