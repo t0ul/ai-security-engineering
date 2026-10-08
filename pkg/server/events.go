@@ -77,9 +77,59 @@ type Event struct {
 
 // events reads the accepted .ics artifacts in OutboxDir and returns their events
 // for the calendar view. The .ics is the source of truth the user accepts.
-// allEvents reads every .ics in the outbox into a sorted event list (shared by
-// the Calendar list and the daily timeline).
+// allEvents returns the parsed outbox events, cached and keyed by the outbox
+// directory's modification time so repeated requests (Calendar, Items, Summary,
+// and now the chat's week schedule) don't re-read and re-parse every .ics each
+// time. accept/reject and new drops add or remove files, which bumps the dir
+// mtime and invalidates the cache. The returned slice is read-only — callers
+// render it, they must not mutate it in place.
 func (s *Server) allEvents() []Event {
+	if s.OutboxDir == "" {
+		return nil
+	}
+	// Fingerprint the .ics/.sig entries (name+size+mtime), not just the dir mtime:
+	// an in-place content edit (e.g. a tampered .ics) changes a file's size/mtime
+	// but not necessarily the parent dir's, and must invalidate so the signature
+	// re-verifies — serving a stale signed=true would be a security regression.
+	fp := s.outboxFingerprint()
+	s.evMu.Lock()
+	if s.evCache != nil && fp == s.evFP {
+		cached := s.evCache
+		s.evMu.Unlock()
+		return cached
+	}
+	s.evMu.Unlock()
+	out := s.readAllEvents()
+	s.evMu.Lock()
+	s.evCache, s.evFP = out, fp
+	s.evMu.Unlock()
+	return out
+}
+
+// outboxFingerprint is a cheap key over the outbox's .ics/.sig entries: it stats
+// (via ReadDir) but never reads or parses, so a cache hit skips all I/O + parse +
+// signature verification. Any add/remove/edit changes it.
+func (s *Server) outboxFingerprint() string {
+	entries, err := os.ReadDir(s.OutboxDir)
+	if err != nil {
+		return ""
+	}
+	var b strings.Builder
+	for _, e := range entries {
+		n := strings.ToLower(e.Name())
+		if !strings.HasSuffix(n, ".ics") && !strings.HasSuffix(n, ".sig") {
+			continue
+		}
+		if info, ierr := e.Info(); ierr == nil {
+			fmt.Fprintf(&b, "%s:%d:%d;", e.Name(), info.Size(), info.ModTime().UnixNano())
+		}
+	}
+	return b.String()
+}
+
+// readAllEvents reads every .ics in the outbox into a sorted, de-duplicated event
+// list. allEvents caches the result.
+func (s *Server) readAllEvents() []Event {
 	var out []Event
 	if s.OutboxDir != "" {
 		entries, _ := os.ReadDir(s.OutboxDir)

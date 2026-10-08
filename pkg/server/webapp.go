@@ -28,6 +28,14 @@ import (
 	"github.com/t0ul/gorauder"
 )
 
+// Model/DTO boundary (MVC): the shared domain nouns live in pkg/domain
+// (Profile/Child/SearchHit/MCPServer); the calendar event's model is
+// pkg/agent/schema.Event. The response shapes defined in THIS package
+// (PromptRow, PolicyRow, SamplingRow, BudgetRow, BundleInfo, EvalResult,
+// PromptTestResult, Anchor, Event) are Controller-owned presentation DTOs by
+// deliberate choice — they are the JSON wire format of specific handlers, not
+// reusable domain types, so they stay next to the handler that serves them.
+
 // Server serves the dashboard and its API.
 type Server struct {
 	AuditPath string // gledger log to read incidents from
@@ -130,6 +138,13 @@ type Server struct {
 	// evidence-first, single-use, clickjack/forgery-resistant confirm).
 	mu   sync.Mutex
 	pend map[string]pending
+
+	// event cache (events.go): the parsed outbox, keyed by a fingerprint of the
+	// .ics/.sig entries so repeated reads don't re-parse+re-verify every file. Any
+	// add/remove/in-place edit changes the fingerprint and invalidates it.
+	evMu    sync.Mutex
+	evCache []Event
+	evFP    string
 }
 
 // verifySig reports whether <name>.sig is a valid content credential over the
