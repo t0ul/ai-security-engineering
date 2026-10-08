@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent Console</title>
+<link rel="stylesheet" href="/static/app.css">
+</head><body>
+<div class="app">
+<aside class="sidebar">
+  <div class="brand">🗓️ Agent Console</div>
+  <nav>
+    <button data-tab="chat">💬 Chat</button>
+    <div class="grp">You</div>
+    <button data-tab="calendar" class="active">Calendar</button>
+    <button data-tab="week">My Week</button>
+    <button data-tab="tasks">Tasks</button>
+    <button data-tab="review">Review</button>
+    <button data-tab="ask">Ask school</button>
+    <button data-tab="activity">Activity</button>
+    <div class="grp">Operator</div>
+    <button data-tab="security">Security</button>
+    <button data-tab="prompts">Prompts</button>
+    <button data-tab="sampling">Sampling</button>
+    <button data-tab="policies">Policies</button>
+    <button data-tab="budgets">Budgets</button>
+    <button data-tab="eval">Eval</button>
+    <button data-tab="incidents">Incidents</button>
+  </nav>
+</aside>
+<main>
+  <section id="chat" class="hide">
+    <div class="chatwrap">
+      <div class="card" style="flex:2;min-width:0">
+        <strong>Chat</strong> <span class="mut">— ask about your emails &amp; this week; grounded in the scrubbed corpus, retrieved text treated as untrusted data (M8); dates come from the host clock, not emails</span>
+        <div id="chatlog" class="chatlog"></div>
+        <div class="chatrow"><input id="chatq" placeholder="e.g. what's going on this week? what's today's date?"><button class="go" onclick="sendChat()">Send</button></div>
+        <label class="mut" style="display:block;margin-top:8px"><input type="checkbox" id="chatUnsafe"> controls off <span style="opacity:.7">— demo: show a poisoned email hijack the answer (then uncheck to see the control block it)</span></label>
+      </div>
+      <div class="card minical" style="flex:1;min-width:230px">
+        <strong>This month</strong> <span class="mut">— click a day to open the calendar</span>
+        <div id="miniCal"></div>
+      </div>
+    </div>
+  </section>
+  <section id="calendar">
+    <div class="card">
+      <strong>Upcoming</strong> <span class="mut">— next things across meetings, tasks &amp; heads-ups</span>
+      <div class="strip" id="deadlines"></div>
+    </div>
+    <div class="card">
+      <strong>Calendar</strong> <span class="mut">— meetings the agent extracted; accept downloads the .ics (with a reminder)</span>
+      <p class="mut" id="inbox"></p>
+      <div class="dz" id="dropzone">
+        Drag a <b>.txt</b> email here, or <label class="link">choose a file<input id="file" type="file" accept=".txt" hidden></label>, or paste below.
+        <div style="margin-top:8px"><textarea id="paste" rows="3" placeholder="paste email text…"></textarea></div>
+        <div style="margin-top:8px"><button class="go" onclick="dropText()">Process email</button> <span id="dropmsg" class="mut"></span></div>
+      </div>
+      <div class="viewtoggle">
+        <button class="ghost" id="vList" onclick="setView('list')">List</button>
+        <button class="ghost" id="vMonth" onclick="setView('month')">Month</button>
+      </div>
+      <div id="events"></div>
+      <div id="monthView" class="hide"></div>
+    </div>
+  </section>
+
+  <section id="week" class="hide">
+    <div class="card">
+      <strong>My Week</strong> <span class="mut">— your kid's day from every processed email + the profile</span>
+      <div style="margin-top:8px">
+        <button class="ghost" onclick="loadWeek('today')">Today</button>
+        <button class="ghost" onclick="loadWeek('tomorrow')">Tomorrow</button>
+        <span id="weekDay" class="mut"></span>
+      </div>
+      <div id="timeline" style="margin-top:8px"><span class="mut">loading…</span></div>
+    </div>
+    <div class="card">
+      <strong>Child profile</strong> <span class="mut">— personalizes the day (stays on this host). JSON: children[] with name/grade/teacher/in/lunch/out/notes.</span>
+      <textarea id="profileJSON" rows="8" style="width:100%;margin-top:6px"></textarea>
+      <div style="margin-top:6px"><button class="go" onclick="saveProfile()">Save profile</button> <span id="profileMsg" class="mut"></span></div>
+    </div>
+  </section>
+
+  <section id="tasks" class="hide">
+    <div class="card">
+      <strong>Tasks &amp; reminders</strong> <span class="mut">— the non-meeting things an email asks of you</span>
+      <h3>To do</h3><div id="taskList"></div>
+      <h3>Heads-up</h3><div id="headsList"></div>
+      <h3>Actions (links)</h3><div id="actionList"></div>
+    </div>
+    <div class="card">
+      <strong>By email</strong> <span class="mut">— digest &amp; contacts the agent pulled</span>
+      <div id="summaries"></div>
+    </div>
+  </section>
+
+  <section id="review" class="hide">
+    <div class="card">
+      <strong>Needs review</strong> <span class="mut">— low-confidence or flagged; not added unattended</span>
+      <div id="reviewList"></div>
+    </div>
+  </section>
+
+  <section id="activity" class="hide">
+    <div class="card">
+      <strong>Agent activity</strong> <span class="mut">— what the agent did, newest first (from the tamper-evident log)</span>
+      <div class="feed" id="feed"></div>
+    </div>
+  </section>
+
+  <section id="ask" class="hide">
+    <div class="card">
+      <strong>Ask school</strong> <span class="mut">— search your past emails &amp; the handbook (what you've dropped)</span>
+      <div style="margin-top:8px"><input id="askq" placeholder="e.g. nurse, phone policy, book fair" style="width:70%"><button class="go" onclick="doAsk()">Search</button></div>
+      <div id="askOut" style="margin-top:10px"></div>
+    </div>
+    <div class="card">
+      <strong>Enrich from a link</strong> <span class="mut">— fetch an allow-listed handbook URL into the knowledge base (R6: HITL + egress-gated + fetched in the MicroVM, indexed untrusted)</span>
+      <div style="margin-top:8px"><input id="enrichURL" placeholder="https://ps51eliashowe.org/handbook" style="width:70%"><button class="go" onclick="doEnrich()">Fetch</button></div>
+      <div id="enrichOut" style="margin-top:10px" class="mut"></div>
+    </div>
+    <div class="card">
+      <strong>Directory</strong> <span class="mut">— contacts the agent surfaced across your emails + profile teachers (R5, host-only)</span>
+      <div id="directory" style="margin-top:8px"><span class="mut">loading…</span></div>
+    </div>
+  </section>
+
+  <section id="security" class="hide">
+    <div class="card">
+      <strong>Kill switch</strong> <span class="mut">— halt the agent (M18)</span>
+      <div style="margin-top:8px">level: <span id="klevel" class="pill">—</span>
+        <button class="ghost" onclick="setKill(0)">Resume</button>
+        <button class="ghost" onclick="setKill(1)">Block actions</button>
+        <button class="ghost" onclick="setKill(2)">Pause</button>
+        <button class="ghost" onclick="setKill(3)">Full halt</button>
+      </div>
+    </div>
+    <div class="card">
+      <strong>MCP servers</strong> <span class="mut">— tool gateway: manifest pins &amp; rug-pull defense (M7)</span>
+      <div id="mcp"><span class="mut">loading…</span></div>
+    </div>
+    <div class="card">
+      <strong>Config snapshots</strong> <span class="mut">— known-good bundles (M15/C10): snapshot the whole governed plane (prompts + sampling + policies) and roll it all back in one click.</span>
+      <div style="margin-top:8px"><input id="bundleLabel" placeholder="e.g. before-prompt-tweak" style="width:50%"><button class="go" onclick="saveBundle()">Snapshot now</button></div>
+      <div id="bundleList" style="margin-top:8px"><span class="mut">loading…</span></div>
+    </div>
+    <div class="card">
+      <strong>Security scorecard</strong>
+      <p class="mut">Run the full red-team suite against the live controls. Every attack should drop to 0%.</p>
+      <button class="go" onclick="runScorecard()">Run scorecard</button>
+      <span id="verdict"></span>
+      <table id="score" class="hide"><thead><tr><th>technique</th><th>control</th><th>before</th><th>after</th><th></th></tr></thead><tbody></tbody></table>
+    </div>
+  </section>
+
+  <section id="prompts" class="hide">
+    <div class="card">
+      <strong>Prompts</strong> <span class="mut">— governed system prompts (M14): versioned, hashed, rollback to default. Resolved by the LLM planner/coder/extractor when enabled.</span>
+      <div id="promptList"><span class="mut">loading…</span></div>
+    </div>
+  </section>
+
+  <section id="sampling" class="hide">
+    <div class="card">
+      <strong>Sampling</strong> <span class="mut">— governed decoding params (M19): temperature / max tokens / seed. A seed makes generations reproducible for eval &amp; forensics. Versioned, hashed, rollback.</span>
+      <div id="samplingList"><span class="mut">loading…</span></div>
+    </div>
+  </section>
+
+  <section id="policies" class="hide">
+    <div class="card">
+      <strong>Policies</strong> <span class="mut">— governed security allowlists (M14/M16): egress hosts, exec argv[0]s. Versioned, hashed, rollback. Deny-by-default (private/IMDS, argcheck) still enforced regardless.</span>
+      <div id="policyList"><span class="mut">loading…</span></div>
+    </div>
+  </section>
+
+  <section id="budgets" class="hide">
+    <div class="card">
+      <strong>Budgets &amp; keys</strong> <span class="mut">— governed limits (M20): API rate (enforced here), token/concurrency/spend (gateway-side). Keys shown by POINTER (env-var name) + whether it's set — never the value.</span>
+      <div id="budgetList"><span class="mut">loading…</span></div>
+    </div>
+  </section>
+
+  <section id="eval" class="hide">
+    <div class="card">
+      <strong>Eval</strong> <span class="mut">— ground-truth F1 on the labeled emails (M11). The promotion gate = F1 ≥ baseline AND ADD ASR = 0.</span>
+      <div style="margin-top:8px"><button class="go" onclick="runEval()">Run eval now</button> <span id="evalMode" class="mut"></span></div>
+      <div id="flywheel" style="margin-top:8px" class="mut"></div>
+      <div id="evalHistory" style="margin-top:8px"><span class="mut">loading…</span></div>
+    </div>
+  </section>
+
+  <section id="incidents" class="hide">
+    <div class="card">
+      <strong>Incidents</strong> <span class="mut">— click a trace to replay it on tamper-evident evidence</span>
+      <table id="traces"><tbody></tbody></table>
+    </div>
+    <div class="card hide" id="replayCard"><strong>Replay</strong><pre id="replay"></pre></div>
+  </section>
+</main>
+</div>
+<script>const __CAP__="{{.CapToken}}";</script>
+<script src="/static/app.js"></script>
+</body></html>

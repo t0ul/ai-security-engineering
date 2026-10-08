@@ -244,6 +244,7 @@ func (s *Server) Handler() http.Handler {
 		mux.HandleFunc("/ics/", s.serveICS)           // .ics only — NOT the whole outbox (sidecars hold PII)
 		mux.HandleFunc("/api/directory", s.directory) // consolidated contacts (R5)
 	}
+	mux.Handle("/static/", staticHandler())
 	mux.HandleFunc("/", s.index)
 	return mux
 }
@@ -413,9 +414,20 @@ func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	// Inject the operator capability token so the page's fetch wrapper presents
-	// it. base64url has no quote/backslash, so it is safe inside the JS string.
-	w.Write([]byte(strings.Replace(ui.Dashboard(), "__CAP_TOKEN__", s.OperatorToken, 1)))
+	// Render via html/template so the operator capability token is escaped into the
+	// page's JS-string context correctly (not a raw string replace).
+	if err := ui.RenderDashboard(w, s.OperatorToken); err != nil {
+		log.Printf("index: render dashboard: %v", err)
+	}
+}
+
+// staticHandler serves the embedded CSS/JS under /static/ with a short cache.
+func staticHandler() http.Handler {
+	fs := http.FileServer(http.FS(ui.Static))
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "public, max-age=300")
+		fs.ServeHTTP(w, r)
+	})
 }
 
 // safetyState reports the current kill-switch level.
