@@ -36,3 +36,38 @@ func TestDedupSeparatesEventFromTask(t *testing.T) {
 		t.Fatalf("an event and a task must stay distinct, got %d", len(got))
 	}
 }
+
+// TestDedupCollapsesSameDayDifferentTime is the per-day fix: the same event on the
+// same day with a different (often fabricated) time collapses to one, and the
+// all-day version wins over the mis-timed one.
+func TestDedupCollapsesSameDayDifferentTime(t *testing.T) {
+	in := []Event{
+		{Title: "Evacuation Drill", Start: "2026-10-14 22:27", Kind: "event"},
+		{Title: "Evacuation Drill", Start: "2026-10-14", Kind: "event", AllDay: true},
+	}
+	got := dedupEvents(in)
+	if len(got) != 1 {
+		t.Fatalf("same event, same day should collapse to 1, got %d: %+v", len(got), got)
+	}
+	if !got[0].AllDay {
+		t.Fatalf("the all-day entry should win over the mis-timed one, got %+v", got[0])
+	}
+}
+
+// TestDropFragments removes lowercase-start sentence fragments but keeps real titles.
+func TestDropFragments(t *testing.T) {
+	in := []Event{
+		{Title: "went smoothly. See below for the dates", Start: "2026-09-15", Kind: "event"},
+		{Title: "Our first evacuation drill", Start: "2026-09-15", Kind: "event"},
+		{Title: "3-407 visits the Columbus Branch", Start: "2026-10-08", Kind: "event"},
+	}
+	got := dropFragments(in)
+	if len(got) != 2 {
+		t.Fatalf("one fragment should be dropped, got %d: %+v", len(got), got)
+	}
+	for _, e := range got {
+		if e.Title[0] >= 'a' && e.Title[0] <= 'z' {
+			t.Fatalf("a fragment survived: %q", e.Title)
+		}
+	}
+}

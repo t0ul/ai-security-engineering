@@ -145,8 +145,26 @@ func (s *Server) readAllEvents() []Event {
 			out = append(out, evs...)
 		}
 	}
+	out = dropFragments(out)
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Start < out[j].Start })
 	return dedupEvents(out)
+}
+
+// dropFragments removes events whose title is a sentence fragment the extractor
+// grabbed rather than a real event name. A real title starts with a capital or a
+// digit ("Back to School Night", "3-407 visits the library"); a fragment starts with
+// a lowercase letter ("went smoothly. See below…", "meeting at 8:30 AM…"). High
+// precision — a clean title never starts lowercase.
+func dropFragments(in []Event) []Event {
+	out := in[:0]
+	for _, e := range in {
+		t := strings.TrimSpace(e.Title)
+		if t == "" || (t[0] >= 'a' && t[0] <= 'z') {
+			continue
+		}
+		out = append(out, e)
+	}
+	return out
 }
 
 func (s *Server) events(w http.ResponseWriter, _ *http.Request) {
