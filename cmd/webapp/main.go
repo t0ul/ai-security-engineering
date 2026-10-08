@@ -45,6 +45,7 @@ import (
 	"github.com/t0ul/gledger"
 	"github.com/t0ul/goflage"
 	"github.com/t0ul/gorauder"
+	"github.com/t0ul/gustoms"
 )
 
 func main() {
@@ -256,30 +257,7 @@ func main() {
 	// MCP governance tab (C6): surface the gateway's servers, their advertised +
 	// allow-listed tools, the approved pin vs the live manifest (rug-pull alert),
 	// and an operator Approve (re-pin). "blocked" reflects the kill switch.
-	mcpList := func() []domain.MCPServer {
-		var out []domain.MCPServer
-		for _, st := range toolGW.Status(context.Background()) {
-			status := "pinned"
-			switch {
-			case st.Err != "":
-				status = "error"
-			case !safety.AllowToolExec():
-				status = "blocked"
-			case st.Pinned == "":
-				status = "unapproved"
-			case st.Mismatch:
-				status = "rug-pull"
-			}
-			out = append(out, domain.MCPServer{
-				Name: st.Name, Tools: st.Tools, Allowed: st.Allowed,
-				Pinned: shortHash(st.Pinned), Current: shortHash(st.Current), Status: status,
-			})
-		}
-		return out
-	}
-	mcpApprove := func(server string) error {
-		return toolGW.Approve(context.Background(), gledger.NewTraceID(), server)
-	}
+	mcpReg := mcpRegistry{gw: toolGW, safety: safety}
 
 	// Governed prompts (C2): the console lists/activates/rolls-back the system
 	// prompts the LLM planner/coder/extractor resolve at runtime. Activations are
@@ -354,8 +332,7 @@ func main() {
 	// policies, and the child profile persisted by a prior session from cpstore on
 	// boot. The shipped consts remain only the fail-closed default when the DB has
 	// no row for a knob.
-	var profileLoad func() domain.Profile
-	var profileSave func(domain.Profile) error
+	var profileSvc server.ProfileStore
 	if inv != nil {
 		for _, n := range []string{"planner", "coder", "extractor", "chat_system"} {
 			if text, ok, _ := inv.LatestPromptText(n); ok {
@@ -392,66 +369,20 @@ func main() {
 		if j, ok, _ := inv.GetConfig("extractor_json"); ok && j == "true" {
 			extractor.SetJSONMode(true)
 		}
-		profileLoad = func() domain.Profile {
-			var p domain.Profile
-			if v, ok, _ := inv.GetConfig("profile"); ok {
-				_ = json.Unmarshal([]byte(v), &p)
-			}
-			return p
-		}
-		profileSave = func(p domain.Profile) error {
-			raw, _ := json.Marshal(p)
-			return inv.SetConfig("profile", string(raw))
-		}
+		profileSvc = profileStore{inv: inv}
 	}
 
 	// Data-flywheel: operator accept/reject decisions are durable ground-truth.
-	var feedback func(decision, source, title string)
-	var flywheelStats func() (int, int)
+	var flywheelSvc server.Flywheel
 	if inv != nil {
-		feedback = func(decision, source, title string) {
-			_ = inv.RecordFeedback(source, title, decision)
-			audit.Emit(gledger.NewTraceID(), "feedback", decision, gledger.F{"source": source, "title": title})
-		}
-		flywheelStats = func() (int, int) {
-			a, r, _ := inv.FeedbackStats()
-			return a, r
-		}
+		flywheelSvc = flywheel{inv: inv, audit: audit}
 	}
 
 	// Known-good bundles (C10): snapshot the whole governed plane under a label and
 	// roll it all back in one step. Needs the DB.
-	var bundleList func() []server.BundleInfo
-	var bundleSave func(string) error
-	var bundleApply func(string) error
+	var bundleSvc server.BundleStore
 	if inv != nil {
-		bundleList = func() []server.BundleInfo {
-			rows, _ := inv.ListBundles(50)
-			out := make([]server.BundleInfo, 0, len(rows))
-			for _, b := range rows {
-				out = append(out, server.BundleInfo{Label: b.Label, At: b.At.Format("2006-01-02 15:04")})
-			}
-			return out
-		}
-		bundleSave = func(label string) error {
-			b := controlplane.Snapshot(label, prompts, sampling, policies)
-			raw, _ := json.Marshal(b)
-			audit.Emit(gledger.NewTraceID(), "bundle", "saved", gledger.F{"label": label})
-			return inv.SaveBundle(label, string(raw))
-		}
-		bundleApply = func(label string) error {
-			cfg, ok, err := inv.GetBundle(label)
-			if err != nil || !ok {
-				return fmt.Errorf("no such snapshot %q", label)
-			}
-			var b controlplane.Bundle
-			if err := json.Unmarshal([]byte(cfg), &b); err != nil {
-				return err
-			}
-			b.Apply(prompts, sampling, policies)
-			audit.Emit(gledger.NewTraceID(), "bundle", "rolled_back", gledger.F{"label": label})
-			return nil
-		}
+		bundleSvc = bundleStore{inv: inv, audit: audit, prompts: prompts, sampling: sampling, policies: policies}
 	}
 
 	// Eval surfaces (C7): the Eval card + a "Test" button that shadow-evals a
@@ -469,12 +400,12 @@ func main() {
 		Handler: server.New(server.Config{
 			AuditPath: auditPath, OutboxDir: cfg.Outbox, InboxPath: cfg.Inbox,
 			Egress: egress, Fetch: fetch, Verifier: verifier, Safety: safety, Search: search, Index: enrichIndex,
-			Feedback: feedback, FlywheelStats: flywheelStats, Chat: chat,
+			Flywheel: flywheelSvc, Chat: chat,
 			Authz: authz, OperatorToken: opToken, Audit: audit,
-			MCP: mcpList, MCPApprove: mcpApprove, Prompts: prompts, Policies: policies, Sampling: sampling, Budgets: budgets,
-			Eval:       evalSvc,
-			BundleList: bundleList, BundleSave: bundleSave, BundleApply: bundleApply,
-			ProfileLoad: profileLoad, ProfileSave: profileSave,
+			MCP: mcpReg, Prompts: prompts, Policies: policies, Sampling: sampling, Budgets: budgets,
+			Eval:    evalSvc,
+			Bundles: bundleSvc,
+			Profile: profileSvc,
 		}).Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
@@ -612,6 +543,112 @@ func (e *evalService) Test(name, candidate string) server.PromptTestResult {
 	}
 	gateOK, _ := controlplane.PromotionGate{MinF1: baseline, F1: func() float64 { return f1 }, ASR: func() float64 { return asrVal }}.Allow()
 	return server.PromptTestResult{F1: f1, Baseline: baseline, ASRPass: asrPass, GateOK: gateOK, Mode: evalMode(live)}
+}
+
+// profileStore is the concrete server.ProfileStore: the household child profile in
+// the governed DB (config in the store, not a file/const).
+type profileStore struct{ inv *datastore.Store }
+
+func (p profileStore) Load() domain.Profile {
+	var pr domain.Profile
+	if v, ok, _ := p.inv.GetConfig("profile"); ok {
+		_ = json.Unmarshal([]byte(v), &pr)
+	}
+	return pr
+}
+
+func (p profileStore) Save(pr domain.Profile) error {
+	raw, _ := json.Marshal(pr)
+	return p.inv.SetConfig("profile", string(raw))
+}
+
+// flywheel is the concrete server.Flywheel: operator accept/reject decisions as
+// durable, audited ground-truth.
+type flywheel struct {
+	inv   *datastore.Store
+	audit *gledger.AuditLog
+}
+
+func (f flywheel) Record(decision, source, title string) {
+	_ = f.inv.RecordFeedback(source, title, decision)
+	f.audit.Emit(gledger.NewTraceID(), "feedback", decision, gledger.F{"source": source, "title": title})
+}
+
+func (f flywheel) Stats() (int, int) {
+	a, r, _ := f.inv.FeedbackStats()
+	return a, r
+}
+
+// mcpRegistry is the concrete server.MCPRegistry over the gustoms tool gateway.
+type mcpRegistry struct {
+	gw     *gustoms.Gateway
+	safety *controlplane.Safety
+}
+
+func (m mcpRegistry) List() []domain.MCPServer {
+	var out []domain.MCPServer
+	for _, st := range m.gw.Status(context.Background()) {
+		status := "pinned"
+		switch {
+		case st.Err != "":
+			status = "error"
+		case !m.safety.AllowToolExec():
+			status = "blocked"
+		case st.Pinned == "":
+			status = "unapproved"
+		case st.Mismatch:
+			status = "rug-pull"
+		}
+		out = append(out, domain.MCPServer{
+			Name: st.Name, Tools: st.Tools, Allowed: st.Allowed,
+			Pinned: shortHash(st.Pinned), Current: shortHash(st.Current), Status: status,
+		})
+	}
+	return out
+}
+
+func (m mcpRegistry) Approve(server string) error {
+	return m.gw.Approve(context.Background(), gledger.NewTraceID(), server)
+}
+
+// bundleStore is the concrete server.BundleStore (C10): snapshot/list/roll-back the
+// whole governed plane.
+type bundleStore struct {
+	inv      *datastore.Store
+	audit    *gledger.AuditLog
+	prompts  *controlplane.Prompts
+	sampling *controlplane.Sampling
+	policies *controlplane.Policies
+}
+
+func (b bundleStore) List() []server.BundleInfo {
+	rows, _ := b.inv.ListBundles(50)
+	out := make([]server.BundleInfo, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, server.BundleInfo{Label: r.Label, At: r.At.Format("2006-01-02 15:04")})
+	}
+	return out
+}
+
+func (b bundleStore) Save(label string) error {
+	bundle := controlplane.Snapshot(label, b.prompts, b.sampling, b.policies)
+	raw, _ := json.Marshal(bundle)
+	b.audit.Emit(gledger.NewTraceID(), "bundle", "saved", gledger.F{"label": label})
+	return b.inv.SaveBundle(label, string(raw))
+}
+
+func (b bundleStore) Apply(label string) error {
+	cfg, ok, err := b.inv.GetBundle(label)
+	if err != nil || !ok {
+		return fmt.Errorf("no such snapshot %q", label)
+	}
+	var bundle controlplane.Bundle
+	if err := json.Unmarshal([]byte(cfg), &bundle); err != nil {
+		return err
+	}
+	bundle.Apply(b.prompts, b.sampling, b.policies)
+	b.audit.Emit(gledger.NewTraceID(), "bundle", "rolled_back", gledger.F{"label": label})
+	return nil
 }
 
 // chatInjectionASR runs the chat-injection ADD against a CANDIDATE chat_system

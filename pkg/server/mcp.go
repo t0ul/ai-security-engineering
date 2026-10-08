@@ -7,7 +7,7 @@ import (
 
 // mcpList returns the MCP registry with pin status for the console.
 func (s *Server) mcpList(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, map[string]any{"servers": s.MCP()})
+	writeJSON(w, map[string]any{"servers": s.MCP.List()})
 }
 
 // mcpApprove re-pins a server to its current manifest (operator rug-pull
@@ -20,7 +20,7 @@ func (s *Server) mcpApprove(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "server required", http.StatusBadRequest)
 		return
 	}
-	if err := s.MCPApprove(req.Server); err != nil {
+	if err := s.MCP.Approve(req.Server); err != nil {
 		http.Error(w, "approve failed: "+err.Error(), http.StatusUnprocessableEntity)
 		return
 	}

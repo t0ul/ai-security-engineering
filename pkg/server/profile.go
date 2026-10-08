@@ -9,8 +9,8 @@ import (
 
 // loadProfile reads the household profile from the governed store (empty if none).
 func (s *Server) loadProfile() domain.Profile {
-	if s.ProfileLoad != nil {
-		return s.ProfileLoad()
+	if s.Profile != nil {
+		return s.Profile.Load()
 	}
 	return domain.Profile{}
 }
@@ -22,7 +22,7 @@ func (s *Server) profileGet(w http.ResponseWriter, _ *http.Request) {
 // profileSave persists the household profile to the DB (host-only, no egress).
 // CSRF + authz(write/profile) guard this route.
 func (s *Server) profileSave(w http.ResponseWriter, r *http.Request) {
-	if s.ProfileSave == nil {
+	if s.Profile == nil {
 		http.Error(w, "no profile store configured", http.StatusNotFound)
 		return
 	}
@@ -31,7 +31,7 @@ func (s *Server) profileSave(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad profile", http.StatusBadRequest)
 		return
 	}
-	if err := s.ProfileSave(p); err != nil {
+	if err := s.Profile.Save(p); err != nil {
 		http.Error(w, "save failed: "+err.Error(), http.StatusInternalServerError)
 		return
 	}

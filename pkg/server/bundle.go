@@ -12,7 +12,7 @@ type BundleInfo struct {
 }
 
 func (s *Server) bundlesList(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, map[string]any{"bundles": s.BundleList()})
+	writeJSON(w, map[string]any{"bundles": s.Bundles.List()})
 }
 
 // bundlesSave snapshots the whole governed plane under a label. CSRF +
@@ -25,7 +25,7 @@ func (s *Server) bundlesSave(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "label required", http.StatusBadRequest)
 		return
 	}
-	if err := s.BundleSave(req.Label); err != nil {
+	if err := s.Bundles.Save(req.Label); err != nil {
 		http.Error(w, "save failed: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -42,7 +42,7 @@ func (s *Server) bundlesApply(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "label required", http.StatusBadRequest)
 		return
 	}
-	if err := s.BundleApply(req.Label); err != nil {
+	if err := s.Bundles.Apply(req.Label); err != nil {
 		http.Error(w, "rollback failed: "+err.Error(), http.StatusUnprocessableEntity)
 		return
 	}

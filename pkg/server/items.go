@@ -156,8 +156,8 @@ func (s *Server) doAccept(w http.ResponseWriter, file string, item schema.Event)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if s.Feedback != nil { // data-flywheel: an accept is ground-truth that this extraction was right
-		s.Feedback("accept", file, item.Title)
+	if s.Flywheel != nil { // data-flywheel: an accept is ground-truth that this extraction was right
+		s.Flywheel.Record("accept", file, item.Title)
 	}
 	writeJSON(w, map[string]any{"ok": true, "file": outName})
 }
@@ -178,15 +178,15 @@ func (s *Server) reject(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "no such item", http.StatusBadRequest)
 		return
 	}
-	if s.Feedback != nil {
-		s.Feedback("reject", req.File, item.Title)
+	if s.Flywheel != nil {
+		s.Flywheel.Record("reject", req.File, item.Title)
 	}
 	writeJSON(w, map[string]any{"ok": true})
 }
 
 // flywheel reports the accept/reject tallies accumulated from real use.
 func (s *Server) flywheel(w http.ResponseWriter, _ *http.Request) {
-	accepts, rejects := s.FlywheelStats()
+	accepts, rejects := s.Flywheel.Stats()
 	rate := 0.0
 	if total := accepts + rejects; total > 0 {
 		rate = float64(accepts) / float64(total)

@@ -61,10 +61,9 @@ type Config struct {
 	// Index, when set with Fetch, powers safe handbook link enrichment (R6): it
 	// adds fetched (untrusted, PII-scrubbed) text to the retrieval corpus.
 	Index func(source, text string) error
-	// Feedback / FlywheelStats, when set, capture operator accept/reject decisions
-	// as durable ground-truth (the data-flywheel) and report the running tallies.
-	Feedback      func(decision, source, title string)
-	FlywheelStats func() (accepts, rejects int)
+	// Flywheel, when set, captures operator accept/reject decisions as durable
+	// ground-truth (the data-flywheel) and reports the running tallies.
+	Flywheel Flywheel
 	// Chat, when set, answers a question grounded in the corpus. unsafe=true runs
 	// the UNDEFENDED path (raw-concat retrieval, no encapsulation/scrub) — the live
 	// attack demo showing a poisoned doc's injection land; default is defended.
@@ -84,10 +83,9 @@ type Config struct {
 	Audit *gledger.AuditLog
 
 	// MCP, when set, lists the MCP servers the agent reaches through the gustoms
-	// gateway with their pin status (C6). MCPApprove re-pins a server to its
-	// current manifest (rug-pull recovery, dual-control). Nil = no MCP tab.
-	MCP        func() []domain.MCPServer
-	MCPApprove func(server string) error
+	// gateway with their pin status and re-pins one on rug-pull recovery (C6).
+	// Nil = no MCP tab.
+	MCP MCPRegistry
 
 	// Prompts, when set, is the governed prompt resolver (C2): the console lists
 	// each model's active/default system prompt, activates a new versioned+hashed
@@ -112,18 +110,14 @@ type Config struct {
 	// the static Egress is used.
 	Policies *controlplane.Policies
 
-	// ProfileLoad/ProfileSave, when set, read/write the household child profile
-	// (R1) in the governed DB — config lives in the store, not a file or a const.
-	// Operator-set, host-only, never from an email. Enables the My Week tab.
-	ProfileLoad func() domain.Profile
-	ProfileSave func(domain.Profile) error
+	// Profile, when set, reads/writes the household child profile (R1) in the
+	// governed DB — config lives in the store, not a file or a const. Operator-set,
+	// host-only, never from an email. Enables the My Week tab.
+	Profile ProfileStore
 
-	// Bundle surfaces (C10): BundleList shows saved known-good snapshots; BundleSave
-	// snapshots the whole governed plane; BundleApply rolls it all back. Nil = no
-	// snapshot card.
-	BundleList  func() []BundleInfo
-	BundleSave  func(label string) error
-	BundleApply func(label string) error
+	// Bundles, when set, is the known-good snapshot surface (C10): list saved
+	// snapshots, snapshot the whole governed plane, roll it all back. Nil = no card.
+	Bundles BundleStore
 
 	// Eval backs the Eval tab + Test button (C7). Nil = no Eval tab / Test button.
 	Eval EvalService
@@ -138,6 +132,33 @@ type EvalService interface {
 	History() []EvalResult
 	Run() (results []EvalResult, mode string)
 	Test(name, candidate string) PromptTestResult
+}
+
+// Flywheel captures operator accept/reject decisions as durable ground-truth and
+// reports the running tallies (the data-flywheel).
+type Flywheel interface {
+	Record(decision, source, title string)
+	Stats() (accepts, rejects int)
+}
+
+// MCPRegistry lists the governed MCP servers with pin status and re-pins one on
+// rug-pull recovery (C6).
+type MCPRegistry interface {
+	List() []domain.MCPServer
+	Approve(server string) error
+}
+
+// ProfileStore reads/writes the household child profile (R1) in the governed DB.
+type ProfileStore interface {
+	Load() domain.Profile
+	Save(domain.Profile) error
+}
+
+// BundleStore is the known-good snapshot surface (C10): list, snapshot, roll back.
+type BundleStore interface {
+	List() []BundleInfo
+	Save(label string) error
+	Apply(label string) error
 }
 
 // Server serves the dashboard and its API. Build it with New — the zero value is
@@ -170,9 +191,6 @@ type Server struct {
 // one disables its feature — so New only warns on obvious mis-wirings rather than
 // failing.
 func New(c Config) *Server {
-	if (c.ProfileLoad == nil) != (c.ProfileSave == nil) {
-		log.Print("server.New: ProfileLoad/ProfileSave should be set together; the My Week tab may half-work")
-	}
 	if c.Index != nil && c.Fetch == nil {
 		log.Print("server.New: Index set without Fetch; link enrichment is disabled")
 	}
@@ -241,7 +259,7 @@ func (s *Server) Handler() http.Handler {
 		mux.HandleFunc("POST /api/policies/activate", csrf(s.authz(controlplane.ActionWrite, "policy", s.policiesActivate)))
 		mux.HandleFunc("POST /api/policies/reset", csrf(s.authz(controlplane.ActionWrite, "policy", s.policiesReset)))
 	}
-	if s.FlywheelStats != nil {
+	if s.Flywheel != nil {
 		mux.HandleFunc("/api/flywheel", s.flywheel)
 	}
 	if s.Eval != nil {
@@ -249,12 +267,12 @@ func (s *Server) Handler() http.Handler {
 		mux.HandleFunc("POST /api/eval/run", csrf(s.authz(controlplane.ActionWrite, "eval", s.evalRunHandler)))
 		mux.HandleFunc("POST /api/prompts/test", csrf(s.authz(controlplane.ActionWrite, "prompts", s.promptsTest)))
 	}
-	if s.BundleList != nil {
+	if s.Bundles != nil {
 		mux.HandleFunc("/api/bundles", s.bundlesList)
 		mux.HandleFunc("POST /api/bundles/save", csrf(s.authz(controlplane.ActionWrite, "bundle", s.bundlesSave)))
 		mux.HandleFunc("POST /api/bundles/apply", csrf(s.authz(controlplane.ActionWrite, "bundle", s.bundlesApply)))
 	}
-	if s.ProfileLoad != nil {
+	if s.Profile != nil {
 		mux.HandleFunc("/api/timeline", s.timeline)
 		mux.HandleFunc("/api/profile", s.profileGet)
 		mux.HandleFunc("POST /api/profile/save", csrf(s.authz(controlplane.ActionWrite, "profile", s.profileSave)))
