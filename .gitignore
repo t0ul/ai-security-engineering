@@ -77,3 +77,6 @@ controlplane/logs/
 
 # local reference, not a project doc
 docs/course.txt
+
+# internal planning/course docs — not public
+docs/
