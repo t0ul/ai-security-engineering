@@ -184,3 +184,49 @@ func TestResidencyPolicy(t *testing.T) {
 		}
 	}
 }
+
+// TestMultiScopeGrantLeastPrivilege is the App-grant invariant: one signed grant
+// covers several distinct consumer scopes (primary + extra) but NOTHING on the
+// governed control plane, and a scope appended after issuance fails the signature.
+func TestMultiScopeGrantLeastPrivilege(t *testing.T) {
+	now := time.Date(2026, 10, 8, 12, 0, 0, 0, time.UTC)
+	a := newTestAuthority(t, now)
+	g, err := a.IssueScoped(
+		Capability{Subject: "app", Action: ActionList, Resource: "corpus", Tenant: "public"},
+		[]GrantScope{
+			{Action: ActionWrite, Resource: "calendar", Tenant: "public"},
+			{Action: ActionExport, Resource: "link", Tenant: "public"},
+		}, time.Hour)
+	if err != nil {
+		t.Fatalf("issue: %v", err)
+	}
+
+	// Authorized: the primary scope and every extra scope.
+	for _, w := range []Capability{
+		{Action: ActionList, Resource: "corpus", Tenant: "public"},
+		{Action: ActionWrite, Resource: "calendar", Tenant: "public"},
+		{Action: ActionExport, Resource: "link", Tenant: "public"},
+	} {
+		if _, err := a.Verify(g, w); err != nil {
+			t.Errorf("app grant should authorize %+v: %v", w, err)
+		}
+	}
+	// Refused: any governed control-plane scope — the whole point.
+	for _, w := range []Capability{
+		{Action: ActionWrite, Resource: "prompts", Tenant: "public"},
+		{Action: ActionWrite, Resource: "sampling", Tenant: "public"},
+		{Action: ActionWrite, Resource: "retrieval", Tenant: "public"},
+		{Action: ActionList, Resource: "contacts", Tenant: "public"}, // no harvest
+	} {
+		if _, err := a.Verify(g, w); err == nil {
+			t.Errorf("app grant must NOT authorize governed scope %+v", w)
+		}
+	}
+	// Tamper: append a scope after issuance → signature fails (the scope rides inside
+	// the signed payload).
+	forged := g
+	forged.Extra = append(append([]GrantScope{}, g.Extra...), GrantScope{Action: ActionWrite, Resource: "prompts", Tenant: "public"})
+	if _, err := a.Verify(forged, Capability{Action: ActionWrite, Resource: "prompts", Tenant: "public"}); err != ErrGrantSignature {
+		t.Errorf("appended scope should fail signature, got: %v", err)
+	}
+}

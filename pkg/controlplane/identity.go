@@ -105,9 +105,36 @@ type Capability struct {
 
 // Grant is a Capability with a detached content credential over its canonical
 // bytes — a signed, scoped, expiring bearer token for one non-human identity.
+// Scope is one (action, resource, tenant) triple a grant authorizes, beyond its
+// primary Capability. It lets a single signed grant carry several distinct scopes
+// — e.g. the household App's {list corpus, write calendar, write inbox, …} — which
+// a single-capability grant cannot express, while a wildcard (*) grant would
+// over-authorize. Every Scope rides inside the signed payload, so none can be
+// added or widened after issuance.
+type GrantScope struct {
+	Action   string `json:"act"`
+	Resource string `json:"res"`
+	Tenant   string `json:"ten"`
+}
+
 type Grant struct {
 	Capability
-	Mark provenance.Mark `json:"mark"`
+	// Extra are additional scopes this grant also covers (least-privilege for a
+	// multi-route subject like the App). Nil for a single-capability grant.
+	Extra []GrantScope    `json:"extra,omitempty"`
+	Mark  provenance.Mark `json:"mark"`
+}
+
+// signedPayload is the canonical byte form the Mark signs: the primary capability
+// AND every Extra scope, so the signature pins the whole grant (a tampered or
+// appended scope fails verification). For a grant with no Extra it is identical in
+// spirit to the primary capability's canonical form, just wrapped.
+func (g Grant) signedPayload() []byte {
+	b, _ := json.Marshal(struct {
+		Cap   Capability   `json:"cap"`
+		Extra []GrantScope `json:"extra,omitempty"`
+	}{Cap: g.Capability, Extra: g.Extra})
+	return b
 }
 
 // canonical is the exact byte sequence that is signed and verified. json.Marshal
@@ -188,6 +215,15 @@ func (a *Authority) now() time.Time {
 // set; Resource and Tenant default to the wildcard Scope (deliberately broad
 // only when the caller leaves them empty — callers scope down).
 func (a *Authority) Issue(cap Capability, ttl time.Duration) (Grant, error) {
+	return a.IssueScoped(cap, nil, ttl)
+}
+
+// IssueScoped mints a grant whose primary capability is cap and which ALSO covers
+// each Scope in extra — a least-privilege, multi-route grant (e.g. the App). The
+// issue policy (residency) is applied to the primary AND every extra scope, so a
+// frontier-bound subject cannot smuggle a confidential list/export in via extra.
+// The signature covers the whole grant.
+func (a *Authority) IssueScoped(cap Capability, extra []GrantScope, ttl time.Duration) (Grant, error) {
 	if cap.Subject == "" || cap.Action == "" {
 		return Grant{}, errors.New("controlplane: capability needs a subject and action")
 	}
@@ -201,11 +237,19 @@ func (a *Authority) Issue(cap Capability, ttl time.Duration) (Grant, error) {
 		if err := a.IssuePolicy(cap); err != nil {
 			return Grant{}, err
 		}
+		for _, s := range extra {
+			sc := Capability{Subject: cap.Subject, Action: s.Action, Resource: s.Resource, Tenant: s.Tenant}
+			if err := a.IssuePolicy(sc); err != nil {
+				return Grant{}, err
+			}
+		}
 	}
 	now := a.now()
 	cap.Issued = now.UTC()
 	cap.Expires = now.Add(ttl).UTC()
-	return Grant{Capability: cap, Mark: a.signer.Sign(cap.canonical())}, nil
+	g := Grant{Capability: cap, Extra: extra}
+	g.Mark = a.signer.Sign(g.signedPayload())
+	return g, nil
 }
 
 // Revoke marks a subject's grants invalid from now on (credential compromise,
@@ -238,7 +282,7 @@ func (a *Authority) isRevoked(subject string) bool {
 // switch and revocation (containment outranks a still-valid scope), then expiry,
 // then scope.
 func (a *Authority) Verify(g Grant, want Capability) (Capability, error) {
-	if err := a.verifier.Verify(g.Capability.canonical(), g.Mark); err != nil {
+	if err := a.verifier.Verify(g.signedPayload(), g.Mark); err != nil {
 		return Capability{}, ErrGrantSignature
 	}
 	if a.Halted != nil && a.Halted() {
@@ -253,10 +297,14 @@ func (a *Authority) Verify(g Grant, want Capability) (Capability, error) {
 	if want.Subject != "" && want.Subject != g.Subject {
 		return Capability{}, ErrGrantScope
 	}
-	if !covers(g.Action, want.Action) ||
-		!covers(g.Resource, want.Resource) ||
-		!covers(g.Tenant, want.Tenant) {
-		return Capability{}, ErrGrantScope
+	// The primary capability, or any extra scope, must cover the request.
+	if covers(g.Action, want.Action) && covers(g.Resource, want.Resource) && covers(g.Tenant, want.Tenant) {
+		return g.Capability, nil
 	}
-	return g.Capability, nil
+	for _, s := range g.Extra {
+		if covers(s.Action, want.Action) && covers(s.Resource, want.Resource) && covers(s.Tenant, want.Tenant) {
+			return Capability{Subject: g.Subject, Action: s.Action, Resource: s.Resource, Tenant: s.Tenant, Issued: g.Issued, Expires: g.Expires}, nil
+		}
+	}
+	return Capability{}, ErrGrantScope
 }

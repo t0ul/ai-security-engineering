@@ -109,6 +109,23 @@ func main() {
 	if g, gerr := authz.Issue(controlplane.Capability{Subject: "operator", Action: controlplane.Scope, Resource: controlplane.Scope, Tenant: controlplane.Scope}, 30*24*time.Hour); gerr == nil {
 		opToken = server.EncodeToken(g)
 	}
+	// The App surface runs on a NARROW, least-privilege grant (C4b): it covers only
+	// the household consumer scopes — list the corpus, accept/reject calendar items,
+	// drop emails, save the profile, follow an action link — and NOTHING on the
+	// governed control plane. A multi-scope signed grant (primary + extra) expresses
+	// this; the operator's wildcard grant still drives Studio. So the App page is
+	// cryptographically unable to reach a governance endpoint, not merely UI-hidden.
+	var appToken string
+	if g, gerr := authz.IssueScoped(
+		controlplane.Capability{Subject: "app", Action: controlplane.ActionList, Resource: "corpus", Tenant: "public"},
+		[]controlplane.GrantScope{
+			{Action: controlplane.ActionWrite, Resource: "calendar", Tenant: "public"},
+			{Action: controlplane.ActionWrite, Resource: "inbox", Tenant: "public"},
+			{Action: controlplane.ActionWrite, Resource: "profile", Tenant: "public"},
+			{Action: controlplane.ActionExport, Resource: "link", Tenant: "public"},
+		}, 30*24*time.Hour); gerr == nil {
+		appToken = server.EncodeToken(g)
+	}
 	corpusPath := filepath.Join(*drop, "corpus.db")
 	// Declared early so the chat closure below can capture them; assigned once the
 	// governed planes are built further down (consts are the fail-closed default).
@@ -412,7 +429,7 @@ func main() {
 			AuditPath: auditPath, OutboxDir: cfg.Outbox, InboxPath: cfg.Inbox,
 			Egress: egress, Fetch: fetch, Verifier: verifier, Safety: safety, Search: search, Index: enrichIndex,
 			Flywheel: flywheelSvc, Chat: chatSvc,
-			Authz: authz, OperatorToken: opToken, Audit: audit,
+			Authz: authz, OperatorToken: opToken, AppToken: appToken, Audit: audit,
 			MCP: mcpReg, Prompts: prompts, Policies: policies, Sampling: sampling, Budgets: budgets, Retrieval: retrieval, Grammars: grammars,
 			Eval:    evalSvc,
 			Bundles: bundleSvc,

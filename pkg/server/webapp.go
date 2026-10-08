@@ -74,9 +74,14 @@ type Config struct {
 	// unauthenticated. Verify is fail-closed and the kill switch (Authority.
 	// Halted) revokes every grant, so Halt kills in-flight side effects too.
 	Authz *controlplane.Authority
-	// OperatorToken is the base64url(JSON) operator Grant injected into the page
-	// so the browser presents it on every /api and /ics request. Empty = none.
+	// OperatorToken is the base64url(JSON) operator Grant injected into the Studio
+	// page so the browser presents it on every /api and /ics request. Empty = none.
 	OperatorToken string
+	// AppToken is the NARROW household grant injected into the App page — it covers
+	// only the consumer scopes (list corpus, write calendar/inbox/profile, export
+	// link) and NOTHING on the governed control plane, so the App is cryptographically
+	// unable to reach a governance endpoint. Empty = fall back to OperatorToken.
+	AppToken string
 	// Audit, when set, records every refused capability for the admin trail.
 	Audit *gledger.AuditLog
 
@@ -491,7 +496,11 @@ func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	s.renderSurface(w, "app")
+	token := s.AppToken
+	if token == "" {
+		token = s.OperatorToken // fall back when no narrow grant was minted
+	}
+	s.renderSurface(w, "app", token)
 }
 
 // studio serves the Studio surface (operator: the governed control/tuning plane —
@@ -500,12 +509,12 @@ func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 // boundary here is the per-route authz on the governance /api endpoints (a narrow
 // App-scoped grant that can't reach them is the follow-on hardening).
 func (s *Server) studio(w http.ResponseWriter, r *http.Request) {
-	s.renderSurface(w, "studio")
+	s.renderSurface(w, "studio", s.OperatorToken)
 }
 
-func (s *Server) renderSurface(w http.ResponseWriter, surface string) {
+func (s *Server) renderSurface(w http.ResponseWriter, surface, token string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := ui.RenderDashboard(w, s.OperatorToken, surface); err != nil {
+	if err := ui.RenderDashboard(w, token, surface); err != nil {
 		log.Printf("render %s surface: %v", surface, err)
 	}
 }
