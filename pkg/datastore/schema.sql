@@ -54,3 +54,11 @@ CREATE TABLE IF NOT EXISTS events(title TEXT, start_at TEXT, end_at TEXT, locati
 -- the fingerprint stored in config('summaries_fingerprint'). The .summary.json stays
 -- the source of truth; this is the queryable projection.
 CREATE TABLE IF NOT EXISTS summaries(file TEXT PRIMARY KEY, json TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);
+
+-- items is the DEDUPED item projection (tasks/heads-up/actions/events) the Tasks tab
+-- and mini-calendar serve from: duplicates the extractor emitted for the same real
+-- item are removed ONCE at build time and the result is stored here, rather than
+-- re-deduping on every request. Rebuilt from the summary sidecars when they change,
+-- keyed by config('items_fingerprint'). Each row keeps its source file + index so an
+-- accept can still resolve the original item.
+CREATE TABLE IF NOT EXISTS items(file TEXT, idx INTEGER, json TEXT);

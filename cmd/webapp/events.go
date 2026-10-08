@@ -63,3 +63,27 @@ func (p summaryProjection) LoadSummaries() (string, []server.SummaryRow, error) 
 	}
 	return fp, sr, nil
 }
+
+// itemProjection adapts the datastore items table to server.ItemStore: the DB-backed
+// DEDUPED item projection the Tasks tab and mini-calendar serve from.
+type itemProjection struct{ inv *datastore.Store }
+
+func (p itemProjection) ReplaceItems(fp string, rows []server.PersistedItem) error {
+	dr := make([]datastore.PersistedItem, len(rows))
+	for i, r := range rows {
+		dr[i] = datastore.PersistedItem{File: r.File, Index: r.Index, JSON: r.JSON}
+	}
+	return p.inv.ReplaceItems(fp, dr)
+}
+
+func (p itemProjection) LoadItems() (string, []server.PersistedItem, error) {
+	fp, rows, err := p.inv.LoadItems()
+	if err != nil {
+		return "", nil, err
+	}
+	sr := make([]server.PersistedItem, len(rows))
+	for i, r := range rows {
+		sr[i] = server.PersistedItem{File: r.File, Index: r.Index, JSON: r.JSON}
+	}
+	return fp, sr, nil
+}

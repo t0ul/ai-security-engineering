@@ -124,6 +124,7 @@ func (s *Server) summariesFingerprint() string {
 		return ""
 	}
 	var b strings.Builder
+	b.WriteString(projectionVersion + "|") // invalidate on a dedup/derivation logic change
 	for _, e := range entries {
 		if !strings.HasSuffix(e.Name(), ".summary.json") {
 			continue
@@ -142,6 +143,45 @@ type itemRow struct {
 	schema.Event
 }
 
+// dedupItems collapses duplicate items the extractor emitted for the same real thing
+// (same normalized title on the same day, regardless of kind). The cleaner title wins.
+// Keyed by (normalized title, day), so distinct same-day items and the same item on
+// different days are kept.
+func dedupItems(rows []itemRow) []itemRow {
+	seen := map[string]int{}
+	var out []itemRow
+	for _, r := range rows {
+		if strings.TrimSpace(r.Title) == "" {
+			continue
+		}
+		day := dateKey(r.Event) // dedup per DAY, not per timestamp (a fabricated time must not dodge it)
+		if len(day) >= 10 {
+			day = day[:10]
+		}
+		key := normTitle(r.Title) + "|" + day
+		if idx, ok := seen[key]; ok {
+			if itemCleaner(r, out[idx]) {
+				out[idx] = r
+			}
+			continue
+		}
+		seen[key] = len(out)
+		out = append(out, r)
+	}
+	return out
+}
+
+// itemCleaner reports whether a has a cleaner title than b (starts with a capital,
+// i.e. not a sentence fragment, and is longer).
+func itemCleaner(a, b itemRow) bool {
+	ac := a.Title != "" && a.Title[0] >= 'A' && a.Title[0] <= 'Z'
+	bc := b.Title != "" && b.Title[0] >= 'A' && b.Title[0] <= 'Z'
+	if ac != bc {
+		return ac
+	}
+	return len(a.Title) > len(b.Title)
+}
+
 // dateKey is the date an item sorts by: due date for tasks/actions, else start.
 func dateKey(e schema.Event) string {
 	if e.Due != "" {
@@ -152,15 +192,93 @@ func dateKey(e schema.Event) string {
 
 // items returns every extracted item across all emails, optionally filtered by
 // ?kind= (event|task|heads_up|action), sorted by date (dateless last).
-func (s *Server) items(w http.ResponseWriter, r *http.Request) {
-	kind := r.URL.Query().Get("kind")
-	var all []itemRow
+// ItemStore is the DB-backed DEDUPED item projection. The extractor emits the same
+// real item several times (across emails, as different kinds, with I/1 spelling
+// variants); the dupes are removed ONCE at build time and the result is stored here,
+// rather than re-deduping on every request. Rebuilt from the summary sidecars when
+// they change.
+type ItemStore interface {
+	ReplaceItems(fingerprint string, rows []PersistedItem) error
+	LoadItems() (fingerprint string, rows []PersistedItem, err error)
+}
+
+// PersistedItem is one projected item: its source file + index and the item JSON.
+type PersistedItem struct {
+	File  string
+	Index int
+	JSON  string
+}
+
+// allItems returns the deduped items, served in three tiers (memory → DB projection →
+// rebuild). The rebuild flattens the summary items, removes duplicates ONCE, and
+// persists the result, so the dupes are gone from the store, not just hidden at read.
+func (s *Server) allItems() []itemRow {
+	if s.OutboxDir == "" {
+		return nil
+	}
+	fp := s.summariesFingerprint()
+	s.itMu.Lock()
+	if s.itCache != nil && fp == s.itFP {
+		cached := s.itCache
+		s.itMu.Unlock()
+		return cached
+	}
+	s.itMu.Unlock()
+	if s.Items != nil && fp != "" {
+		if dbFP, rows, err := s.Items.LoadItems(); err == nil && dbFP == fp {
+			out := decodeItems(rows)
+			s.itMu.Lock()
+			s.itCache, s.itFP = out, fp
+			s.itMu.Unlock()
+			return out
+		}
+	}
+	var raw []itemRow
 	for _, ns := range s.loadSummaries() {
 		for i, it := range ns.S.Items {
-			if kind == "" || it.ResolvedKind() == kind {
-				all = append(all, itemRow{File: ns.Name, Index: i, Event: it})
+			raw = append(raw, itemRow{File: ns.Name, Index: i, Event: it})
+		}
+	}
+	ded := dedupItems(raw)
+	if s.Items != nil {
+		persist := make([]PersistedItem, 0, len(ded))
+		for _, r := range ded {
+			if b, err := json.Marshal(r.Event); err == nil {
+				persist = append(persist, PersistedItem{File: r.File, Index: r.Index, JSON: string(b)})
 			}
 		}
+		if err := s.Items.ReplaceItems(fp, persist); err == nil {
+			log.Printf("items: rebuilt deduped DB projection (%d → %d items)", len(raw), len(ded))
+		}
+	}
+	s.itMu.Lock()
+	s.itCache, s.itFP = ded, fp
+	s.itMu.Unlock()
+	return ded
+}
+
+func decodeItems(rows []PersistedItem) []itemRow {
+	out := make([]itemRow, 0, len(rows))
+	for _, r := range rows {
+		var ev schema.Event
+		if json.Unmarshal([]byte(r.JSON), &ev) == nil {
+			out = append(out, itemRow{File: r.File, Index: r.Index, Event: ev})
+		}
+	}
+	return out
+}
+
+func (s *Server) items(w http.ResponseWriter, r *http.Request) {
+	kind := r.URL.Query().Get("kind")
+	all := s.allItems()
+	if kind != "" {
+		filtered := make([]itemRow, 0, len(all))
+		for _, it := range all {
+			if it.Event.ResolvedKind() == kind {
+				filtered = append(filtered, it)
+			}
+		}
+		all = filtered
 	}
 	sort.SliceStable(all, func(i, j int) bool {
 		di, dj := dateKey(all[i].Event), dateKey(all[j].Event)

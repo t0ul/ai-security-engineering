@@ -77,15 +77,22 @@ func betterEvent(a, b Event) Event {
 	return b
 }
 
-// normTitle lowercases a title and strips leading articles and trailing linking
-// words so a clean title and the sentence fragment around it compare equal.
+// normTitle lowercases a title, strips leading articles and trailing linking words,
+// and normalizes a standalone Roman "i" to the digit "1" so near-duplicates like
+// "Annual Title I Meeting" and "Annual Title 1 Meeting" compare equal.
 func normTitle(t string) string {
 	s := strings.ToLower(strings.TrimSpace(t))
 	s = strings.TrimPrefix(s, "the ")
 	for _, suf := range []string{" is", " are", " on", " at", " will be", " begins", " starts"} {
 		s = strings.TrimSuffix(s, suf)
 	}
-	return strings.TrimSpace(s)
+	toks := strings.Fields(s)
+	for i, tok := range toks {
+		if tok == "i" { // Roman numeral one vs digit one
+			toks[i] = "1"
+		}
+	}
+	return strings.Join(toks, " ")
 }
 
 // titleScore rates a title's quality: a clean, Title-Case noun phrase beats a

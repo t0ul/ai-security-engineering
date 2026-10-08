@@ -137,6 +137,7 @@ func (s *Server) outboxFingerprint() string {
 		return ""
 	}
 	var b strings.Builder
+	b.WriteString(projectionVersion + "|") // bump to invalidate projections on a logic change
 	for _, e := range entries {
 		n := strings.ToLower(e.Name())
 		if !strings.HasSuffix(n, ".ics") && !strings.HasSuffix(n, ".sig") {
@@ -148,6 +149,11 @@ func (s *Server) outboxFingerprint() string {
 	}
 	return b.String()
 }
+
+// projectionVersion keys the events/items/summaries DB projections to the derivation
+// logic (dedup, cleaning, filtering). Bump it when that logic changes so the stored
+// projections rebuild from source instead of serving a stale result.
+const projectionVersion = "v3"
 
 // readAllEvents reads every .ics in the outbox into a sorted, de-duplicated event
 // list. allEvents caches the result.

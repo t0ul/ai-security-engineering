@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 )
@@ -35,15 +36,22 @@ func (s *Server) chat(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{"answer": answer, "sources": sources})
 }
 
-// weekScheduleBlock renders the accepted events whose date falls in the current
-// week (Mon–Sun) as a compact block for the chat. It reads the agent's own signed
-// .ics outbox — the trusted derived calendar — so the chat can answer scheduling
-// questions from real state. Returns "" when nothing is scheduled this week.
+// weekScheduleBlock renders the accepted events in the near-term window (from the
+// start of this week through ~6 weeks out) as a compact block for the chat, read
+// from the agent's own DEDUPED events projection (the DB, derived from the signed
+// .ics outbox). A wide window lets the chat answer "what's this week?" AND "what's on
+// October 15?" from real calendar state, not an email snippet. One line per event,
+// sorted by date, so questions like "how many events on the 15th?" are answerable.
+// Returns "" when the calendar is empty in the window.
 func (s *Server) weekScheduleBlock(now time.Time) string {
-	mon := now.AddDate(0, 0, -int((now.Weekday()+6)%7))
+	mon := now.AddDate(0, 0, -int((now.Weekday()+6)%7)) // start of this week
 	lo := mon.Format("2006-01-02")
-	hi := mon.AddDate(0, 0, 6).Format("2006-01-02")
-	var lines []string
+	hi := now.AddDate(0, 0, 45).Format("2006-01-02") // ~6 weeks out
+	// Group events UNDER each date so a small model can count per day unambiguously
+	// ("how many on the 15th?" = count the lines under that date) instead of scanning
+	// a flat list and mis-attributing events to the wrong day.
+	byDay := map[string][]string{}
+	var days []string
 	for _, e := range s.allEvents() {
 		d := e.Start
 		if d == "" {
@@ -60,10 +68,21 @@ func (s *Server) weekScheduleBlock(now time.Time) string {
 		if title == "" {
 			continue
 		}
-		lines = append(lines, "- "+day+": "+title)
+		if _, ok := byDay[day]; !ok {
+			days = append(days, day)
+		}
+		byDay[day] = append(byDay[day], title)
 	}
-	if len(lines) == 0 {
+	if len(days) == 0 {
 		return ""
 	}
-	return fmt.Sprintf("<schedule source=\"extracted-calendar\">\n%s\n</schedule>", strings.Join(lines, "\n"))
+	sort.Strings(days)
+	var b strings.Builder
+	for _, day := range days {
+		fmt.Fprintf(&b, "%s (%d):\n", day, len(byDay[day]))
+		for _, t := range byDay[day] {
+			b.WriteString("  - " + t + "\n")
+		}
+	}
+	return fmt.Sprintf("<calendar source=\"extracted-calendar\" note=\"the household's own accepted upcoming events, deduped; each date shows its event count\">\n%s</calendar>", b.String())
 }

@@ -135,6 +135,11 @@ type Config struct {
 	// re-scanning + re-parsing every .summary.json per request. Nil = read from JSON.
 	Summaries SummaryStore
 
+	// Items, when set, is the DB-backed DEDUPED item projection: the Tasks tab and
+	// mini-calendar serve deduped items from here, built (dupes removed) once and
+	// stored rather than re-deduped per request. Nil = dedup at read, not persisted.
+	Items ItemStore
+
 	// RAG, when set, is the retrieval experimentation surface (RAG tab): tune the
 	// ingestion config (mode/chunker/size/overlap/embedder) and reindex. Nil = no tab.
 	RAG RAGLab
@@ -250,6 +255,12 @@ type Server struct {
 	smMu    sync.Mutex
 	smCache []namedSummary
 	smFP    string
+
+	// item cache (items.go): the deduped item projection, keyed by the summaries
+	// fingerprint, so the Tasks/mini-cal views serve a deduped list without re-deduping.
+	itMu    sync.Mutex
+	itCache []itemRow
+	itFP    string
 }
 
 // New builds a ready Server from its dependencies. It initializes internal state

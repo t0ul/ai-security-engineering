@@ -411,6 +411,60 @@ func b2i(b bool) int {
 	return 0
 }
 
+// PersistedItem is one row of the deduped item projection: the item's source file +
+// index (so an accept can resolve it) and the item itself as JSON.
+type PersistedItem struct {
+	File  string
+	Index int
+	JSON  string
+}
+
+// ReplaceItems rebuilds the deduped item projection in one transaction and records
+// the fingerprint it was built from.
+func (s *Store) ReplaceItems(fingerprint string, rows []PersistedItem) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec(`DELETE FROM items`); err != nil {
+		return err
+	}
+	stmt, err := tx.Prepare(`INSERT INTO items(file,idx,json) VALUES(?,?,?)`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+	for _, r := range rows {
+		if _, err := stmt.Exec(r.File, r.Index, r.JSON); err != nil {
+			return err
+		}
+	}
+	if _, err := tx.Exec(`INSERT OR REPLACE INTO config(key,value) VALUES('items_fingerprint',?)`, fingerprint); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// LoadItems returns the deduped item projection (in insertion order) and the
+// fingerprint it was built from.
+func (s *Store) LoadItems() (fingerprint string, rows []PersistedItem, err error) {
+	fingerprint, _, _ = s.GetConfig("items_fingerprint")
+	r, err := s.db.Query(`SELECT file,idx,json FROM items ORDER BY rowid`)
+	if err != nil {
+		return "", nil, err
+	}
+	defer r.Close()
+	for r.Next() {
+		var it PersistedItem
+		if err := r.Scan(&it.File, &it.Index, &it.JSON); err != nil {
+			return "", nil, err
+		}
+		rows = append(rows, it)
+	}
+	return fingerprint, rows, r.Err()
+}
+
 // SummaryRow is one row of the summaries projection: a per-email sidecar (the parsed
 // EmailSummary, carried as its JSON) keyed by file name.
 type SummaryRow struct {
