@@ -16,8 +16,8 @@ import (
 	"github.com/t0ul/ai-security-engineering/agent/pipeline"
 	"github.com/t0ul/ai-security-engineering/agent/schema"
 	"github.com/t0ul/ai-security-engineering/controlplane"
-	"github.com/t0ul/ai-security-engineering/netpolicy"
-	"github.com/t0ul/ai-security-engineering/provenance"
+	"github.com/t0ul/ai-security-engineering/pkg/netpolicy"
+	"github.com/t0ul/ai-security-engineering/pkg/provenance"
 	"github.com/t0ul/ai-security-engineering/webapp"
 	"github.com/t0ul/gledger"
 )

@@ -16,8 +16,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/t0ul/ai-security-engineering/argcheck"
-	"github.com/t0ul/ai-security-engineering/netpolicy"
+	"github.com/t0ul/ai-security-engineering/pkg/argcheck"
+	"github.com/t0ul/ai-security-engineering/pkg/netpolicy"
 	"github.com/t0ul/gustoms"
 )
 

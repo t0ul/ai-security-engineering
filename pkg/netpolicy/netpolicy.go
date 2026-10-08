@@ -20,10 +20,10 @@ import (
 )
 
 var (
-	ErrScheme        = errors.New("netpolicy: only http and https are allowed")
-	ErrNoHost        = errors.New("netpolicy: URL has no host")
+	ErrScheme         = errors.New("netpolicy: only http and https are allowed")
+	ErrNoHost         = errors.New("netpolicy: URL has no host")
 	ErrNotAllowlisted = errors.New("netpolicy: host is not on the egress allowlist")
-	ErrBlockedIP     = errors.New("netpolicy: host resolves to a blocked (internal) address")
+	ErrBlockedIP      = errors.New("netpolicy: host resolves to a blocked (internal) address")
 )
 
 // Policy is an egress allowlist. The zero value denies everything.

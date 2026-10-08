@@ -15,11 +15,11 @@ import (
 )
 
 var (
-	ErrUnknownArg  = errors.New("argcheck: argument not in schema")
-	ErrType        = errors.New("argcheck: argument type mismatch")
-	ErrShellMeta   = errors.New("argcheck: shell metacharacter in argument")
-	ErrPathEscape  = errors.New("argcheck: path escapes the confinement base")
-	ErrMissingArg  = errors.New("argcheck: required argument missing")
+	ErrUnknownArg = errors.New("argcheck: argument not in schema")
+	ErrType       = errors.New("argcheck: argument type mismatch")
+	ErrShellMeta  = errors.New("argcheck: shell metacharacter in argument")
+	ErrPathEscape = errors.New("argcheck: path escapes the confinement base")
+	ErrMissingArg = errors.New("argcheck: required argument missing")
 )
 
 // Kind is an argument type.

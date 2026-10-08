@@ -19,7 +19,7 @@ import (
 	"github.com/t0ul/ai-security-engineering/agent/items"
 	"github.com/t0ul/ai-security-engineering/agent/schema"
 	"github.com/t0ul/ai-security-engineering/agent/tool"
-	"github.com/t0ul/ai-security-engineering/provenance"
+	"github.com/t0ul/ai-security-engineering/pkg/provenance"
 	"github.com/t0ul/gledger"
 	"github.com/t0ul/goflage"
 )

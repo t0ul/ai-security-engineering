@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/t0ul/ai-security-engineering/netpolicy"
+	"github.com/t0ul/ai-security-engineering/pkg/netpolicy"
 )
 
 // fakeDNS maps hostnames to IPs so Check is deterministic without real DNS.

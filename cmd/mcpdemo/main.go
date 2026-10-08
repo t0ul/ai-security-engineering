@@ -21,7 +21,7 @@ import (
 	"github.com/t0ul/ai-security-engineering/controlplane"
 	"github.com/t0ul/ai-security-engineering/cpstore"
 	"github.com/t0ul/ai-security-engineering/mcp"
-	"github.com/t0ul/ai-security-engineering/netpolicy"
+	"github.com/t0ul/ai-security-engineering/pkg/netpolicy"
 	"github.com/t0ul/ai-security-engineering/sandbox"
 	"github.com/t0ul/gledger"
 	"github.com/t0ul/gustoms"

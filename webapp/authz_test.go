@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/t0ul/ai-security-engineering/controlplane"
-	"github.com/t0ul/ai-security-engineering/provenance"
+	"github.com/t0ul/ai-security-engineering/pkg/provenance"
 )
 
 // authzFixture returns a Server with authZ enabled plus a freshly minted

@@ -8,7 +8,7 @@ import (
 
 	"github.com/t0ul/ai-security-engineering/agent/pipeline"
 	"github.com/t0ul/ai-security-engineering/agent/schema"
-	"github.com/t0ul/ai-security-engineering/hitl"
+	"github.com/t0ul/ai-security-engineering/pkg/hitl"
 )
 
 // pending is an issued HITL approval bound to an action (ASI09).

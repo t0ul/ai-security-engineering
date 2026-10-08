@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/t0ul/ai-security-engineering/captoken"
+	"github.com/t0ul/ai-security-engineering/pkg/captoken"
 )
 
 func TestScopedTokenVerifies(t *testing.T) {

@@ -32,7 +32,7 @@ import (
 	"github.com/Code-Hex/vz/v3"
 	"github.com/t0ul/ai-security-engineering/broker"
 	"github.com/t0ul/ai-security-engineering/internal/modelserve"
-	"github.com/t0ul/ai-security-engineering/netpolicy"
+	"github.com/t0ul/ai-security-engineering/pkg/netpolicy"
 	"golang.org/x/term"
 )
 
