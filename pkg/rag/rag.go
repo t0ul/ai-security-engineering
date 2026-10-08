@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/t0ul/GoRag"
 	"github.com/t0ul/ai-security-engineering/pkg/agent/guard"
 	_ "modernc.org/sqlite"
 )
@@ -48,8 +49,8 @@ type Chunk struct {
 // semantic retrieval (SemanticQuery).
 type Store struct {
 	db      *sql.DB
-	Embed   Embedder // optional; when set, Add also stores an embedding per chunk
-	Chunker Chunker  // optional; nil = whole-document. Splits a doc into indexed chunks
+	Embed   Embedder      // optional; when set, Add also stores an embedding per chunk
+	Chunker gorag.Chunker // optional; nil = whole-document. Splits a doc into indexed chunks (fleet GoRag)
 }
 
 // Open creates/opens the index at path (":memory:" for ephemeral).
@@ -115,9 +116,9 @@ func (s *Store) Add(d Doc) error {
 	}
 	chunker := s.Chunker
 	if chunker == nil {
-		chunker = WholeChunker{}
+		chunker = gorag.WholeChunker{}
 	}
-	for _, c := range chunker.Chunk(Clean(d.Text)) {
+	for _, c := range chunker.Chunk(gorag.Clean(d.Text)) {
 		res, err := s.db.Exec(`INSERT INTO docs(id, tenant, prov, text) VALUES(?,?,?,?)`,
 			d.ID, d.Tenant, string(d.Prov), c)
 		if err != nil {

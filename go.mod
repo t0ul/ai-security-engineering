@@ -18,6 +18,7 @@ require (
 require (
 	github.com/Code-Hex/vz/v3 v3.8.0
 	github.com/t0ul/ADD v0.0.0-00010101000000-000000000000
+	github.com/t0ul/GoRag v0.0.0-00010101000000-000000000000
 	github.com/t0ul/gledger v0.0.0-00010101000000-000000000000
 	github.com/t0ul/goflage v0.0.0-00010101000000-000000000000
 	github.com/t0ul/gonductor v0.0.0-00010101000000-000000000000
@@ -42,3 +43,5 @@ replace (
 	github.com/t0ul/gumpers => ../fleet/gumpers
 	github.com/t0ul/gustoms => ../fleet/gustoms
 )
+
+replace github.com/t0ul/GoRag => ../fleet/GoRag
