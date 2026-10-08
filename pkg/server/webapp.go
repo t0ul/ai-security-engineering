@@ -120,6 +120,15 @@ type Config struct {
 	// Models tab.
 	Models *controlplane.Models
 
+	// Skills, when set, is the governed skill-approval resolver (the pin side of the
+	// skills supply-chain control): which skill versions an operator has approved.
+	// Fail-closed — an unapproved skill is never loadable. Nil = no Skills tab.
+	Skills *controlplane.Skills
+
+	// SkillCatalog, when set, is the live consumer of Skills: it loads a named skill
+	// through the governed sign+pin+scope gate and lists the supply for the Studio.
+	SkillCatalog SkillLoader
+
 	// Policies, when set, is the governed policy-allowlist resolver (C8): egress /
 	// exec / guardrail allowlists as versioned, hashed, rollback-able artifacts.
 	// The action egress check resolves its allowlist from here at request time, so
@@ -294,6 +303,12 @@ func (s *Server) Handler() http.Handler {
 		mux.HandleFunc("/api/models", s.modelsList)
 		mux.HandleFunc("POST /api/models/activate", csrf(s.authz(controlplane.ActionWrite, "model", s.modelsActivate)))
 		mux.HandleFunc("POST /api/models/reset", csrf(s.authz(controlplane.ActionWrite, "model", s.modelsReset)))
+	}
+	if s.Skills != nil {
+		mux.HandleFunc("/api/skills", s.skillsList)
+		mux.HandleFunc("POST /api/skills/approve", csrf(s.authz(controlplane.ActionWrite, "skill", s.skillsApprove)))
+		mux.HandleFunc("POST /api/skills/reset", csrf(s.authz(controlplane.ActionWrite, "skill", s.skillsReset)))
+		mux.HandleFunc("POST /api/skills/load", csrf(s.authz(controlplane.ActionWrite, "skill", s.skillsLoad)))
 	}
 	if s.Policies != nil {
 		mux.HandleFunc("/api/policies", s.policiesList)

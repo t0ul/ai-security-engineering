@@ -3,7 +3,7 @@
 // request. Empty (household mode) = no header, unchanged behavior.
 (function(){const f=window.fetch.bind(window);window.fetch=(u,o)=>{o=o||{};const s=typeof u==='string'?u:(u&&u.url)||'';if(__CAP__&&(s.indexOf('/api/')===0||s.indexOf('/ics/')===0)){o.headers=Object.assign({},o.headers||{},{'Authorization':'Bearer '+__CAP__});}return f(u,o);};})();
 const $=s=>document.querySelector(s);
-const TABS=['chat','calendar','week','tasks','review','activity','ask','security','prompts','sampling','models','retrieval','grammar','policies','budgets','eval','incidents'];
+const TABS=['chat','calendar','week','tasks','review','activity','ask','security','prompts','sampling','models','skills','retrieval','grammar','policies','budgets','eval','incidents'];
 const esc=s=>{const d=document.createElement('div');d.textContent=s||'';return d.innerHTML;};
 const when=e=>e.all_day?((e.due||e.start)+' · all day'):((e.start||e.due)+(e.end?(' – '+e.end.slice(11)):''));
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
@@ -22,6 +22,7 @@ document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
   if(t==='prompts') loadPrompts();
   if(t==='sampling') loadSampling();
   if(t==='models') loadModels();
+  if(t==='skills') loadSkills();
   if(t==='retrieval') loadRetrieval();
   if(t==='grammar') loadGrammar();
   if(t==='budgets') loadBudgets();
@@ -32,7 +33,7 @@ document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
 // App = consumer (zero control knobs); Studio = operator (the tuning/governance plane).
 const SURFACES={
   app:['chat','calendar','week','tasks','review','ask'],
-  studio:['security','prompts','sampling','models','retrieval','grammar','policies','budgets','eval','incidents','activity']
+  studio:['security','prompts','sampling','models','skills','retrieval','grammar','policies','budgets','eval','incidents','activity']
 };
 (function(){
   const vis=(SURFACES[SURFACE]||TABS);
@@ -165,6 +166,29 @@ async function loadModels(){
 }
 async function activateModel(name){await postJSON('/api/models/activate',{name:name,model:$('#md_'+name).value});loadModels();}
 async function resetModel(name){await postJSON('/api/models/reset',{name:name});loadModels();}
+async function loadSkills(){
+  const c=$('#skillList');if(!c)return;const d=await getJSON('/api/skills');const cat=d.catalog||[];
+  if(!cat.length){c.innerHTML='<p class="mut">no skills in the catalog</p>';}
+  else c.innerHTML=cat.map(s=>{
+    const trust=s.signer_trusted?'<span class="pill pass">signed · trusted</span>':'<span class="pill fail">untrusted signer</span>';
+    const appr=s.approved?'<span class="pill pass">approved</span>':'<span class="pill">unapproved</span>';
+    return '<div class="ev"><div><b>'+esc(s.name)+'</b> <span class="mut">v'+s.version+' · '+esc(s.hash)+'</span><div style="margin-top:4px">'+trust+' '+appr+'</div>'+
+      '<div style="margin-top:6px">'+
+      (s.approved?('<button class="ghost" onclick="revokeSkill(\''+esc(s.name)+'\')">Revoke approval</button>')
+                 :('<button class="go" onclick="approveSkill(\''+esc(s.name)+'\')">Approve this version</button>'))+
+      '</div></div></div>';
+  }).join('');
+  const sel=$('#skillLoadName');if(sel){sel.innerHTML=cat.map(s=>'<option value="'+esc(s.name)+'">'+esc(s.name)+'</option>').join('');}
+}
+async function approveSkill(name){await postJSON('/api/skills/approve',{name:name});loadSkills();}
+async function revokeSkill(name){await postJSON('/api/skills/reset',{name:name});loadSkills();}
+async function loadSkill(){
+  const name=$('#skillLoadName').value;const unsafe=$('#skillUnsafe').checked;
+  const r=await postJSON('/api/skills/load',{name:name,unsafe:unsafe});
+  const out=$('#skillLoadOut');
+  if(r.loaded){out.textContent=(r.unsafe?'⚠ CONTROLS OFF — loaded unchecked:\n\n':'✓ loaded (gate passed):\n\n')+(r.instructions||'');}
+  else{out.textContent='⛔ '+(r.reason||'refused');}
+}
 async function loadRetrieval(){
   const c=$('#retrievalList');if(!c)return;const d=await getJSON('/api/retrieval');const rs=d.retrieval||[];
   if(!rs.length){c.innerHTML='<p class="mut">no corpora registered</p>';return;}

@@ -293,11 +293,17 @@ func main() {
 		"extractor": "planner",
 		"chat":      "planner",
 	}
+	// Skills supply + governed approvals (the skills dimension's live consumer): the
+	// loader signs its catalog at boot; the plane records which versions the operator
+	// approved. Build the loader first for the catalog names, then the plane, then
+	// attach (plane needs names, loader needs plane).
+	skillSupply, skillNames := newSkillLoader()
 	var policies *controlplane.Policies
 	var budgets *controlplane.Budgets
 	var retrieval *controlplane.Retrieval
 	var grammars *controlplane.Grammars
 	var models *controlplane.Models
+	var skillsPlane *controlplane.Skills
 	if db, ierr := datastore.Open(filepath.Join(*drop, "inventory.db")); ierr == nil {
 		inv = db
 		defer inv.Close()
@@ -308,6 +314,7 @@ func main() {
 		retrieval = controlplane.GovernedRetrieval(retrievalDefaults, inv, audit)
 		grammars = controlplane.GovernedGrammars(grammarDefaults, inv, audit)
 		models = controlplane.GovernedModels(modelDefaults, inv, audit)
+		skillsPlane = controlplane.GovernedSkills(skillNames, inv, audit)
 	} else {
 		prompts = controlplane.NewPrompts(promptDefaults)
 		policies = controlplane.NewPolicies(policyDefaults)
@@ -316,7 +323,9 @@ func main() {
 		retrieval = controlplane.NewRetrieval(retrievalDefaults)
 		grammars = controlplane.NewGrammars(grammarDefaults)
 		models = controlplane.NewModels(modelDefaults)
+		skillsPlane = controlplane.NewSkills(skillNames)
 	}
+	skillSupply.attach(skillsPlane)
 	// Activating the "extractor" sampling drives the live LLM decoding params.
 	baseSampOnActivate := sampling.OnActivate
 	sampling.OnActivate = func(sv controlplane.SamplingVersion) {
@@ -395,6 +404,11 @@ func main() {
 				models.Rehydrate(n, m)
 			}
 		}
+		for _, n := range skillNames {
+			if h, ok, _ := inv.LatestSkillPin(n); ok && h != "" {
+				skillsPlane.Rehydrate(n, h)
+			}
+		}
 		for _, n := range []string{"api", "gateway"} {
 			if cfgJSON, ok, _ := inv.LatestBudget(n); ok {
 				var cfg controlplane.BudgetConfig
@@ -453,6 +467,7 @@ func main() {
 			Flywheel: flywheelSvc, Chat: chatSvc,
 			Authz: authz, OperatorToken: opToken, AppToken: appToken, Audit: audit,
 			MCP: mcpReg, Prompts: prompts, Policies: policies, Sampling: sampling, Budgets: budgets, Retrieval: retrieval, Grammars: grammars, Models: models,
+			Skills: skillsPlane, SkillCatalog: skillSupply,
 			Eval:    evalSvc,
 			Bundles: bundleSvc,
 			Profile: profileSvc,

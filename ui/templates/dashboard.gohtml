@@ -21,6 +21,7 @@
     <button data-tab="prompts">Prompts</button>
     <button data-tab="sampling">Sampling</button>
     <button data-tab="models">Models</button>
+    <button data-tab="skills">Skills</button>
     <button data-tab="retrieval">Retrieval</button>
     <button data-tab="grammar">Grammar</button>
     <button data-tab="policies">Policies</button>
@@ -173,6 +174,21 @@
     <div class="card">
       <strong>Models</strong> <span class="mut">— governed model bindings: the logical model each role (extractor, chat) routes to. Versioned, hashed, rollback; bundle-referenced. A local→frontier swap is where data-residency bites.</span>
       <div id="modelsList"><span class="mut">loading…</span></div>
+    </div>
+  </section>
+  <section id="skills" class="hide">
+    <div class="card">
+      <strong>Skills</strong> <span class="mut">— on-demand capabilities the agent loads. A skill is runtime-loaded instructions, so it is a supply-chain surface (LLM03): loading is fail-closed under sign + pin + scope. Approve pins the exact content you reviewed; a changed or untrusted skill is refused until re-approved.</span>
+      <div id="skillList" style="margin-top:8px"><span class="mut">loading…</span></div>
+    </div>
+    <div class="card">
+      <strong>Load (demo)</strong> <span class="mut">— run a catalog skill through the governed gate. Controls off bypasses sign/pin/scope so a poisoned skill's instructions leak (the attack); controls on refuse it.</span>
+      <div style="margin-top:8px">
+        <select id="skillLoadName"></select>
+        <label class="mut" style="margin-left:8px"><input type="checkbox" id="skillUnsafe"> controls off</label>
+        <button class="go" onclick="loadSkill()">Load</button>
+      </div>
+      <pre id="skillLoadOut" style="margin-top:8px;white-space:pre-wrap"></pre>
     </div>
   </section>
   <section id="retrieval" class="hide">

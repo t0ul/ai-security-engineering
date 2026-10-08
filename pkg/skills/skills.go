@@ -45,15 +45,15 @@ type Skill struct {
 	RequiredTools []string `json:"required_tools,omitempty"`
 }
 
-// canonical is the deterministic byte form that is signed and hashed.
-func (s Skill) canonical() []byte {
+// Canonical is the deterministic byte form that is signed and hashed.
+func (s Skill) Canonical() []byte {
 	b, _ := json.Marshal(s)
 	return b
 }
 
 // Hash is the content pin for a skill (sha256 over its canonical form).
 func (s Skill) Hash() string {
-	sum := sha256.Sum256(s.canonical())
+	sum := sha256.Sum256(s.Canonical())
 	return hex.EncodeToString(sum[:])
 }
 
@@ -65,7 +65,7 @@ type Signed struct {
 
 // Sign produces a Signed skill from a trusted author's signer.
 func Sign(s Skill, signer *provenance.Signer) Signed {
-	return Signed{Skill: s, Mark: signer.Sign(s.canonical())}
+	return Signed{Skill: s, Mark: signer.Sign(s.Canonical())}
 }
 
 // Library loads skills under the sign + pin + scope controls (fail-closed).
@@ -89,7 +89,7 @@ func NewLibrary(verifier *provenance.Verifier, pins map[string]string, allowedTo
 // hash matches the approved pin, and every required tool is in the allow-set.
 // Otherwise it refuses — the instructions never reach the agent. DEFENDED path.
 func (l *Library) Load(s Signed) (string, error) {
-	if l.verifier == nil || l.verifier.Verify(s.Skill.canonical(), s.Mark) != nil {
+	if l.verifier == nil || l.verifier.Verify(s.Skill.Canonical(), s.Mark) != nil {
 		return "", ErrUnsigned
 	}
 	if l.pins[s.Name] != s.Hash() {
