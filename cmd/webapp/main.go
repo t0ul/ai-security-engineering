@@ -18,6 +18,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -51,7 +52,15 @@ func main() {
 	drop := flag.String("drop", defaultDrop(), "drop folder (inbox/outbox/processed/logs)")
 	allow := flag.String("allow", "schools.nyc.gov,nyc.gov,ps51eliashowe.org,schoolsaccount.nyc", "comma-separated egress allowlist for action/handbook links (parent domains cover subdomains); set empty to deny all")
 	vmURL := flag.String("microvm", "http://127.0.0.1:5000", "MicroVM vsock bridge for in-sandbox fetches")
+	gateway := flag.String("gateway", envOr("GATEWAY_URL", "http://127.0.0.1:4000/v1/chat/completions"), "gouncer gateway chat-completions URL (the single source for the chat + health-check endpoint)")
 	flag.Parse()
+
+	// Single source for the gateway endpoint (was two hardcoded literals). The chat
+	// path posts here; the health check dials the host:port parsed from it.
+	gatewayURL = *gateway
+	if u, err := url.Parse(*gateway); err == nil && u.Host != "" {
+		gatewayDial = u.Host
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -581,6 +590,22 @@ func agentIdentity(path string) (*provenance.Signer, *provenance.Verifier) {
 // splice that an injection can hijack). With no gateway it returns the grounded
 // passage — in unsafe mode that includes the raw/poisoned text, so the demo works
 // even offline (the real control is at the retrieval layer: rag.Assemble).
+// gatewayURL / gatewayDial are the single source for the gouncer gateway endpoint,
+// set from the -gateway flag in main. gatewayChatAnswer posts to the URL; gatewayUp
+// dials the host:port. Consts are only the fail-closed default before flag parsing.
+var (
+	gatewayURL  = "http://127.0.0.1:4000/v1/chat/completions"
+	gatewayDial = "127.0.0.1:4000"
+)
+
+// envOr returns the env var value or a fallback.
+func envOr(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
+}
+
 func gatewayChatAnswer(systemPrompt, dateBlock, appData, context, question string, unsafe bool) string {
 	sys := systemPrompt + "\n" + dateBlock + "\n" + appData + "\n" + context
 	if unsafe {
@@ -604,7 +629,7 @@ func gatewayChatAnswer(systemPrompt, dateBlock, appData, context, question strin
 		"model": "planner", "temperature": 0.2, "max_tokens": 400,
 		"messages": []map[string]string{{"role": "system", "content": sys}, {"role": "user", "content": question}},
 	})
-	resp, err := (&http.Client{Timeout: 60 * time.Second}).Post("http://localhost:4000/v1/chat/completions", "application/json", strings.NewReader(string(body)))
+	resp, err := (&http.Client{Timeout: 60 * time.Second}).Post(gatewayURL, "application/json", strings.NewReader(string(body)))
 	if err != nil {
 		return "From your emails:\n" + shortText(context, 700)
 	}
@@ -673,7 +698,7 @@ func stripTags(block string) string {
 // gatewayUp reports whether the gouncer gateway is reachable, so a live eval run
 // can say whether it ran against the model or fell back to regex.
 func gatewayUp() bool {
-	c, err := net.DialTimeout("tcp", "127.0.0.1:4000", 300*time.Millisecond)
+	c, err := net.DialTimeout("tcp", gatewayDial, 300*time.Millisecond)
 	if err != nil {
 		return false
 	}
