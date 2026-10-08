@@ -39,7 +39,7 @@ func TestShortText(t *testing.T) {
 func TestChatAnswerOfflineUsesTrustedDate(t *testing.T) {
 	c := New("http://127.0.0.1:1/unused", "127.0.0.1:1") // unreachable
 	db := TrustedDateBlock(time.Date(2026, 10, 8, 0, 0, 0, 0, time.UTC))
-	ans := c.ChatAnswer("sys", db, "", "", "what's today?", false)
+	ans := c.ChatAnswer(ChatParams{}, "sys", db, "", "", "what's today?", false)
 	if !strings.Contains(ans, "2026-10-08") {
 		t.Errorf("offline answer should carry the trusted date, got: %s", ans)
 	}

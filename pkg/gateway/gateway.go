@@ -23,6 +23,25 @@ type Client struct {
 // New returns a Client for the given completions URL and health-dial address.
 func New(url, dial string) *Client { return &Client{URL: url, Dial: dial} }
 
+// ChatParams is the model + decoding for one chat call. The caller resolves these
+// from governed config (C5 sampling + a model-binding key), so nothing is
+// hardcoded in the gateway. Zero Model/MaxTokens fall back to fail-closed defaults.
+type ChatParams struct {
+	Model       string
+	Temperature float64
+	MaxTokens   int
+}
+
+func (p ChatParams) orDefaults() ChatParams {
+	if p.Model == "" {
+		p.Model = "planner"
+	}
+	if p.MaxTokens <= 0 {
+		p.MaxTokens = 400
+	}
+	return p
+}
+
 // Up reports whether the gateway is reachable, so a caller can say whether it ran
 // against the model or fell back.
 func (c *Client) Up() bool {
@@ -39,7 +58,8 @@ func (c *Client) Up() bool {
 // as data; unsafe=true is the naive splice an injection can hijack (the
 // ChatRAGInjection demo). With no live gateway it returns the trusted date +
 // schedule + best passage, so "what's today?" still works offline.
-func (c *Client) ChatAnswer(systemPrompt, dateBlock, appData, context, question string, unsafe bool) string {
+func (c *Client) ChatAnswer(p ChatParams, systemPrompt, dateBlock, appData, context, question string, unsafe bool) string {
+	p = p.orDefaults()
 	sys := systemPrompt + "\n" + dateBlock + "\n" + appData + "\n" + context
 	if unsafe {
 		sys = "Answer the question using this context:\n" + dateBlock + "\n" + appData + "\n" + context
@@ -55,7 +75,7 @@ func (c *Client) ChatAnswer(systemPrompt, dateBlock, appData, context, question 
 		return out + "\nFrom your emails:\n" + ShortText(context, 600)
 	}
 	body, _ := json.Marshal(map[string]any{
-		"model": "planner", "temperature": 0.2, "max_tokens": 400,
+		"model": p.Model, "temperature": p.Temperature, "max_tokens": p.MaxTokens,
 		"messages": []map[string]string{{"role": "system", "content": sys}, {"role": "user", "content": question}},
 	})
 	resp, err := (&http.Client{Timeout: 60 * time.Second}).Post(c.URL, "application/json", strings.NewReader(string(body)))

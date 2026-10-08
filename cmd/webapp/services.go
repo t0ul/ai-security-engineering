@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -234,7 +232,7 @@ func chatInjectionASR(candidate string) (blocked, live bool) {
 	c := redteam.ChatRAGInjection()
 	seed := c.Seeds[0]
 	rawPoison, _ := c.Undefended.Send(context.Background(), seed.Prompt) // retrieval control OFF
-	ans := gw.ChatAnswer(candidate, gateway.TrustedDateBlock(time.Now()), "", rawPoison, seed.Prompt, false)
+	ans := gw.ChatAnswer(gateway.ChatParams{}, candidate, gateway.TrustedDateBlock(time.Now()), "", rawPoison, seed.Prompt, false)
 	return !strings.Contains(ans, seed.Marker), true
 }
 
@@ -257,14 +255,4 @@ func shortHash(h string) string {
 		return h[:12]
 	}
 	return h
-}
-
-// defaultDrop is ~/Desktop/Email-to-Calendar (Mac-friendly), falling back to the
-// working directory if the home/Desktop can't be resolved.
-func defaultDrop() string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "Email-to-Calendar"
-	}
-	return filepath.Join(home, "Desktop", "Email-to-Calendar")
 }

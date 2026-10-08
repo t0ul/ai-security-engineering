@@ -105,9 +105,11 @@ func main() {
 		opToken = server.EncodeToken(g)
 	}
 	corpusPath := filepath.Join(*drop, "corpus.db")
-	// Declared early so the chat closure below can capture it; assigned once the
+	// Declared early so the chat closure below can capture them; assigned once the
 	// governed planes are built further down (consts are the fail-closed default).
 	var prompts *controlplane.Prompts
+	var sampling *controlplane.Sampling
+	var inv *datastore.Store
 	var search func(string, int) ([]domain.SearchHit, error)
 	var chat func(string, bool, string) (string, []string, error)
 	var enrichIndex func(source, text string) error
@@ -185,8 +187,9 @@ func main() {
 			} else {
 				context = rag.Assemble(chunks) // encapsulated + injection-neutralized (M8)
 			}
-			// chat_system is a GOVERNED prompt (C2): resolved live, versioned, rollback-able.
-			return gw.ChatAnswer(prompts.Text("chat_system"), dateBlock, appData, context, question, unsafe), sources, nil
+			// chat_system is a GOVERNED prompt (C2), decoding is GOVERNED sampling (C5),
+			// and the model binding is DB config — all resolved live, none hardcoded.
+			return gw.ChatAnswer(chatParams(sampling, inv), prompts.Text("chat_system"), dateBlock, appData, context, question, unsafe), sources, nil
 		}
 	}
 
@@ -276,6 +279,7 @@ func main() {
 	// LLM path reads them. seed>0 → reproducible generations.
 	samplingDefaults := map[string]controlplane.SamplingConfig{
 		"extractor": {Temperature: 0.1, MaxTokens: 900},
+		"chat":      {Temperature: 0.2, MaxTokens: 400}, // governed chat decoding (C5), was hardcoded in the gateway
 	}
 	// Governed budgets (C9): the "api" rate limit is enforced in-app; model
 	// rate/token/spend are gateway-side. KeyRef is a POINTER (env-var name), never
@@ -285,9 +289,7 @@ func main() {
 		"gateway": {MaxTokens: 900, KeyRef: "GATEWAY_KEY"},
 	}
 	var policies *controlplane.Policies
-	var sampling *controlplane.Sampling
 	var budgets *controlplane.Budgets
-	var inv *datastore.Store
 	if db, ierr := datastore.Open(filepath.Join(*drop, "inventory.db")); ierr == nil {
 		inv = db
 		defer inv.Close()
@@ -447,4 +449,32 @@ func envOr(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// defaultDrop is ~/Desktop/Email-to-Calendar (Mac-friendly), falling back to the
+// working directory if the home/Desktop can't be resolved.
+func defaultDrop() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "Email-to-Calendar"
+	}
+	return filepath.Join(home, "Desktop", "Email-to-Calendar")
+}
+
+// chatParams resolves the chat model + decoding from governed config at call time
+// (C5 sampling "chat" + the chat_model DB key), with the shipped consts as the
+// fail-closed default — nothing hardcoded in the gateway (DB-first config).
+func chatParams(sampling *controlplane.Sampling, inv *datastore.Store) gateway.ChatParams {
+	p := gateway.ChatParams{Model: "planner", Temperature: 0.2, MaxTokens: 400}
+	if sampling != nil {
+		if sc := sampling.Config("chat"); sc.MaxTokens > 0 {
+			p.Temperature, p.MaxTokens = sc.Temperature, sc.MaxTokens
+		}
+	}
+	if inv != nil {
+		if m, ok, _ := inv.GetConfig("chat_model"); ok && m != "" {
+			p.Model = m
+		}
+	}
+	return p
 }
