@@ -35,7 +35,8 @@ CREATE TABLE IF NOT EXISTS sampling(name TEXT, version TEXT, hash TEXT, config T
 CREATE TABLE IF NOT EXISTS retrieval(name TEXT, version TEXT, hash TEXT, config TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS bundles(label TEXT, config TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS budgets(name TEXT, version TEXT, hash TEXT, config TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);
-CREATE TABLE IF NOT EXISTS feedback(source TEXT, title TEXT, decision TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);`
+CREATE TABLE IF NOT EXISTS feedback(source TEXT, title TEXT, decision TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS skill_pins(name TEXT, version TEXT, hash TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);`
 
 // Open creates/opens the inventory at path (":memory:" for ephemeral).
 func Open(path string) (*Store, error) {
@@ -252,6 +253,27 @@ func (s *Store) LatestModel(name string) (model string, ok bool, err error) {
 	switch e := row.Scan(&model); e {
 	case nil:
 		return model, true, nil
+	case sql.ErrNoRows:
+		return "", false, nil
+	default:
+		return "", false, e
+	}
+}
+
+// RecordSkillPin persists a governed skill approval: the operator-approved content
+// hash (the pin) for a skill name. The approved hash IS the pin — no hash-of-a-hash.
+func (s *Store) RecordSkillPin(name, version, hash string) error {
+	_, err := s.db.Exec(`INSERT INTO skill_pins(name,version,hash) VALUES(?,?,?)`, name, version, hash)
+	return err
+}
+
+// LatestSkillPin returns the most recent approved content hash for a skill name, so
+// the resolver can rehydrate the active pin on boot.
+func (s *Store) LatestSkillPin(name string) (hash string, ok bool, err error) {
+	row := s.db.QueryRow(`SELECT hash FROM skill_pins WHERE name=? ORDER BY at DESC, rowid DESC LIMIT 1`, name)
+	switch e := row.Scan(&hash); e {
+	case nil:
+		return hash, true, nil
 	case sql.ErrNoRows:
 		return "", false, nil
 	default:
