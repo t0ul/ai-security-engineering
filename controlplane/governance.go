@@ -3,7 +3,7 @@ package controlplane
 import (
 	"fmt"
 
-	"github.com/t0ul/ai-security-engineering/cpstore"
+	"github.com/t0ul/ai-security-engineering/pkg/datastore"
 	"github.com/t0ul/gledger"
 	"github.com/t0ul/goverlord"
 )
@@ -22,7 +22,7 @@ type Governance struct {
 	cp *goverlord.ControlPlane
 	// Inventory, if set, durably records approvals and admin actions (cpstore),
 	// so decisions survive a restart and the console shows real history.
-	Inventory *cpstore.Store
+	Inventory *datastore.Store
 }
 
 // Standard role names seeded by NewGovernance.

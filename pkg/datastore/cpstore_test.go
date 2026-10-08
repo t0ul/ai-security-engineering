@@ -1,14 +1,14 @@
-package cpstore_test
+package datastore_test
 
 import (
 	"testing"
 
-	"github.com/t0ul/ai-security-engineering/cpstore"
+	"github.com/t0ul/ai-security-engineering/pkg/datastore"
 )
 
-func open(t *testing.T) *cpstore.Store {
+func open(t *testing.T) *datastore.Store {
 	t.Helper()
-	s, err := cpstore.Open(":memory:")
+	s, err := datastore.Open(":memory:")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,7 +48,7 @@ func TestApprovalsPersistAndList(t *testing.T) {
 }
 
 func TestPromptsPersistAndList(t *testing.T) {
-	s, _ := cpstore.Open(":memory:")
+	s, _ := datastore.Open(":memory:")
 	defer s.Close()
 	if err := s.RecordPrompt("planner", "v1", "abc123", "hello"); err != nil {
 		t.Fatal(err)
@@ -60,7 +60,7 @@ func TestPromptsPersistAndList(t *testing.T) {
 }
 
 func TestPinsPersistAndList(t *testing.T) {
-	s, _ := cpstore.Open(":memory:")
+	s, _ := datastore.Open(":memory:")
 	defer s.Close()
 	if err := s.RecordPin("search", "deadbeef", "operator"); err != nil {
 		t.Fatal(err)

@@ -3,7 +3,7 @@ package controlplane
 import (
 	"testing"
 
-	"github.com/t0ul/ai-security-engineering/cpstore"
+	"github.com/t0ul/ai-security-engineering/pkg/datastore"
 )
 
 func TestSamplingListActivateReset(t *testing.T) {
@@ -24,7 +24,7 @@ func TestSamplingListActivateReset(t *testing.T) {
 }
 
 func TestGovernedSamplingPersist(t *testing.T) {
-	inv, _ := cpstore.Open(":memory:")
+	inv, _ := datastore.Open(":memory:")
 	defer inv.Close()
 	p := GovernedSampling(map[string]SamplingConfig{"extractor": {Temperature: 0.1}}, inv, nil)
 	p.Activate("extractor", SamplingConfig{Temperature: 0.2, Seed: 7})

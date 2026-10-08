@@ -7,7 +7,7 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/t0ul/ai-security-engineering/cpstore"
+	"github.com/t0ul/ai-security-engineering/pkg/datastore"
 	"github.com/t0ul/gledger"
 )
 
@@ -38,7 +38,7 @@ type Prompts struct {
 	defaults map[string]string
 	active   map[string]PromptVersion
 	// OnActivate, when set, persists/audits each activation (e.g.
-	// cpstore.RecordPrompt + a gledger admin record). Kept as a hook so the
+	// datastore.RecordPrompt + a gledger admin record). Kept as a hook so the
 	// resolver stays dependency-free and offline-testable.
 	OnActivate func(PromptVersion)
 }
@@ -138,9 +138,9 @@ func (p *Prompts) Reset(name string) PromptVersion {
 }
 
 // GovernedPrompts is a resolver whose activations are durably persisted
-// (cpstore.RecordPrompt — a versioned, hashed artifact) and audited to gledger,
+// (datastore.RecordPrompt — a versioned, hashed artifact) and audited to gledger,
 // so a prompt change survives restarts and is attributable (M14/M15).
-func GovernedPrompts(defaults map[string]string, inv *cpstore.Store, audit *gledger.AuditLog) *Prompts {
+func GovernedPrompts(defaults map[string]string, inv *datastore.Store, audit *gledger.AuditLog) *Prompts {
 	p := NewPrompts(defaults)
 	p.OnActivate = func(pv PromptVersion) {
 		if inv != nil {

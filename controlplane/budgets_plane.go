@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/t0ul/ai-security-engineering/cpstore"
+	"github.com/t0ul/ai-security-engineering/pkg/datastore"
 	"github.com/t0ul/gledger"
 )
 
@@ -137,9 +137,9 @@ func (p *Budgets) Verify(name, wantHash string) bool {
 	return p.Get(name).Hash == wantHash
 }
 
-// GovernedBudgets persists activations (cpstore.RecordBudget) and audits them to
+// GovernedBudgets persists activations (datastore.RecordBudget) and audits them to
 // gledger, so a budget change survives restarts and is attributable (M20).
-func GovernedBudgets(defaults map[string]BudgetConfig, inv *cpstore.Store, audit *gledger.AuditLog) *Budgets {
+func GovernedBudgets(defaults map[string]BudgetConfig, inv *datastore.Store, audit *gledger.AuditLog) *Budgets {
 	p := NewBudgets(defaults)
 	p.OnActivate = func(pv BudgetVersion) {
 		if inv != nil {

@@ -3,7 +3,7 @@ package controlplane
 import (
 	"testing"
 
-	"github.com/t0ul/ai-security-engineering/cpstore"
+	"github.com/t0ul/ai-security-engineering/pkg/datastore"
 )
 
 func TestPoliciesListActivateReset(t *testing.T) {
@@ -35,7 +35,7 @@ func TestPoliciesListActivateReset(t *testing.T) {
 }
 
 func TestGovernedPoliciesPersist(t *testing.T) {
-	inv, _ := cpstore.Open(":memory:")
+	inv, _ := datastore.Open(":memory:")
 	defer inv.Close()
 	p := GovernedPolicies(map[string][]string{"egress": {"nyc.gov"}}, inv, nil)
 	p.Activate("egress", []string{"nyc.gov", "example.org"})

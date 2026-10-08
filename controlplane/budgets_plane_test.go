@@ -3,7 +3,7 @@ package controlplane
 import (
 	"testing"
 
-	"github.com/t0ul/ai-security-engineering/cpstore"
+	"github.com/t0ul/ai-security-engineering/pkg/datastore"
 )
 
 func TestBudgetsListActivateReset(t *testing.T) {
@@ -25,7 +25,7 @@ func TestBudgetsListActivateReset(t *testing.T) {
 }
 
 func TestGovernedBudgetsPersist(t *testing.T) {
-	inv, _ := cpstore.Open(":memory:")
+	inv, _ := datastore.Open(":memory:")
 	defer inv.Close()
 	p := GovernedBudgets(map[string]BudgetConfig{"api": {}}, inv, nil)
 	p.Activate("api", BudgetConfig{RatePerMin: 30})

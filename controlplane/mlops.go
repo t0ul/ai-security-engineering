@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/t0ul/ai-security-engineering/cpstore"
+	"github.com/t0ul/ai-security-engineering/pkg/datastore"
 	"github.com/t0ul/ai-security-engineering/registry"
 )
 
@@ -12,7 +12,7 @@ import (
 // eval score for label from the inventory, stamps it on the model, then runs the
 // gated promotion — so "ship to prod" is backed by a real, auditable score, not
 // an operator's say-so (M11 eval → M19 promotion gate).
-func PromoteWithLatestEval(reg *registry.Registry, inv *cpstore.Store, name, version, label string) error {
+func PromoteWithLatestEval(reg *registry.Registry, inv *datastore.Store, name, version, label string) error {
 	e, ok, err := inv.LatestEval(label)
 	if err != nil {
 		return err

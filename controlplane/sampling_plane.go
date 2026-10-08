@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/t0ul/ai-security-engineering/cpstore"
+	"github.com/t0ul/ai-security-engineering/pkg/datastore"
 	"github.com/t0ul/gledger"
 )
 
@@ -137,9 +137,9 @@ func (p *Sampling) Verify(name, wantHash string) bool {
 	return p.Get(name).Hash == wantHash
 }
 
-// GovernedSampling persists activations (cpstore.RecordSampling) and audits them
+// GovernedSampling persists activations (datastore.RecordSampling) and audits them
 // to gledger, so a sampling change survives restarts and is attributable (M19).
-func GovernedSampling(defaults map[string]SamplingConfig, inv *cpstore.Store, audit *gledger.AuditLog) *Sampling {
+func GovernedSampling(defaults map[string]SamplingConfig, inv *datastore.Store, audit *gledger.AuditLog) *Sampling {
 	p := NewSampling(defaults)
 	p.OnActivate = func(pv SamplingVersion) {
 		if inv != nil {

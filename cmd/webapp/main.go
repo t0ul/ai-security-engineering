@@ -33,7 +33,7 @@ import (
 	"github.com/t0ul/ai-security-engineering/agent/tool"
 	"github.com/t0ul/ai-security-engineering/agent/watcher"
 	"github.com/t0ul/ai-security-engineering/controlplane"
-	"github.com/t0ul/ai-security-engineering/cpstore"
+	"github.com/t0ul/ai-security-engineering/pkg/datastore"
 	"github.com/t0ul/ai-security-engineering/durable"
 	"github.com/t0ul/ai-security-engineering/pkg/netpolicy"
 	"github.com/t0ul/ai-security-engineering/pkg/provenance"
@@ -298,8 +298,8 @@ func main() {
 	var policies *controlplane.Policies
 	var sampling *controlplane.Sampling
 	var budgets *controlplane.Budgets
-	var inv *cpstore.Store
-	if db, ierr := cpstore.Open(filepath.Join(*drop, "inventory.db")); ierr == nil {
+	var inv *datastore.Store
+	if db, ierr := datastore.Open(filepath.Join(*drop, "inventory.db")); ierr == nil {
 		inv = db
 		defer inv.Close()
 		prompts = controlplane.GovernedPrompts(promptDefaults, inv, audit)

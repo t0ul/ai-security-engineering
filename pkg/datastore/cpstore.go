@@ -8,7 +8,7 @@
 //
 // Tables are append-only history (an inventory of versioned artifacts and the
 // decisions about them), distinct from gledger's runtime trace log.
-package cpstore
+package datastore
 
 import (
 	"database/sql"

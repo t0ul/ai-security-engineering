@@ -8,7 +8,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/t0ul/ai-security-engineering/cpstore"
+	"github.com/t0ul/ai-security-engineering/pkg/datastore"
 	"github.com/t0ul/gledger"
 )
 
@@ -26,7 +26,7 @@ type Policies struct {
 	mu       sync.RWMutex
 	defaults map[string][]string
 	active   map[string]PolicyVersion
-	// OnActivate persists/audits each activation (cpstore.RecordPolicy + gledger).
+	// OnActivate persists/audits each activation (datastore.RecordPolicy + gledger).
 	OnActivate func(PolicyVersion)
 }
 
@@ -138,9 +138,9 @@ func (p *Policies) Verify(name, wantHash string) bool {
 }
 
 // GovernedPolicies is a resolver whose activations are durably persisted
-// (cpstore.RecordPolicy) and audited to gledger (M14/M15), so a policy change
+// (datastore.RecordPolicy) and audited to gledger (M14/M15), so a policy change
 // survives restarts and is attributable.
-func GovernedPolicies(defaults map[string][]string, inv *cpstore.Store, audit *gledger.AuditLog) *Policies {
+func GovernedPolicies(defaults map[string][]string, inv *datastore.Store, audit *gledger.AuditLog) *Policies {
 	p := NewPolicies(defaults)
 	p.OnActivate = func(pv PolicyVersion) {
 		if inv != nil {

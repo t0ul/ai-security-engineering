@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/t0ul/ai-security-engineering/cpstore"
+	"github.com/t0ul/ai-security-engineering/pkg/datastore"
 	"github.com/t0ul/goverlord"
 )
 
@@ -49,7 +49,7 @@ func TestGovernanceFourEyesApproval(t *testing.T) {
 }
 
 func TestApprovalRecordedToInventory(t *testing.T) {
-	inv, err := cpstore.Open(":memory:")
+	inv, err := datastore.Open(":memory:")
 	if err != nil {
 		t.Fatal(err)
 	}

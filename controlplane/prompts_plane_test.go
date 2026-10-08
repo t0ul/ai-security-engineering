@@ -3,11 +3,11 @@ package controlplane
 import (
 	"testing"
 
-	"github.com/t0ul/ai-security-engineering/cpstore"
+	"github.com/t0ul/ai-security-engineering/pkg/datastore"
 )
 
 func TestGovernedPromptsPersist(t *testing.T) {
-	inv, _ := cpstore.Open(":memory:")
+	inv, _ := datastore.Open(":memory:")
 	defer inv.Close()
 	p := GovernedPrompts(map[string]string{"planner": "D"}, inv, nil)
 	p.Activate("planner", "GOVERNED-V1")
@@ -51,7 +51,7 @@ func TestPromptsActivateVersionsAndPins(t *testing.T) {
 func TestPromptsActivateHookFires(t *testing.T) {
 	var got PromptVersion
 	p := NewPrompts(map[string]string{"planner": "D"})
-	p.OnActivate = func(pv PromptVersion) { got = pv } // stands in for cpstore.RecordPrompt + audit
+	p.OnActivate = func(pv PromptVersion) { got = pv } // stands in for datastore.RecordPrompt + audit
 	p.Activate("planner", "V1")
 	if got.Name != "planner" || got.Version != 1 || got.Hash != HashPrompt("V1") {
 		t.Fatalf("persistence hook did not receive the activation: %+v", got)

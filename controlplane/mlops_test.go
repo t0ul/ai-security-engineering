@@ -3,12 +3,12 @@ package controlplane
 import (
 	"testing"
 
-	"github.com/t0ul/ai-security-engineering/cpstore"
+	"github.com/t0ul/ai-security-engineering/pkg/datastore"
 	"github.com/t0ul/ai-security-engineering/registry"
 )
 
 func TestPromoteWithLatestEval(t *testing.T) {
-	inv, err := cpstore.Open(":memory:")
+	inv, err := datastore.Open(":memory:")
 	if err != nil {
 		t.Fatal(err)
 	}
