@@ -178,67 +178,67 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/safety", s.safetyState)
 	// The kill switch is deliberately OUTSIDE the capability gate: engaging Halt
 	// revokes every grant, so a gated killswitch could never be disengaged.
-	mux.HandleFunc("/api/killswitch", csrf(s.killswitch))
+	mux.HandleFunc("POST /api/killswitch", csrf(s.killswitch))
 	// Ask lists the retrieval corpus — ActionList, the data-residency-sensitive
 	// endpoint (a frontier reader must not harvest it).
 	mux.HandleFunc("/api/ask", s.authz(controlplane.ActionList, "corpus", s.ask))
 	if s.Chat != nil {
-		mux.HandleFunc("/api/chat", csrf(s.authz(controlplane.ActionList, "corpus", s.chat)))
+		mux.HandleFunc("POST /api/chat", csrf(s.authz(controlplane.ActionList, "corpus", s.chat)))
 	}
 	if s.MCP != nil {
 		mux.HandleFunc("/api/mcp", s.mcpList)
-		mux.HandleFunc("/api/mcp/approve", csrf(s.authz(controlplane.ActionWrite, "mcp", s.mcpApprove)))
+		mux.HandleFunc("POST /api/mcp/approve", csrf(s.authz(controlplane.ActionWrite, "mcp", s.mcpApprove)))
 	}
 	if s.Prompts != nil {
 		mux.HandleFunc("/api/prompts", s.promptsList)
-		mux.HandleFunc("/api/prompts/activate", csrf(s.authz(controlplane.ActionWrite, "prompts", s.promptsActivate)))
-		mux.HandleFunc("/api/prompts/reset", csrf(s.authz(controlplane.ActionWrite, "prompts", s.promptsReset)))
+		mux.HandleFunc("POST /api/prompts/activate", csrf(s.authz(controlplane.ActionWrite, "prompts", s.promptsActivate)))
+		mux.HandleFunc("POST /api/prompts/reset", csrf(s.authz(controlplane.ActionWrite, "prompts", s.promptsReset)))
 	}
 	if s.Budgets != nil {
 		mux.HandleFunc("/api/budgets", s.budgetsList)
-		mux.HandleFunc("/api/budgets/activate", csrf(s.authz(controlplane.ActionWrite, "budget", s.budgetsActivate)))
-		mux.HandleFunc("/api/budgets/reset", csrf(s.authz(controlplane.ActionWrite, "budget", s.budgetsReset)))
+		mux.HandleFunc("POST /api/budgets/activate", csrf(s.authz(controlplane.ActionWrite, "budget", s.budgetsActivate)))
+		mux.HandleFunc("POST /api/budgets/reset", csrf(s.authz(controlplane.ActionWrite, "budget", s.budgetsReset)))
 	}
 	if s.Sampling != nil {
 		mux.HandleFunc("/api/sampling", s.samplingList)
-		mux.HandleFunc("/api/sampling/activate", csrf(s.authz(controlplane.ActionWrite, "sampling", s.samplingActivate)))
-		mux.HandleFunc("/api/sampling/reset", csrf(s.authz(controlplane.ActionWrite, "sampling", s.samplingReset)))
+		mux.HandleFunc("POST /api/sampling/activate", csrf(s.authz(controlplane.ActionWrite, "sampling", s.samplingActivate)))
+		mux.HandleFunc("POST /api/sampling/reset", csrf(s.authz(controlplane.ActionWrite, "sampling", s.samplingReset)))
 	}
 	if s.Policies != nil {
 		mux.HandleFunc("/api/policies", s.policiesList)
-		mux.HandleFunc("/api/policies/activate", csrf(s.authz(controlplane.ActionWrite, "policy", s.policiesActivate)))
-		mux.HandleFunc("/api/policies/reset", csrf(s.authz(controlplane.ActionWrite, "policy", s.policiesReset)))
+		mux.HandleFunc("POST /api/policies/activate", csrf(s.authz(controlplane.ActionWrite, "policy", s.policiesActivate)))
+		mux.HandleFunc("POST /api/policies/reset", csrf(s.authz(controlplane.ActionWrite, "policy", s.policiesReset)))
 	}
 	if s.FlywheelStats != nil {
 		mux.HandleFunc("/api/flywheel", s.flywheel)
 	}
 	if s.EvalHistory != nil {
 		mux.HandleFunc("/api/eval", s.evalList)
-		mux.HandleFunc("/api/eval/run", csrf(s.authz(controlplane.ActionWrite, "eval", s.evalRunHandler)))
+		mux.HandleFunc("POST /api/eval/run", csrf(s.authz(controlplane.ActionWrite, "eval", s.evalRunHandler)))
 	}
 	if s.PromptTest != nil {
-		mux.HandleFunc("/api/prompts/test", csrf(s.authz(controlplane.ActionWrite, "prompts", s.promptsTest)))
+		mux.HandleFunc("POST /api/prompts/test", csrf(s.authz(controlplane.ActionWrite, "prompts", s.promptsTest)))
 	}
 	if s.BundleList != nil {
 		mux.HandleFunc("/api/bundles", s.bundlesList)
-		mux.HandleFunc("/api/bundles/save", csrf(s.authz(controlplane.ActionWrite, "bundle", s.bundlesSave)))
-		mux.HandleFunc("/api/bundles/apply", csrf(s.authz(controlplane.ActionWrite, "bundle", s.bundlesApply)))
+		mux.HandleFunc("POST /api/bundles/save", csrf(s.authz(controlplane.ActionWrite, "bundle", s.bundlesSave)))
+		mux.HandleFunc("POST /api/bundles/apply", csrf(s.authz(controlplane.ActionWrite, "bundle", s.bundlesApply)))
 	}
 	if s.ProfileLoad != nil {
 		mux.HandleFunc("/api/timeline", s.timeline)
 		mux.HandleFunc("/api/profile", s.profileGet)
-		mux.HandleFunc("/api/profile/save", csrf(s.authz(controlplane.ActionWrite, "profile", s.profileSave)))
+		mux.HandleFunc("POST /api/profile/save", csrf(s.authz(controlplane.ActionWrite, "profile", s.profileSave)))
 	}
 	if s.InboxPath != "" {
-		mux.HandleFunc("/api/drop", csrf(s.authz(controlplane.ActionWrite, "inbox", s.drop)))
+		mux.HandleFunc("POST /api/drop", csrf(s.authz(controlplane.ActionWrite, "inbox", s.drop)))
 	}
 	if s.OutboxDir != "" {
-		mux.HandleFunc("/api/accept", csrf(s.authz(controlplane.ActionWrite, "calendar", s.accept)))
-		mux.HandleFunc("/api/reject", csrf(s.authz(controlplane.ActionWrite, "calendar", s.reject)))
-		mux.HandleFunc("/api/action", csrf(s.authz(controlplane.ActionExport, "link", s.action))) // egress
+		mux.HandleFunc("POST /api/accept", csrf(s.authz(controlplane.ActionWrite, "calendar", s.accept)))
+		mux.HandleFunc("POST /api/reject", csrf(s.authz(controlplane.ActionWrite, "calendar", s.reject)))
+		mux.HandleFunc("POST /api/action", csrf(s.authz(controlplane.ActionExport, "link", s.action))) // egress
 	}
 	if s.Fetch != nil && s.Index != nil {
-		mux.HandleFunc("/api/enrich", csrf(s.authz(controlplane.ActionExport, "link", s.enrich))) // egress → corpus
+		mux.HandleFunc("POST /api/enrich", csrf(s.authz(controlplane.ActionExport, "link", s.enrich))) // egress → corpus
 	}
 	if s.OutboxDir != "" {
 		mux.HandleFunc("/ics/", s.serveICS)           // .ics only — NOT the whole outbox (sidecars hold PII)
@@ -433,10 +433,6 @@ func (s *Server) safetyState(w http.ResponseWriter, _ *http.Request) {
 func (s *Server) killswitch(w http.ResponseWriter, r *http.Request) {
 	if s.Safety == nil {
 		http.Error(w, "no kill switch configured", http.StatusNotFound)
-		return
-	}
-	if r.Method != http.MethodPost {
-		http.Error(w, "POST required", http.StatusMethodNotAllowed)
 		return
 	}
 	var req struct {

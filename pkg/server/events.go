@@ -19,10 +19,6 @@ var reSafeName = regexp.MustCompile(`[^a-zA-Z0-9._-]+`)
 // The content is untrusted — the pipeline guards/sanitizes it on ingest; here we
 // only harden the filename (basename, safe chars, .txt).
 func (s *Server) drop(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "POST required", http.StatusMethodNotAllowed)
-		return
-	}
 	if s.paused() {
 		http.Error(w, "processing paused by the kill switch", http.StatusServiceUnavailable)
 		return

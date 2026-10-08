@@ -19,10 +19,6 @@ import (
 // Read of the household's own events — not a contacts/PII harvest — so "what's on
 // this week?" can be answered from the app's real state, not just email snippets.
 func (s *Server) chat(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "POST required", http.StatusMethodNotAllowed)
-		return
-	}
 	var req struct {
 		Question string `json:"question"`
 		Unsafe   bool   `json:"unsafe"` // demo: run with RAG controls OFF (raw concat) to show the attack land

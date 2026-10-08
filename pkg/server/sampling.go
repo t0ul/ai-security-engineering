@@ -27,10 +27,6 @@ func (s *Server) samplingList(w http.ResponseWriter, _ *http.Request) {
 // samplingActivate records a new governed sampling version for a model (versioned,
 // hashed, audited, persisted). CSRF + authz(write/sampling) guard this route.
 func (s *Server) samplingActivate(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "POST required", http.StatusMethodNotAllowed)
-		return
-	}
 	var req struct {
 		Name   string                      `json:"name"`
 		Config controlplane.SamplingConfig `json:"config"`
@@ -45,10 +41,6 @@ func (s *Server) samplingActivate(w http.ResponseWriter, r *http.Request) {
 
 // samplingReset rolls a model's sampling back to its shipped default.
 func (s *Server) samplingReset(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "POST required", http.StatusMethodNotAllowed)
-		return
-	}
 	var req struct {
 		Name string `json:"name"`
 	}

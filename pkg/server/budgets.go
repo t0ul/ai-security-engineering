@@ -30,10 +30,6 @@ func (s *Server) budgetsList(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (s *Server) budgetsActivate(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "POST required", http.StatusMethodNotAllowed)
-		return
-	}
 	var req struct {
 		Name   string                    `json:"name"`
 		Config controlplane.BudgetConfig `json:"config"`
@@ -47,10 +43,6 @@ func (s *Server) budgetsActivate(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) budgetsReset(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "POST required", http.StatusMethodNotAllowed)
-		return
-	}
 	var req struct {
 		Name string `json:"name"`
 	}

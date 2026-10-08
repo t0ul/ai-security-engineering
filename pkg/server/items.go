@@ -117,10 +117,6 @@ func (s *Server) summary(w http.ResponseWriter, r *http.Request) {
 // Body: {"file":"<stem>.summary.json","index":N}. The URL/field sanitizers in
 // ics.Write still apply; an action's click is egress-gated later (A6).
 func (s *Server) accept(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "POST required", http.StatusMethodNotAllowed)
-		return
-	}
 	var req struct {
 		File    string `json:"file"`
 		Index   int    `json:"index"`
@@ -169,10 +165,6 @@ func (s *Server) doAccept(w http.ResponseWriter, file string, item schema.Event)
 // reject records that an extracted item was wrong — the negative half of the
 // data-flywheel. No side effect beyond the durable feedback signal.
 func (s *Server) reject(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "POST required", http.StatusMethodNotAllowed)
-		return
-	}
 	var req struct {
 		File  string `json:"file"`
 		Index int    `json:"index"`

@@ -23,10 +23,6 @@ type Fetcher func(ctx context.Context, url string) (string, error)
 // sandbox fetch runs. The link text came from an UNTRUSTED document, so this
 // endpoint is the only place it may be reached, and only on an explicit click.
 func (s *Server) action(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "POST required", http.StatusMethodNotAllowed)
-		return
-	}
 	var req struct {
 		File    string `json:"file"`
 		Index   int    `json:"index"`

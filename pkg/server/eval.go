@@ -31,10 +31,6 @@ func (s *Server) evalList(w http.ResponseWriter, _ *http.Request) {
 // evalRunHandler runs the eval live (through the extractor LLM path) and persists
 // the scores. Guarded by CSRF + authz(write/eval).
 func (s *Server) evalRunHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "POST required", http.StatusMethodNotAllowed)
-		return
-	}
 	results, mode := s.EvalRun()
 	writeJSON(w, map[string]any{"ok": true, "results": results, "mode": mode})
 }
@@ -43,10 +39,6 @@ func (s *Server) evalRunHandler(w http.ResponseWriter, r *http.Request) {
 // the candidate's live F1, the ADD-ASR, and the promotion-gate verdict so an
 // operator can see the effect before promoting. Guarded by CSRF + authz(write/prompts).
 func (s *Server) promptsTest(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "POST required", http.StatusMethodNotAllowed)
-		return
-	}
 	var req struct {
 		Name string `json:"name"`
 		Text string `json:"text"`

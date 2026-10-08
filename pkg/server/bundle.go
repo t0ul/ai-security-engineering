@@ -18,10 +18,6 @@ func (s *Server) bundlesList(w http.ResponseWriter, _ *http.Request) {
 // bundlesSave snapshots the whole governed plane under a label. CSRF +
 // authz(write/bundle).
 func (s *Server) bundlesSave(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "POST required", http.StatusMethodNotAllowed)
-		return
-	}
 	var req struct {
 		Label string `json:"label"`
 	}
@@ -39,10 +35,6 @@ func (s *Server) bundlesSave(w http.ResponseWriter, r *http.Request) {
 // bundlesApply rolls the entire governed plane back to a saved snapshot. CSRF +
 // authz(write/bundle).
 func (s *Server) bundlesApply(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "POST required", http.StatusMethodNotAllowed)
-		return
-	}
 	var req struct {
 		Label string `json:"label"`
 	}

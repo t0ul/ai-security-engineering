@@ -22,10 +22,6 @@ func (s *Server) profileGet(w http.ResponseWriter, _ *http.Request) {
 // profileSave persists the household profile to the DB (host-only, no egress).
 // CSRF + authz(write/profile) guard this route.
 func (s *Server) profileSave(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "POST required", http.StatusMethodNotAllowed)
-		return
-	}
 	if s.ProfileSave == nil {
 		http.Error(w, "no profile store configured", http.StatusNotFound)
 		return

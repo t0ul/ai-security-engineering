@@ -27,10 +27,6 @@ func (s *Server) policiesList(w http.ResponseWriter, _ *http.Request) {
 // hashed, audited, persisted). CSRF + authz(write/policy) guard this route. The
 // deny-by-default enforcement (private/IMDS, argcheck) is unaffected.
 func (s *Server) policiesActivate(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "POST required", http.StatusMethodNotAllowed)
-		return
-	}
 	var req struct {
 		Name  string   `json:"name"`
 		Items []string `json:"items"`
@@ -45,10 +41,6 @@ func (s *Server) policiesActivate(w http.ResponseWriter, r *http.Request) {
 
 // policiesReset rolls an allowlist back to its shipped default.
 func (s *Server) policiesReset(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "POST required", http.StatusMethodNotAllowed)
-		return
-	}
 	var req struct {
 		Name string `json:"name"`
 	}

@@ -13,10 +13,6 @@ func (s *Server) mcpList(w http.ResponseWriter, _ *http.Request) {
 // mcpApprove re-pins a server to its current manifest (operator rug-pull
 // recovery). The capability gate (write/mcp) and CSRF already guard this route.
 func (s *Server) mcpApprove(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "POST required", http.StatusMethodNotAllowed)
-		return
-	}
 	var req struct {
 		Server string `json:"server"`
 	}

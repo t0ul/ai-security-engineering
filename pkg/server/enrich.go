@@ -14,10 +14,6 @@ import (
 // on ingest) so Ask-School can answer from it without ever trusting it as
 // instructions. Never auto-fetched.
 func (s *Server) enrich(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "POST required", http.StatusMethodNotAllowed)
-		return
-	}
 	var req struct {
 		URL     string `json:"url"`
 		Nonce   string `json:"nonce"`

@@ -35,10 +35,6 @@ func (s *Server) promptsList(w http.ResponseWriter, _ *http.Request) {
 // audited, persisted via the resolver's OnActivate). CSRF + authz(write/prompts)
 // already guard this route.
 func (s *Server) promptsActivate(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "POST required", http.StatusMethodNotAllowed)
-		return
-	}
 	var req struct {
 		Name string `json:"name"`
 		Text string `json:"text"`
@@ -53,10 +49,6 @@ func (s *Server) promptsActivate(w http.ResponseWriter, r *http.Request) {
 
 // promptsReset rolls a prompt back to its shipped default (known-good).
 func (s *Server) promptsReset(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "POST required", http.StatusMethodNotAllowed)
-		return
-	}
 	var req struct {
 		Name string `json:"name"`
 	}
