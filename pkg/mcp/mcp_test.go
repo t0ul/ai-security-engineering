@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/t0ul/ai-security-engineering/pkg/argcheck"
-	"github.com/t0ul/ai-security-engineering/mcp"
+	"github.com/t0ul/ai-security-engineering/pkg/mcp"
 	"github.com/t0ul/ai-security-engineering/pkg/netpolicy"
 	"github.com/t0ul/gustoms"
 )

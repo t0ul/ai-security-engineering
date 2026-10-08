@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/t0ul/ai-security-engineering/mcp"
+	"github.com/t0ul/ai-security-engineering/pkg/mcp"
 )
 
 // SandboxExecTool exposes the egress-denied MicroVM detonation chamber as a

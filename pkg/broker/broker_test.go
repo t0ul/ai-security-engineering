@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/t0ul/ai-security-engineering/broker"
+	"github.com/t0ul/ai-security-engineering/pkg/broker"
 	"github.com/t0ul/ai-security-engineering/pkg/netpolicy"
 )
 
