@@ -550,8 +550,28 @@ func main() {
 	// Chat is constructed late (after the governed planes exist) but only when the
 	// corpus opened — reader nil = no Chat tab. Same reader NHI grant as search.
 	var chatSvc server.ChatService
+	var chatHistorySvc server.ChatHistoryStore
 	if reader != nil {
-		chatSvc = &chatService{reader: reader, grant: readerGrant, authz: authz, gw: gw, prompts: prompts, sampling: sampling, models: models, retrieval: retrieval, semantic: &ragSemantic}
+		// The chat model's context window (for the usage bar): resolve the governed
+		// "chat" binding to its catalog ctx size, fail-closed to 8192.
+		chatCtxLimit := func() int {
+			name := "planner"
+			if models != nil {
+				if b := models.Bound("chat"); b != "" {
+					name = b
+				}
+			}
+			if inv != nil {
+				if e, ok, _ := inv.GetModelCatalog(name); ok && e.Ctx > 0 {
+					return e.Ctx
+				}
+			}
+			return 8192
+		}
+		chatSvc = &chatService{reader: reader, grant: readerGrant, authz: authz, gw: gw, prompts: prompts, sampling: sampling, models: models, retrieval: retrieval, semantic: &ragSemantic, hist: inv, ctxLimit: chatCtxLimit}
+		if inv != nil {
+			chatHistorySvc = chatHistoryStore{inv: inv}
+		}
 	}
 
 	srv := &http.Server{
@@ -559,7 +579,7 @@ func main() {
 		Handler: server.New(server.Config{
 			AuditPath: auditPath, OutboxDir: cfg.Outbox, InboxPath: cfg.Inbox,
 			Egress: egress, Fetch: fetch, Verifier: verifier, Safety: safety, Search: search, Index: enrichIndex,
-			Flywheel: flywheelSvc, Chat: chatSvc,
+			Flywheel: flywheelSvc, Chat: chatSvc, ChatHistory: chatHistorySvc,
 			Authz: authz, OperatorToken: opToken, AppToken: appToken, Audit: audit,
 			MCP: mcpReg, Prompts: prompts, Policies: policies, Sampling: sampling, Budgets: budgets, Retrieval: retrieval, Grammars: grammars, Models: models,
 			Skills: skillsPlane, SkillCatalog: skillSupply, ModelCatalog: modelCatalogSvc, Events: eventsSvc, Summaries: summariesSvc, Items: itemsSvc, RAG: ragLabSvc,

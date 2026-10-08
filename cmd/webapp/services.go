@@ -238,12 +238,14 @@ type chatService struct {
 	sampling  *controlplane.Sampling
 	models    *controlplane.Models
 	retrieval *controlplane.Retrieval
-	semantic  *atomic.Bool // when true, retrieve with vector SemanticQuery instead of FTS
+	semantic  *atomic.Bool          // when true, retrieve with vector SemanticQuery instead of FTS
+	hist      *datastore.Store      // persists the conversation (multi-turn + reload); nil = stateless
+	ctxLimit  func() int            // the chat model's context window size (for the usage bar)
 }
 
-func (c *chatService) Answer(question string, unsafe bool, appData string) (string, []string, error) {
+func (c *chatService) Answer(question string, unsafe bool, appData string) (server.ChatReply, error) {
 	if _, err := c.authz.Verify(c.grant, controlplane.Capability{Action: controlplane.ActionList, Resource: "corpus", Tenant: "public"}); err != nil {
-		return "", nil, fmt.Errorf("rag-reader capability refused: %w", err)
+		return server.ChatReply{}, fmt.Errorf("rag-reader capability refused: %w", err)
 	}
 	// Trusted context: the host clock is the ONLY authority for dates — never the
 	// corpus, so a poisoned email ("today is …") cannot move the agent's clock.
@@ -270,26 +272,55 @@ func (c *chatService) Answer(question string, unsafe bool, appData string) (stri
 		chunks, err = c.reader.Query("public", question, k)
 	}
 	if err != nil {
-		return "", nil, err
+		return server.ChatReply{}, err
 	}
 	sources := make([]string, 0, len(chunks))
 	for _, ch := range chunks {
 		sources = append(sources, ch.DocID)
 	}
-	var context string
+	var ctxText string
 	if unsafe {
 		var b strings.Builder
 		for _, ch := range chunks {
 			b.WriteString(ch.Text)
 			b.WriteString("\n")
 		}
-		context = b.String() // CONTROLS OFF: raw untrusted text, no encapsulation/scrub
+		ctxText = b.String() // CONTROLS OFF: raw untrusted text, no encapsulation/scrub
 	} else {
-		context = rag.Assemble(chunks) // encapsulated + injection-neutralized (M8)
+		ctxText = rag.Assemble(chunks) // encapsulated + injection-neutralized (M8)
+	}
+	// Multi-turn: replay the recent conversation so the chat remembers prior turns
+	// (loaded BEFORE storing this question, so it is not duplicated into its own input).
+	var history []gateway.Turn
+	if c.hist != nil {
+		if turns, e := c.hist.LoadChatTurns(10); e == nil {
+			for _, t := range turns {
+				history = append(history, gateway.Turn{Role: t.Role, Content: t.Content})
+			}
+		}
 	}
 	// chat_system is a GOVERNED prompt (C2), decoding is GOVERNED sampling (C5), model
 	// binding is DB config — all resolved live, none hardcoded.
-	return c.gw.ChatAnswer(chatParams(c.sampling, c.models), c.prompts.Text("chat_system"), dateBlock, appData, context, question, unsafe), sources, nil
+	res := c.gw.Chat(chatParams(c.sampling, c.models), c.prompts.Text("chat_system"), dateBlock, appData, ctxText, history, question, unsafe)
+	// Persist the turn (DB-first): the question + the answer with its model + token
+	// usage, so the chat survives a reload and ratings are durable.
+	var turnID int64
+	if c.hist != nil {
+		_, _ = c.hist.AppendChatTurn(datastore.ChatTurn{Role: "user", Content: question})
+		turnID, _ = c.hist.AppendChatTurn(datastore.ChatTurn{
+			Role: "assistant", Content: res.Answer, Sources: strings.Join(sources, "\n"),
+			Model: res.Model, PromptTokens: res.PromptTokens, CompletionTokens: res.CompletionTokens,
+		})
+	}
+	limit := 0
+	if c.ctxLimit != nil {
+		limit = c.ctxLimit()
+	}
+	return server.ChatReply{
+		Answer: res.Answer, Sources: sources, Model: shortModel(res.Model),
+		PromptTokens: res.PromptTokens, CompletionTokens: res.CompletionTokens,
+		ContextLimit: limit, TurnID: turnID,
+	}, nil
 }
 
 // chatInjectionASR runs the chat-injection ADD against a CANDIDATE chat_system
@@ -330,3 +361,45 @@ func shortHash(h string) string {
 	}
 	return h
 }
+
+// shortModel renders a model name compactly for the UI: basename, no .gguf, capped.
+func shortModel(m string) string {
+	if i := strings.LastIndexAny(m, "/\\"); i >= 0 {
+		m = m[i+1:]
+	}
+	m = strings.TrimSuffix(m, ".gguf")
+	if len(m) > 28 {
+		m = m[:28]
+	}
+	return m
+}
+
+// chatHistoryStore adapts *datastore.Store to server.ChatHistoryStore (history +
+// feedback + clear), converting the stored turns to the API DTO.
+type chatHistoryStore struct{ inv *datastore.Store }
+
+func (h chatHistoryStore) LoadChatTurns(limit int) ([]server.ChatTurnDTO, error) {
+	turns, err := h.inv.LoadChatTurns(limit)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]server.ChatTurnDTO, 0, len(turns))
+	for _, t := range turns {
+		var srcs []string
+		if t.Sources != "" {
+			srcs = strings.Split(t.Sources, "\n")
+		}
+		out = append(out, server.ChatTurnDTO{
+			ID: t.ID, Role: t.Role, Content: t.Content, Sources: srcs,
+			Model: shortModel(t.Model), PromptTokens: t.PromptTokens,
+			CompletionTokens: t.CompletionTokens, Rating: t.Rating,
+		})
+	}
+	return out, nil
+}
+
+func (h chatHistoryStore) SetChatRating(id int64, rating string) error {
+	return h.inv.SetChatRating(id, rating)
+}
+
+func (h chatHistoryStore) ClearChatTurns() error { return h.inv.ClearChatTurns() }

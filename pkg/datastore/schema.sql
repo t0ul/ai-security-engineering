@@ -62,3 +62,9 @@ CREATE TABLE IF NOT EXISTS summaries(file TEXT PRIMARY KEY, json TEXT, at DATETI
 -- keyed by config('items_fingerprint'). Each row keeps its source file + index so an
 -- accept can still resolve the original item.
 CREATE TABLE IF NOT EXISTS items(file TEXT, idx INTEGER, json TEXT);
+
+-- chat_turns is the persistent conversation: one row per user/assistant turn, so the
+-- chat survives a reload, is multi-turn (prior turns are replayed to the model), and
+-- carries observability (which model answered, token usage) + a per-answer rating
+-- (up/down/neutral) that feeds the feedback flywheel.
+CREATE TABLE IF NOT EXISTS chat_turns(id INTEGER PRIMARY KEY AUTOINCREMENT, role TEXT, content TEXT, sources TEXT, model TEXT, prompt_tokens INTEGER, completion_tokens INTEGER, rating TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);

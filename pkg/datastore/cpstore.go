@@ -411,6 +411,69 @@ func b2i(b bool) int {
 	return 0
 }
 
+// ChatTurn is one persisted conversation turn.
+type ChatTurn struct {
+	ID               int64  `json:"id"`
+	Role             string `json:"role"` // "user" | "assistant"
+	Content          string `json:"content"`
+	Sources          string `json:"sources"` // newline-joined doc ids (assistant turns)
+	Model            string `json:"model"`
+	PromptTokens     int    `json:"prompt_tokens"`
+	CompletionTokens int    `json:"completion_tokens"`
+	Rating           string `json:"rating"` // up | down | neutral | ""
+	At               string `json:"at"`
+}
+
+// AppendChatTurn stores one conversation turn and returns its id.
+func (s *Store) AppendChatTurn(t ChatTurn) (int64, error) {
+	res, err := s.db.Exec(
+		`INSERT INTO chat_turns(role,content,sources,model,prompt_tokens,completion_tokens,rating) VALUES(?,?,?,?,?,?,?)`,
+		t.Role, t.Content, t.Sources, t.Model, t.PromptTokens, t.CompletionTokens, t.Rating)
+	if err != nil {
+		return 0, err
+	}
+	return res.LastInsertId()
+}
+
+// LoadChatTurns returns the most recent `limit` turns in chronological order (oldest
+// first), so the UI renders the thread and the model replays recent context.
+func (s *Store) LoadChatTurns(limit int) ([]ChatTurn, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	rows, err := s.db.Query(
+		`SELECT id,role,content,sources,model,prompt_tokens,completion_tokens,rating,at FROM chat_turns ORDER BY id DESC LIMIT ?`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []ChatTurn
+	for rows.Next() {
+		var t ChatTurn
+		if err := rows.Scan(&t.ID, &t.Role, &t.Content, &t.Sources, &t.Model, &t.PromptTokens, &t.CompletionTokens, &t.Rating, &t.At); err != nil {
+			return nil, err
+		}
+		out = append(out, t)
+	}
+	// reverse to chronological order
+	for i, j := 0, len(out)-1; i < j; i, j = i+1, j-1 {
+		out[i], out[j] = out[j], out[i]
+	}
+	return out, rows.Err()
+}
+
+// SetChatRating records a thumbs up/down/neutral on an assistant turn.
+func (s *Store) SetChatRating(id int64, rating string) error {
+	_, err := s.db.Exec(`UPDATE chat_turns SET rating=? WHERE id=?`, rating, id)
+	return err
+}
+
+// ClearChatTurns wipes the conversation history.
+func (s *Store) ClearChatTurns() error {
+	_, err := s.db.Exec(`DELETE FROM chat_turns`)
+	return err
+}
+
 // PersistedItem is one row of the deduped item projection: the item's source file +
 // index (so an accept can resolve it) and the item itself as JSON.
 type PersistedItem struct {

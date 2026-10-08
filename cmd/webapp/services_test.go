@@ -96,20 +96,20 @@ func TestChatServiceDefendsRAGInjectionLive(t *testing.T) {
 		prompts: controlplane.NewPrompts(map[string]string{"chat_system": "answer from context"}),
 	}
 
-	ans, _, err := cs.Answer("what is on in October", false, "")
+	reply, err := cs.Answer("what is on in October", false, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(ans, "PWNED-CHAT") {
-		t.Errorf("DEFENDED chat leaked the injection marker: %s", ans)
+	if strings.Contains(reply.Answer, "PWNED-CHAT") {
+		t.Errorf("DEFENDED chat leaked the injection marker: %s", reply.Answer)
 	}
 
-	raw, _, err := cs.Answer("what is on in October", true, "")
+	rawReply, err := cs.Answer("what is on in October", true, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(raw, "PWNED-CHAT") {
-		t.Errorf("UNSAFE path should expose the injection (so the control is proven), got: %s", raw)
+	if !strings.Contains(rawReply.Answer, "PWNED-CHAT") {
+		t.Errorf("UNSAFE path should expose the injection (so the control is proven), got: %s", rawReply.Answer)
 	}
 }
 
@@ -136,18 +136,18 @@ func TestChatServiceUsesGovernedK(t *testing.T) {
 		prompts:   controlplane.NewPrompts(map[string]string{"chat_system": "sys"}),
 		retrieval: ret,
 	}
-	_, sources, err := cs.Answer("what is on in October", false, "")
+	r1, err := cs.Answer("what is on in October", false, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(sources) != 1 {
-		t.Fatalf("governed k=1 should cap retrieval at 1 source, got %d: %v", len(sources), sources)
+	if len(r1.Sources) != 1 {
+		t.Fatalf("governed k=1 should cap retrieval at 1 source, got %d: %v", len(r1.Sources), r1.Sources)
 	}
 	// Rollback to k=2 via the plane → both docs retrievable.
 	ret.Activate("public", controlplane.RetrievalConfig{K: 2})
-	_, sources2, _ := cs.Answer("what is on in October", false, "")
-	if len(sources2) != 2 {
-		t.Fatalf("governed k=2 should return 2 sources, got %d: %v", len(sources2), sources2)
+	r2, _ := cs.Answer("what is on in October", false, "")
+	if len(r2.Sources) != 2 {
+		t.Fatalf("governed k=2 should return 2 sources, got %d: %v", len(r2.Sources), r2.Sources)
 	}
 }
 

@@ -28,12 +28,54 @@ func (s *Server) chat(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "question required", http.StatusBadRequest)
 		return
 	}
-	answer, sources, err := s.Chat.Answer(req.Question, req.Unsafe, s.weekScheduleBlock(time.Now()))
+	reply, err := s.Chat.Answer(req.Question, req.Unsafe, s.weekScheduleBlock(time.Now()))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	writeJSON(w, map[string]any{"answer": answer, "sources": sources})
+	writeJSON(w, reply)
+}
+
+// chatHistory returns the persisted conversation so the UI can render it on load.
+func (s *Server) chatHistory(w http.ResponseWriter, _ *http.Request) {
+	turns, err := s.ChatHistory.LoadChatTurns(50)
+	if err != nil {
+		http.Error(w, "history read failed", http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, map[string]any{"turns": turns})
+}
+
+// chatFeedback records a thumbs up/down/neutral on an assistant turn. CSRF + authz.
+func (s *Server) chatFeedback(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		TurnID int64  `json:"turn_id"`
+		Rating string `json:"rating"`
+	}
+	if json.NewDecoder(r.Body).Decode(&req) != nil || req.TurnID == 0 {
+		http.Error(w, "turn_id and rating required", http.StatusBadRequest)
+		return
+	}
+	switch req.Rating {
+	case "up", "down", "neutral", "":
+	default:
+		http.Error(w, "rating must be up|down|neutral", http.StatusBadRequest)
+		return
+	}
+	if err := s.ChatHistory.SetChatRating(req.TurnID, req.Rating); err != nil {
+		http.Error(w, "rating write failed", http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, map[string]any{"ok": true})
+}
+
+// chatClear wipes the conversation history.
+func (s *Server) chatClear(w http.ResponseWriter, _ *http.Request) {
+	if err := s.ChatHistory.ClearChatTurns(); err != nil {
+		http.Error(w, "clear failed", http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, map[string]any{"ok": true})
 }
 
 // weekScheduleBlock renders the accepted events in the near-term window (from the

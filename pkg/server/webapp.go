@@ -67,6 +67,10 @@ type Config struct {
 	// Chat, when set, answers a question grounded in the corpus. Nil = no chat.
 	Chat ChatService
 
+	// ChatHistory, when set, persists the conversation (history/feedback/clear API),
+	// so the chat survives a reload and ratings are durable. Nil = no history/feedback.
+	ChatHistory ChatHistoryStore
+
 	// Authz, when set, turns the console into an authZ'd API: every mutating or
 	// data-listing endpoint requires a capability Grant (C4b). The operator
 	// holds one broad grant (OperatorToken); the agent and tools get narrower
@@ -190,13 +194,45 @@ type EvalService interface {
 	Test(name, candidate string) PromptTestResult
 }
 
-// ChatService answers a natural-language question grounded in the corpus. unsafe=true
-// runs the UNDEFENDED path (raw-concat retrieval, no encapsulation/scrub) — the live
-// attack demo showing a poisoned doc's injection land; default is defended
-// (rag.Assemble). appData is the server-supplied trusted app context (this week's
-// schedule). The concrete impl + its deps live in cmd/webapp, out of the handler.
+// ChatReply is a chat answer plus its observability: the sources it grounded on, the
+// model that answered, the token usage (prompt tokens ≈ context window in use), the
+// model's context limit, and the persisted turn id (so the UI can rate it).
+type ChatReply struct {
+	Answer           string   `json:"answer"`
+	Sources          []string `json:"sources"`
+	Model            string   `json:"model"`
+	PromptTokens     int      `json:"prompt_tokens"`
+	CompletionTokens int      `json:"completion_tokens"`
+	ContextLimit     int      `json:"context_limit"`
+	TurnID           int64    `json:"turn_id"`
+}
+
+// ChatService answers a natural-language question grounded in the corpus, carrying the
+// conversation history so it is multi-turn, and persisting the turn. unsafe=true runs
+// the UNDEFENDED path (raw-concat retrieval) — the live attack demo. appData is the
+// server-supplied trusted app context (the calendar). Impl + deps live in cmd/webapp.
 type ChatService interface {
-	Answer(question string, unsafe bool, appData string) (answer string, sources []string, err error)
+	Answer(question string, unsafe bool, appData string) (ChatReply, error)
+}
+
+// ChatHistoryStore persists the conversation (DB-backed), so the chat survives a
+// reload and ratings are durable. The concrete impl lives in cmd/webapp.
+type ChatHistoryStore interface {
+	LoadChatTurns(limit int) ([]ChatTurnDTO, error)
+	SetChatRating(id int64, rating string) error
+	ClearChatTurns() error
+}
+
+// ChatTurnDTO is one persisted conversation turn for the history/feedback API.
+type ChatTurnDTO struct {
+	ID               int64    `json:"id"`
+	Role             string   `json:"role"`
+	Content          string   `json:"content"`
+	Sources          []string `json:"sources"`
+	Model            string   `json:"model"`
+	PromptTokens     int      `json:"prompt_tokens"`
+	CompletionTokens int      `json:"completion_tokens"`
+	Rating           string   `json:"rating"`
 }
 
 // Flywheel captures operator accept/reject decisions as durable ground-truth and
@@ -312,6 +348,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/ask", s.authz(controlplane.ActionList, "corpus", s.ask))
 	if s.Chat != nil {
 		mux.HandleFunc("POST /api/chat", csrf(s.authz(controlplane.ActionList, "corpus", s.chat)))
+	}
+	if s.ChatHistory != nil {
+		mux.HandleFunc("/api/chat/history", s.authz(controlplane.ActionList, "corpus", s.chatHistory))
+		mux.HandleFunc("POST /api/chat/feedback", csrf(s.authz(controlplane.ActionList, "corpus", s.chatFeedback)))
+		mux.HandleFunc("POST /api/chat/clear", csrf(s.authz(controlplane.ActionList, "corpus", s.chatClear)))
 	}
 	if s.MCP != nil {
 		mux.HandleFunc("/api/mcp", s.mcpList)

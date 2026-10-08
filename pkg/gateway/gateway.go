@@ -58,7 +58,35 @@ func (c *Client) Up() bool {
 // as data; unsafe=true is the naive splice an injection can hijack (the
 // ChatRAGInjection demo). With no live gateway it returns the trusted date +
 // schedule + best passage, so "what's today?" still works offline.
+// Turn is one prior conversation turn (role "user" or "assistant"), passed so the
+// chat is multi-turn: the model sees the conversation so far, not just the latest
+// question.
+type Turn struct {
+	Role    string
+	Content string
+}
+
+// ChatResult carries the answer plus observability the UI surfaces: which model
+// answered and the token usage (prompt tokens ≈ the context window currently in use,
+// completion tokens = the reply). Zero usage means it fell back (no live model).
+type ChatResult struct {
+	Answer           string
+	Model            string
+	PromptTokens     int
+	CompletionTokens int
+}
+
+// ChatAnswer is the single-turn convenience wrapper (used by the ADD demo). Prefer
+// Chat for the real conversational path.
 func (c *Client) ChatAnswer(p ChatParams, systemPrompt, dateBlock, appData, context, question string, unsafe bool) string {
+	return c.Chat(p, systemPrompt, dateBlock, appData, context, nil, question, unsafe).Answer
+}
+
+// Chat answers grounded in the context, carrying the conversation history so the chat
+// is multi-turn, and returns the model + token usage. The retrieved context stays in
+// the system message (untrusted data, M8); history turns are prior user/assistant
+// messages. Falls back to a stitched passage when no live model is reachable.
+func (c *Client) Chat(p ChatParams, systemPrompt, dateBlock, appData, context string, history []Turn, question string, unsafe bool) ChatResult {
 	p = p.orDefaults()
 	sys := systemPrompt + "\n" + dateBlock + "\n" + appData + "\n" + context
 	if unsafe {
@@ -70,30 +98,53 @@ func (c *Client) ChatAnswer(p ChatParams, systemPrompt, dateBlock, appData, cont
 			out += "\nThis week:\n" + StripTags(appData)
 		}
 		if strings.TrimSpace(context) == "" {
-			return out + "\nNo matching emails yet — drop more in."
+			return ChatResult{Answer: out + "\nNo matching emails yet — drop more in."}
 		}
-		return out + "\nFrom your emails:\n" + ShortText(context, 600)
+		return ChatResult{Answer: out + "\nFrom your emails:\n" + ShortText(context, 600)}
 	}
+	msgs := make([]map[string]string, 0, len(history)+2)
+	msgs = append(msgs, map[string]string{"role": "system", "content": sys})
+	for _, t := range history {
+		if t.Role == "" || t.Content == "" {
+			continue
+		}
+		msgs = append(msgs, map[string]string{"role": t.Role, "content": t.Content})
+	}
+	msgs = append(msgs, map[string]string{"role": "user", "content": question})
 	body, _ := json.Marshal(map[string]any{
-		"model": p.Model, "temperature": p.Temperature, "max_tokens": p.MaxTokens,
-		"messages": []map[string]string{{"role": "system", "content": sys}, {"role": "user", "content": question}},
+		"model": p.Model, "temperature": p.Temperature, "max_tokens": p.MaxTokens, "messages": msgs,
 	})
+	fallback := ChatResult{Answer: "From your emails:\n" + ShortText(context, 700)}
 	resp, err := (&http.Client{Timeout: 60 * time.Second}).Post(c.URL, "application/json", strings.NewReader(string(body)))
 	if err != nil {
-		return "From your emails:\n" + ShortText(context, 700)
+		return fallback
 	}
 	defer resp.Body.Close()
 	var d struct {
+		Model   string `json:"model"`
 		Choices []struct {
 			Message struct {
 				Content string `json:"content"`
 			} `json:"message"`
 		} `json:"choices"`
+		Usage struct {
+			PromptTokens     int `json:"prompt_tokens"`
+			CompletionTokens int `json:"completion_tokens"`
+		} `json:"usage"`
 	}
 	if json.NewDecoder(resp.Body).Decode(&d) != nil || len(d.Choices) == 0 {
-		return "From your emails:\n" + ShortText(context, 700)
+		return fallback
 	}
-	return d.Choices[0].Message.Content
+	model := d.Model
+	if model == "" {
+		model = p.Model
+	}
+	return ChatResult{
+		Answer:           d.Choices[0].Message.Content,
+		Model:            model,
+		PromptTokens:     d.Usage.PromptTokens,
+		CompletionTokens: d.Usage.CompletionTokens,
+	}
 }
 
 // TrustedDateBlock renders the host clock as a trusted context block — the "date

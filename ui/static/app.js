@@ -10,7 +10,7 @@ document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
   document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('active',x===b));
   TABS.forEach(t=>$('#'+t).classList.toggle('hide',t!==b.dataset.tab));
   const t=b.dataset.tab;
-  if(t==='chat'){const q=$('#chatq');if(q)q.focus();loadMiniCal();}
+  if(t==='chat'){const q=$('#chatq');if(q)q.focus();loadMiniCal();loadChatHistory();}
   if(t==='calendar'){loadEvents();loadDeadlines();}
   if(t==='week'){loadWeek('today');loadProfile();}
   if(t==='tasks') loadTasks();
@@ -70,6 +70,54 @@ async function loadDirectory(){
   if(em.length) h+='<div class="ev"><div><b>Emails</b><br><span class="mut">'+em.map(esc).join(', ')+'</span></div></div>';
   c.innerHTML=h;
 }
+function chatFeedbackHTML(turnId,rating){
+  if(!turnId)return '';
+  const on=x=>rating===x?' on':'';
+  return '<div class="fb" data-turn="'+turnId+'">'+
+    '<button class="thumb'+on('up')+'" title="good" onclick="rateChat('+turnId+',\'up\',this)">👍</button>'+
+    '<button class="thumb'+on('neutral')+'" title="ok" onclick="rateChat('+turnId+',\'neutral\',this)">😐</button>'+
+    '<button class="thumb'+on('down')+'" title="bad" onclick="rateChat('+turnId+',\'down\',this)">👎</button></div>';
+}
+function chatMetaHTML(r){
+  const bits=[];
+  if(r.model)bits.push('model '+esc(r.model));
+  if(r.prompt_tokens)bits.push(r.prompt_tokens+' ctx + '+(r.completion_tokens||0)+' out tok');
+  return bits.length?'<div class="meta mut">'+bits.join(' · ')+'</div>':'';
+}
+function assistantHTML(r,unsafe){
+  const src=(r.sources&&r.sources.length)?'<div class="src">sources: '+r.sources.map(esc).join(', ')+'</div>':'';
+  const warn=unsafe?'<div class="src" style="color:var(--bad)">⚠ controls off — retrieved text spliced in raw (injection can hijack)</div>':'';
+  return '<div class="msg a">'+esc(r.answer||'(no answer)')+warn+src+chatMetaHTML(r)+chatFeedbackHTML(r.turn_id,r.rating)+'</div>';
+}
+function updateChatStatus(r){
+  const el=$('#chatStatus');if(!el)return;
+  if(!r||(!r.model&&!r.prompt_tokens)){el.textContent='';return;}
+  let s=r.model?('model: '+r.model):'';
+  if(r.context_limit){const pct=Math.round(100*(r.prompt_tokens||0)/r.context_limit);s+=(s?'  ·  ':'')+'context '+(r.prompt_tokens||0)+' / '+r.context_limit+' ('+pct+'%)';}
+  else if(r.prompt_tokens){s+=(s?'  ·  ':'')+r.prompt_tokens+' ctx + '+(r.completion_tokens||0)+' out tokens';}
+  el.textContent=s;
+}
+async function loadChatHistory(){
+  const log=$('#chatlog');if(!log)return;
+  const d=await getJSON('/api/chat/history');const turns=d.turns||[];
+  log.innerHTML='';let last=null;
+  turns.forEach(t=>{
+    if(t.role==='user')log.insertAdjacentHTML('beforeend','<div class="msg u">'+esc(t.content)+'</div>');
+    else{log.insertAdjacentHTML('beforeend',assistantHTML({answer:t.content,sources:t.sources,model:t.model,prompt_tokens:t.prompt_tokens,completion_tokens:t.completion_tokens,turn_id:t.id,rating:t.rating},false));last={model:t.model,prompt_tokens:t.prompt_tokens,completion_tokens:t.completion_tokens};}
+  });
+  updateChatStatus(last);
+  log.scrollTop=log.scrollHeight;
+}
+async function rateChat(turnId,rating,btn){
+  const wrap=btn.closest('.fb');
+  const r=await postJSON('/api/chat/feedback',{turn_id:turnId,rating:rating});
+  if(r.ok&&wrap){wrap.querySelectorAll('.thumb').forEach(b=>b.classList.remove('on'));btn.classList.add('on');}
+}
+async function clearChat(){
+  if(!confirm('Clear the conversation history?'))return;
+  const r=await postJSON('/api/chat/clear',{});
+  if(r.ok){const log=$('#chatlog');if(log)log.innerHTML='';updateChatStatus(null);}
+}
 async function sendChat(){
   const inp=$('#chatq');const q=(inp.value||'').trim();if(!q)return;const log=$('#chatlog');
   const unsafe=$('#chatUnsafe')&&$('#chatUnsafe').checked;
@@ -77,9 +125,9 @@ async function sendChat(){
   log.insertAdjacentHTML('beforeend','<div class="msg a" id="pending"><span class="mut">thinking…</span></div>');log.scrollTop=log.scrollHeight;
   let r;try{r=await (await postJSON('/api/chat',{question:q,unsafe:unsafe})).json();}catch(e){r={answer:'error'};}
   const p=document.getElementById('pending');if(p)p.remove();
-  const src=(r.sources&&r.sources.length)?'<div class="src">sources: '+r.sources.map(esc).join(', ')+'</div>':'';
-  const warn=unsafe?'<div class="src" style="color:var(--bad)">⚠ controls off — retrieved text spliced in raw (injection can hijack)</div>':'';
-  log.insertAdjacentHTML('beforeend','<div class="msg a">'+esc(r.answer||'(no answer)')+warn+src+'</div>');log.scrollTop=log.scrollHeight;
+  log.insertAdjacentHTML('beforeend',assistantHTML(r,unsafe));
+  updateChatStatus(r);
+  log.scrollTop=log.scrollHeight;
 }
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&document.activeElement&&document.activeElement.id==='chatq')sendChat();});
 async function doEnrich(){

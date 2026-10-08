@@ -40,6 +40,7 @@
         <strong>Chat</strong> <span class="mut">— ask about your emails &amp; this week; grounded in the scrubbed corpus, retrieved text treated as untrusted data (M8); dates come from the host clock, not emails</span>
         <div id="chatlog" class="chatlog"></div>
         <div class="chatrow"><input id="chatq" placeholder="e.g. what's going on this week? what's today's date?"><button class="go" onclick="sendChat()">Send</button></div>
+        <div class="chatfoot"><span id="chatStatus" class="mut"></span><button class="ghost chatclear" onclick="clearChat()">Clear</button></div>
         <label class="mut" style="display:block;margin-top:8px"><input type="checkbox" id="chatUnsafe"> controls off <span style="opacity:.7">— demo: show a poisoned email hijack the answer (then uncheck to see the control block it)</span></label>
       </div>
       <div class="card minical" style="flex:1;min-width:230px">
