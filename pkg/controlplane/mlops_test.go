@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/t0ul/ai-security-engineering/pkg/datastore"
-	"github.com/t0ul/ai-security-engineering/registry"
+	"github.com/t0ul/ai-security-engineering/pkg/registry"
 )
 
 func TestPromoteWithLatestEval(t *testing.T) {

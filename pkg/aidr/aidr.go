@@ -9,7 +9,7 @@ package aidr
 import (
 	"strings"
 
-	"github.com/t0ul/ai-security-engineering/controlplane"
+	"github.com/t0ul/ai-security-engineering/pkg/controlplane"
 	"github.com/t0ul/ai-security-engineering/pkg/ir"
 )
 

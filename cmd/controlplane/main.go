@@ -17,7 +17,7 @@ import (
 	"strings"
 
 	"github.com/t0ul/ai-security-engineering/pkg/aidr"
-	"github.com/t0ul/ai-security-engineering/controlplane"
+	"github.com/t0ul/ai-security-engineering/pkg/controlplane"
 	"github.com/t0ul/ai-security-engineering/pkg/hitl"
 	"github.com/t0ul/ai-security-engineering/pkg/ir"
 	"github.com/t0ul/gledger"

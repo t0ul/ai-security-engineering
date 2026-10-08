@@ -17,7 +17,7 @@ import (
 	"github.com/t0ul/ADD"
 	"github.com/t0ul/ai-security-engineering/pkg/agent/guard"
 	"github.com/t0ul/ai-security-engineering/pkg/agent/pipeline"
-	"github.com/t0ul/ai-security-engineering/controlplane"
+	"github.com/t0ul/ai-security-engineering/pkg/controlplane"
 	"github.com/t0ul/goflage"
 	"github.com/t0ul/gorauder"
 )

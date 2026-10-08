@@ -19,7 +19,7 @@ import (
 	"strings"
 
 	"github.com/t0ul/ai-security-engineering/pkg/agent/extractor"
-	"github.com/t0ul/ai-security-engineering/controlplane"
+	"github.com/t0ul/ai-security-engineering/pkg/controlplane"
 )
 
 type module struct {

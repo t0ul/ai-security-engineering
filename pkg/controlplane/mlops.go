@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/t0ul/ai-security-engineering/pkg/datastore"
-	"github.com/t0ul/ai-security-engineering/registry"
+	"github.com/t0ul/ai-security-engineering/pkg/registry"
 )
 
 // PromoteWithLatestEval closes the MLOps loop: it reads the latest persisted

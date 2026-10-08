@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/t0ul/ai-security-engineering/controlplane"
+	"github.com/t0ul/ai-security-engineering/pkg/controlplane"
 )
 
 // SamplingRow is one entry of the sampling governance tab (C5): a model's governed

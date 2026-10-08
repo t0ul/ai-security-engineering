@@ -32,7 +32,7 @@ import (
 	"github.com/t0ul/ai-security-engineering/pkg/agent/roster"
 	"github.com/t0ul/ai-security-engineering/pkg/agent/tool"
 	"github.com/t0ul/ai-security-engineering/pkg/agent/watcher"
-	"github.com/t0ul/ai-security-engineering/controlplane"
+	"github.com/t0ul/ai-security-engineering/pkg/controlplane"
 	"github.com/t0ul/ai-security-engineering/pkg/datastore"
 	"github.com/t0ul/ai-security-engineering/pkg/durable"
 	"github.com/t0ul/ai-security-engineering/pkg/netpolicy"

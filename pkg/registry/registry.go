@@ -40,11 +40,11 @@ type Model struct {
 }
 
 var (
-	ErrUnknown    = errors.New("registry: no such model")
-	ErrSkipStage  = errors.New("registry: promotion must advance one stage at a time")
-	ErrUnsigned   = errors.New("registry: model must be signed to advance")
-	ErrEvalGate   = errors.New("registry: model fails the eval gate")
-	ErrAtProd     = errors.New("registry: already at prod")
+	ErrUnknown   = errors.New("registry: no such model")
+	ErrSkipStage = errors.New("registry: promotion must advance one stage at a time")
+	ErrUnsigned  = errors.New("registry: model must be signed to advance")
+	ErrEvalGate  = errors.New("registry: model fails the eval gate")
+	ErrAtProd    = errors.New("registry: already at prod")
 )
 
 // Registry holds models keyed by name@version.
