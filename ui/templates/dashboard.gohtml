@@ -20,6 +20,8 @@
     <button data-tab="security">Security</button>
     <button data-tab="prompts">Prompts</button>
     <button data-tab="sampling">Sampling</button>
+    <button data-tab="retrieval">Retrieval</button>
+    <button data-tab="grammar">Grammar</button>
     <button data-tab="policies">Policies</button>
     <button data-tab="budgets">Budgets</button>
     <button data-tab="eval">Eval</button>
@@ -164,6 +166,18 @@
     <div class="card">
       <strong>Sampling</strong> <span class="mut">— governed decoding params (M19): temperature / max tokens / seed. A seed makes generations reproducible for eval &amp; forensics. Versioned, hashed, rollback.</span>
       <div id="samplingList"><span class="mut">loading…</span></div>
+    </div>
+  </section>
+  <section id="retrieval" class="hide">
+    <div class="card">
+      <strong>Retrieval</strong> <span class="mut">— governed RAG read knobs: top-k per corpus. Versioned, hashed, rollback; bundle-referenced. Drives the chat read path live.</span>
+      <div id="retrievalList"><span class="mut">loading…</span></div>
+    </div>
+  </section>
+  <section id="grammar" class="hide">
+    <div class="card">
+      <strong>Grammar</strong> <span class="mut">— governed output grammar (GBNF) the extractor constrains output with. A swapped grammar silently changes the output contract, so it is pinned like a prompt.</span>
+      <div id="grammarList"><span class="mut">loading…</span></div>
     </div>
   </section>
 

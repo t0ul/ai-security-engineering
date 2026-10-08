@@ -3,7 +3,7 @@
 // request. Empty (household mode) = no header, unchanged behavior.
 (function(){const f=window.fetch.bind(window);window.fetch=(u,o)=>{o=o||{};const s=typeof u==='string'?u:(u&&u.url)||'';if(__CAP__&&(s.indexOf('/api/')===0||s.indexOf('/ics/')===0)){o.headers=Object.assign({},o.headers||{},{'Authorization':'Bearer '+__CAP__});}return f(u,o);};})();
 const $=s=>document.querySelector(s);
-const TABS=['chat','calendar','week','tasks','review','activity','ask','security','prompts','sampling','policies','budgets','eval','incidents'];
+const TABS=['chat','calendar','week','tasks','review','activity','ask','security','prompts','sampling','retrieval','grammar','policies','budgets','eval','incidents'];
 const esc=s=>{const d=document.createElement('div');d.textContent=s||'';return d.innerHTML;};
 const when=e=>e.all_day?((e.due||e.start)+' · all day'):((e.start||e.due)+(e.end?(' – '+e.end.slice(11)):''));
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
@@ -21,6 +21,8 @@ document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
   if(t==='security'){loadKill();loadMCP();loadBundles();}
   if(t==='prompts') loadPrompts();
   if(t==='sampling') loadSampling();
+  if(t==='retrieval') loadRetrieval();
+  if(t==='grammar') loadGrammar();
   if(t==='budgets') loadBudgets();
   if(t==='policies') loadPolicies();
   if(t==='eval') loadEval();
@@ -29,7 +31,7 @@ document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
 // App = consumer (zero control knobs); Studio = operator (the tuning/governance plane).
 const SURFACES={
   app:['chat','calendar','week','tasks','review','ask'],
-  studio:['security','prompts','sampling','policies','budgets','eval','incidents','activity']
+  studio:['security','prompts','sampling','retrieval','grammar','policies','budgets','eval','incidents','activity']
 };
 (function(){
   const vis=(SURFACES[SURFACE]||TABS);
@@ -150,6 +152,30 @@ async function activateSampling(name){
   await postJSON('/api/sampling/activate',{name:name,config:cfg});loadSampling();
 }
 async function resetSampling(name){await postJSON('/api/sampling/reset',{name:name});loadSampling();}
+async function loadRetrieval(){
+  const c=$('#retrievalList');if(!c)return;const d=await getJSON('/api/retrieval');const rs=d.retrieval||[];
+  if(!rs.length){c.innerHTML='<p class="mut">no corpora registered</p>';return;}
+  c.innerHTML=rs.map(s=>{const cf=s.config||{};const governed=s.version>0;
+    return '<div class="ev"><div><b>'+esc(s.name)+'</b> <span class="pill '+(governed?'pass':'')+'">v'+s.version+'</span> <span class="mut">'+esc(s.hash)+'</span>'+
+      '<div style="margin-top:6px">top-k <input id="rk_'+esc(s.name)+'" type="number" value="'+(cf.k||0)+'" style="width:80px"></div>'+
+      '<div style="margin-top:6px"><button class="go" onclick="activateRetrieval(\''+esc(s.name)+'\')">Activate</button>'+
+      (governed?(' <button class="ghost" onclick="resetRetrieval(\''+esc(s.name)+'\')">Reset to default</button>'):'')+'</div></div></div>';
+  }).join('');
+}
+async function activateRetrieval(name){await postJSON('/api/retrieval/activate',{name:name,config:{k:parseInt($('#rk_'+name).value)||0}});loadRetrieval();}
+async function resetRetrieval(name){await postJSON('/api/retrieval/reset',{name:name});loadRetrieval();}
+async function loadGrammar(){
+  const c=$('#grammarList');if(!c)return;const d=await getJSON('/api/grammar');const gs=d.grammars||[];
+  if(!gs.length){c.innerHTML='<p class="mut">no grammars registered</p>';return;}
+  c.innerHTML=gs.map(g=>{const governed=g.version>0;
+    return '<div class="ev"><div><b>'+esc(g.name)+'</b> <span class="pill '+(governed?'pass':'')+'">v'+g.version+'</span> <span class="mut">'+esc(g.hash)+'</span>'+
+      '<div style="margin-top:6px"><textarea id="gt_'+esc(g.name)+'" rows="5" style="width:100%;font-family:monospace;font-size:12px">'+esc(g.text)+'</textarea></div>'+
+      '<div style="margin-top:6px"><button class="go" onclick="activateGrammar(\''+esc(g.name)+'\')">Activate</button>'+
+      (governed?(' <button class="ghost" onclick="resetGrammar(\''+esc(g.name)+'\')">Reset to default</button>'):'')+'</div></div></div>';
+  }).join('');
+}
+async function activateGrammar(name){await postJSON('/api/grammar/activate',{name:name,text:$('#gt_'+name).value});loadGrammar();}
+async function resetGrammar(name){await postJSON('/api/grammar/reset',{name:name});loadGrammar();}
 async function loadBudgets(){
   const c=$('#budgetList');if(!c)return;const d=await getJSON('/api/budgets');const bs=d.budgets||[];
   if(!bs.length){c.innerHTML='<p class="mut">no budgets registered</p>';return;}

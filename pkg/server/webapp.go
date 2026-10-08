@@ -101,6 +101,15 @@ type Config struct {
 	// artifacts. Nil = no Sampling tab.
 	Sampling *controlplane.Sampling
 
+	// Retrieval, when set, is the governed RAG read-knob resolver (top-k per corpus)
+	// as versioned, hashed, rollback-able artifacts. Nil = no Retrieval tab.
+	Retrieval *controlplane.Retrieval
+
+	// Grammars, when set, is the governed output-grammar resolver (the GBNF the
+	// extractor constrains output with) as versioned, hashed, rollback-able
+	// artifacts. Nil = no Grammar tab.
+	Grammars *controlplane.Grammars
+
 	// Policies, when set, is the governed policy-allowlist resolver (C8): egress /
 	// exec / guardrail allowlists as versioned, hashed, rollback-able artifacts.
 	// The action egress check resolves its allowlist from here at request time, so
@@ -260,6 +269,16 @@ func (s *Server) Handler() http.Handler {
 		mux.HandleFunc("/api/sampling", s.samplingList)
 		mux.HandleFunc("POST /api/sampling/activate", csrf(s.authz(controlplane.ActionWrite, "sampling", s.samplingActivate)))
 		mux.HandleFunc("POST /api/sampling/reset", csrf(s.authz(controlplane.ActionWrite, "sampling", s.samplingReset)))
+	}
+	if s.Retrieval != nil {
+		mux.HandleFunc("/api/retrieval", s.retrievalList)
+		mux.HandleFunc("POST /api/retrieval/activate", csrf(s.authz(controlplane.ActionWrite, "retrieval", s.retrievalActivate)))
+		mux.HandleFunc("POST /api/retrieval/reset", csrf(s.authz(controlplane.ActionWrite, "retrieval", s.retrievalReset)))
+	}
+	if s.Grammars != nil {
+		mux.HandleFunc("/api/grammar", s.grammarList)
+		mux.HandleFunc("POST /api/grammar/activate", csrf(s.authz(controlplane.ActionWrite, "grammar", s.grammarActivate)))
+		mux.HandleFunc("POST /api/grammar/reset", csrf(s.authz(controlplane.ActionWrite, "grammar", s.grammarReset)))
 	}
 	if s.Policies != nil {
 		mux.HandleFunc("/api/policies", s.policiesList)

@@ -413,7 +413,7 @@ func main() {
 			Egress: egress, Fetch: fetch, Verifier: verifier, Safety: safety, Search: search, Index: enrichIndex,
 			Flywheel: flywheelSvc, Chat: chatSvc,
 			Authz: authz, OperatorToken: opToken, Audit: audit,
-			MCP: mcpReg, Prompts: prompts, Policies: policies, Sampling: sampling, Budgets: budgets,
+			MCP: mcpReg, Prompts: prompts, Policies: policies, Sampling: sampling, Budgets: budgets, Retrieval: retrieval, Grammars: grammars,
 			Eval:    evalSvc,
 			Bundles: bundleSvc,
 			Profile: profileSvc,
