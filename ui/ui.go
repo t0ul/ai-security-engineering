@@ -26,9 +26,15 @@ var dashboardTmpl = template.Must(template.New("dashboard").Parse(dashboardSrc))
 // DashboardData is the template data for the dashboard page.
 type DashboardData struct {
 	CapToken string // operator capability Grant, html/template-escaped into the page
+	Surface  string // "app" (consumer: zero knobs) or "studio" (operator: the tuning/governance plane)
 }
 
-// RenderDashboard writes the dashboard page with the capability token escaped in.
-func RenderDashboard(w io.Writer, token string) error {
-	return dashboardTmpl.Execute(w, DashboardData{CapToken: token})
+// RenderDashboard writes the dashboard page for the given surface ("app" or
+// "studio"), with the capability token escaped in. One template, two surfaces: the
+// JS shows only the tabs that belong to the surface (1 view, 1 job).
+func RenderDashboard(w io.Writer, token, surface string) error {
+	if surface == "" {
+		surface = "app"
+	}
+	return dashboardTmpl.Execute(w, DashboardData{CapToken: token, Surface: surface})
 }

@@ -300,6 +300,7 @@ func (s *Server) Handler() http.Handler {
 		mux.HandleFunc("/api/directory", s.directory) // consolidated contacts (R5)
 	}
 	mux.Handle("/static/", staticHandler())
+	mux.HandleFunc("/studio", s.studio)
 	mux.HandleFunc("/", s.index)
 	return mux
 }
@@ -463,16 +464,30 @@ func (s *Server) incident(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{"timeline": ir.Timeline(events, trace)})
 }
 
+// index serves the App surface (consumer: Calendar/Week/Tasks/Chat/Ask/Review —
+// zero control knobs). "1 view, 1 job": the governance/tuning plane is a separate
+// surface at /studio.
 func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
 		http.NotFound(w, r)
 		return
 	}
+	s.renderSurface(w, "app")
+}
+
+// studio serves the Studio surface (operator: the governed control/tuning plane —
+// prompts, sampling, policies, budgets, eval, security, incidents). Co-resident
+// with the App for now; the App page gets the same token, so the capability
+// boundary here is the per-route authz on the governance /api endpoints (a narrow
+// App-scoped grant that can't reach them is the follow-on hardening).
+func (s *Server) studio(w http.ResponseWriter, r *http.Request) {
+	s.renderSurface(w, "studio")
+}
+
+func (s *Server) renderSurface(w http.ResponseWriter, surface string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	// Render via html/template so the operator capability token is escaped into the
-	// page's JS-string context correctly (not a raw string replace).
-	if err := ui.RenderDashboard(w, s.OperatorToken); err != nil {
-		log.Printf("index: render dashboard: %v", err)
+	if err := ui.RenderDashboard(w, s.OperatorToken, surface); err != nil {
+		log.Printf("render %s surface: %v", surface, err)
 	}
 }
 

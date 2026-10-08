@@ -43,6 +43,8 @@
   @media (prefers-color-scheme:dark){:root{--side:#0a0d14;--sidefg:#aeb8cc}}
   .app{display:flex;min-height:100vh}
   .sidebar{width:208px;flex:0 0 208px;background:var(--side);color:var(--sidefg);padding:16px 12px;position:sticky;top:0;height:100vh;overflow-y:auto}
+  .switch{display:block;margin-top:18px;padding:9px 10px;border-radius:8px;color:var(--sidefg);opacity:.75;font-size:13px;text-decoration:none;border:1px solid rgba(255,255,255,.12)}
+  .switch:hover{opacity:1;background:rgba(255,255,255,.06)}
   .brand{font-size:16px;font-weight:700;color:#fff;padding:6px 10px 14px;display:flex;gap:8px;align-items:center}
   header{display:none}
   .sidebar nav{display:flex;flex-direction:column;gap:2px}

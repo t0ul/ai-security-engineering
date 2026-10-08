@@ -25,6 +25,28 @@ document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
   if(t==='policies') loadPolicies();
   if(t==='eval') loadEval();
 });
+// --- App / Studio surface split: 1 view, 1 job ---
+// App = consumer (zero control knobs); Studio = operator (the tuning/governance plane).
+const SURFACES={
+  app:['chat','calendar','week','tasks','review','ask'],
+  studio:['security','prompts','sampling','policies','budgets','eval','incidents','activity']
+};
+(function(){
+  const vis=(SURFACES[SURFACE]||TABS);
+  document.querySelectorAll('nav button').forEach(b=>{ if(vis.indexOf(b.dataset.tab)<0) b.style.display='none'; });
+  TABS.forEach(t=>{ if(vis.indexOf(t)<0){ const el=$('#'+t); if(el) el.classList.add('hide'); }});
+  // hide a group label if no visible button follows it (until the next label)
+  const nav=document.querySelector('nav'); let grp=null, seen=false;
+  [...nav.children].forEach(el=>{
+    if(el.classList&&el.classList.contains('grp')){ if(grp&&!seen) grp.style.display='none'; grp=el; seen=false; }
+    else if(el.tagName==='BUTTON' && el.style.display!=='none'){ seen=true; }
+  });
+  if(grp&&!seen) grp.style.display='none';
+  const sw=$('#surfaceSwitch');
+  if(sw){ if(SURFACE==='studio'){ sw.textContent='🏠 Back to App'; sw.href='/'; } else { sw.textContent='⚙ Studio'; sw.href='/studio'; } }
+  const first=document.querySelector('nav button[data-tab="'+vis[0]+'"]');
+  if(first) first.click(); // land on this surface's first tab
+})();
 async function doAsk(){
   const q=$('#askq').value.trim();const c=$('#askOut');if(!q){c.innerHTML='';return;}
   c.innerHTML='<span class="mut">searching…</span>';

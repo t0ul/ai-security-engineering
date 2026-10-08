@@ -25,6 +25,7 @@
     <button data-tab="eval">Eval</button>
     <button data-tab="incidents">Incidents</button>
   </nav>
+  <a id="surfaceSwitch" class="switch" href="/"></a>
 </aside>
 <main>
   <section id="chat" class="hide">
@@ -198,6 +199,6 @@
   </section>
 </main>
 </div>
-<script>const __CAP__="{{.CapToken}}";</script>
+<script>const __CAP__="{{.CapToken}}";const SURFACE="{{.Surface}}";</script>
 <script src="/static/app.js"></script>
 </body></html>
