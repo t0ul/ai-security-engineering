@@ -461,79 +461,8 @@ func main() {
 	// override, so these still serialize on evalMu. Live runs need the gouncer
 	// gateway (cmd/livecheck / a running modeld+gouncer); without it the extractor
 	// falls back to regex and we say so.
-	var evalMu sync.Mutex
-	labels := []string{"testdata/emaildrop/labels/3.json", "testdata/emaildrop/labels/1.json"}
-	evalHistory := func() []server.EvalResult {
-		if inv == nil {
-			return nil
-		}
-		rows, _ := inv.ListEvals(20)
-		out := make([]server.EvalResult, 0, len(rows))
-		for _, e := range rows {
-			out = append(out, server.EvalResult{Label: e.Label, F1: e.F1, At: e.At.Format("2006-01-02 15:04")})
-		}
-		return out
-	}
-	evalRun := func() ([]server.EvalResult, string) {
-		evalMu.Lock()
-		defer evalMu.Unlock()
-		live := gw.Up()
-		var out []server.EvalResult
-		for _, l := range labels {
-			rep, err := eval.ScoreWithMode(l, true, "llm")
-			if err != nil {
-				continue
-			}
-			if inv != nil {
-				_ = inv.RecordEval(rep.Source, rep.F1)
-			}
-			out = append(out, server.EvalResult{Label: rep.Source, F1: rep.F1})
-		}
-		return out, evalMode(live)
-	}
-	promptTest := func(name, candidate string) server.PromptTestResult {
-		if name == "chat_system" {
-			blocked, live := chatInjectionASR(candidate)
-			if !live {
-				return server.PromptTestResult{Mode: evalMode(false), Note: "chat_system test needs a live gateway (modeld + :4000); offline the prompt is never sent to a model."}
-			}
-			return server.PromptTestResult{ASRPass: blocked, GateOK: blocked, Mode: evalMode(true),
-				Note: "chat-injection ADD: candidate prompt fed a poisoned RAG doc with retrieval encapsulation OFF — it alone must refuse the injection (marker absent)."}
-		}
-		if name != "extractor" {
-			return server.PromptTestResult{Note: "shadow eval applies to the 'extractor' prompt (the labeled eval path); planner/coder drive the orchestrator demo, not this eval."}
-		}
-		evalMu.Lock()
-		defer evalMu.Unlock()
-		live := gw.Up()
-		extractor.SetExtractionPrompt(candidate)
-		defer extractor.SetExtractionPrompt(prompts.Text("extractor")) // restore the governed-active prompt
-
-		rep, err := eval.ScoreWithMode("testdata/emaildrop/labels/1.json", true, "llm")
-		f1 := 0.0
-		if err == nil {
-			f1 = rep.F1
-		}
-		baseline := 0.0
-		if inv != nil {
-			if e, ok, _ := inv.LatestEval("samples/1.txt"); ok {
-				baseline = e.F1
-			}
-		}
-		asrPass := true
-		for _, c := range redteam.Cases() {
-			if defendedASR(c) > 0 {
-				asrPass = false
-				break
-			}
-		}
-		asrVal := 0.0
-		if !asrPass {
-			asrVal = 1.0
-		}
-		gateOK, _ := controlplane.PromotionGate{MinF1: baseline, F1: func() float64 { return f1 }, ASR: func() float64 { return asrVal }}.Allow()
-		return server.PromptTestResult{F1: f1, Baseline: baseline, ASRPass: asrPass, GateOK: gateOK, Mode: evalMode(live)}
-	}
+	evalSvc := &evalService{inv: inv, gw: gw, prompts: prompts,
+		labels: []string{"testdata/emaildrop/labels/3.json", "testdata/emaildrop/labels/1.json"}}
 
 	srv := &http.Server{
 		Addr: *addr,
@@ -543,7 +472,7 @@ func main() {
 			Feedback: feedback, FlywheelStats: flywheelStats, Chat: chat,
 			Authz: authz, OperatorToken: opToken, Audit: audit,
 			MCP: mcpList, MCPApprove: mcpApprove, Prompts: prompts, Policies: policies, Sampling: sampling, Budgets: budgets,
-			EvalHistory: evalHistory, EvalRun: evalRun, PromptTest: promptTest,
+			Eval:       evalSvc,
 			BundleList: bundleList, BundleSave: bundleSave, BundleApply: bundleApply,
 			ProfileLoad: profileLoad, ProfileSave: profileSave,
 		}).Handler(),
@@ -592,6 +521,97 @@ func envOr(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// evalService is the concrete server.EvalService (C7): it holds the DB, gateway,
+// governed prompts, and label set the eval surface needs, so that logic lives here
+// as typed methods instead of closures in main. History/Run/Test serialize on mu
+// because Test mutates the shared extractor prompt override.
+type evalService struct {
+	inv     *datastore.Store
+	gw      *gateway.Client
+	prompts *controlplane.Prompts
+	labels  []string
+	mu      sync.Mutex
+}
+
+// History returns the persisted F1 trend (empty without a DB).
+func (e *evalService) History() []server.EvalResult {
+	if e.inv == nil {
+		return nil
+	}
+	rows, _ := e.inv.ListEvals(20)
+	out := make([]server.EvalResult, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, server.EvalResult{Label: r.Label, F1: r.F1, At: r.At.Format("2006-01-02 15:04")})
+	}
+	return out
+}
+
+// Run scores the label set live through the LLM path and persists each F1.
+func (e *evalService) Run() ([]server.EvalResult, string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	live := e.gw.Up()
+	var out []server.EvalResult
+	for _, l := range e.labels {
+		rep, err := eval.ScoreWithMode(l, true, "llm")
+		if err != nil {
+			continue
+		}
+		if e.inv != nil {
+			_ = e.inv.RecordEval(rep.Source, rep.F1)
+		}
+		out = append(out, server.EvalResult{Label: rep.Source, F1: rep.F1})
+	}
+	return out, evalMode(live)
+}
+
+// Test shadow-evaluates a candidate prompt WITHOUT activating it: chat_system runs
+// the chat-injection ADD; extractor runs the labeled F1 eval + ADD-ASR + promotion
+// gate; other names are a no-op note.
+func (e *evalService) Test(name, candidate string) server.PromptTestResult {
+	if name == "chat_system" {
+		blocked, live := chatInjectionASR(candidate)
+		if !live {
+			return server.PromptTestResult{Mode: evalMode(false), Note: "chat_system test needs a live gateway (modeld + :4000); offline the prompt is never sent to a model."}
+		}
+		return server.PromptTestResult{ASRPass: blocked, GateOK: blocked, Mode: evalMode(true),
+			Note: "chat-injection ADD: candidate prompt fed a poisoned RAG doc with retrieval encapsulation OFF — it alone must refuse the injection (marker absent)."}
+	}
+	if name != "extractor" {
+		return server.PromptTestResult{Note: "shadow eval applies to the 'extractor' prompt (the labeled eval path); planner/coder drive the orchestrator demo, not this eval."}
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	live := e.gw.Up()
+	extractor.SetExtractionPrompt(candidate)
+	defer extractor.SetExtractionPrompt(e.prompts.Text("extractor")) // restore the governed-active prompt
+
+	rep, err := eval.ScoreWithMode("testdata/emaildrop/labels/1.json", true, "llm")
+	f1 := 0.0
+	if err == nil {
+		f1 = rep.F1
+	}
+	baseline := 0.0
+	if e.inv != nil {
+		if ev, ok, _ := e.inv.LatestEval("samples/1.txt"); ok {
+			baseline = ev.F1
+		}
+	}
+	asrPass := true
+	for _, c := range redteam.Cases() {
+		if defendedASR(c) > 0 {
+			asrPass = false
+			break
+		}
+	}
+	asrVal := 0.0
+	if !asrPass {
+		asrVal = 1.0
+	}
+	gateOK, _ := controlplane.PromotionGate{MinF1: baseline, F1: func() float64 { return f1 }, ASR: func() float64 { return asrVal }}.Allow()
+	return server.PromptTestResult{F1: f1, Baseline: baseline, ASRPass: asrPass, GateOK: gateOK, Mode: evalMode(live)}
 }
 
 // chatInjectionASR runs the chat-injection ADD against a CANDIDATE chat_system

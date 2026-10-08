@@ -125,13 +125,19 @@ type Config struct {
 	BundleSave  func(label string) error
 	BundleApply func(label string) error
 
-	// Eval surfaces (C7): EvalHistory lists persisted F1 scores (the trend card);
-	// EvalRun runs the eval live and persists it; PromptTest shadow-evals a
-	// candidate extractor prompt (F1 + ADD-ASR + promotion-gate verdict) WITHOUT
-	// activating it. Nil = no Eval tab / Test button.
-	EvalHistory func() []EvalResult
-	EvalRun     func() ([]EvalResult, string)
-	PromptTest  func(name, candidate string) PromptTestResult
+	// Eval backs the Eval tab + Test button (C7). Nil = no Eval tab / Test button.
+	Eval EvalService
+}
+
+// EvalService is the Controller's view of the eval surface (C7): persisted F1
+// history (the trend card), a live eval run that scores + persists, and a shadow
+// prompt test (F1 + ADD-ASR + promotion-gate verdict) that never activates the
+// candidate. The concrete implementation and its model/DB/gateway dependencies
+// live in cmd/webapp, out of the handlers.
+type EvalService interface {
+	History() []EvalResult
+	Run() (results []EvalResult, mode string)
+	Test(name, candidate string) PromptTestResult
 }
 
 // Server serves the dashboard and its API. Build it with New — the zero value is
@@ -238,11 +244,9 @@ func (s *Server) Handler() http.Handler {
 	if s.FlywheelStats != nil {
 		mux.HandleFunc("/api/flywheel", s.flywheel)
 	}
-	if s.EvalHistory != nil {
+	if s.Eval != nil {
 		mux.HandleFunc("/api/eval", s.evalList)
 		mux.HandleFunc("POST /api/eval/run", csrf(s.authz(controlplane.ActionWrite, "eval", s.evalRunHandler)))
-	}
-	if s.PromptTest != nil {
 		mux.HandleFunc("POST /api/prompts/test", csrf(s.authz(controlplane.ActionWrite, "prompts", s.promptsTest)))
 	}
 	if s.BundleList != nil {

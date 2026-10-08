@@ -25,13 +25,13 @@ type PromptTestResult struct {
 }
 
 func (s *Server) evalList(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, map[string]any{"history": s.EvalHistory()})
+	writeJSON(w, map[string]any{"history": s.Eval.History()})
 }
 
 // evalRunHandler runs the eval live (through the extractor LLM path) and persists
 // the scores. Guarded by CSRF + authz(write/eval).
 func (s *Server) evalRunHandler(w http.ResponseWriter, r *http.Request) {
-	results, mode := s.EvalRun()
+	results, mode := s.Eval.Run()
 	writeJSON(w, map[string]any{"ok": true, "results": results, "mode": mode})
 }
 
@@ -47,5 +47,5 @@ func (s *Server) promptsTest(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "name and text required", http.StatusBadRequest)
 		return
 	}
-	writeJSON(w, s.PromptTest(req.Name, req.Text))
+	writeJSON(w, s.Eval.Test(req.Name, req.Text))
 }
