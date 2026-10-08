@@ -143,3 +143,32 @@ Wails wrapper adds packaging, not substance. A clean, idiomatic Go layout is the
 higher-value "make it a real product" move and what a reviewer sees first.
 Capstone II is retired in favor of this.
 ```
+
+## Design principles (ongoing — apply to all new work)
+1. **MVC.** Model = `pkg/domain` + `pkg/datastore`; View = `ui/templates/*.gohtml`
+   + `ui/static`; Controller = `pkg/server` handlers with logic in **typed services**
+   (interfaces + `server.New(Config)`), never closures in `main`. `main` = wiring
+   only. Single-method dependencies may stay func-fields; multi-op ones become
+   interfaces.
+2. **DB-first config (extends [config-in-DB]).** No hardcoded paths or default
+   settings in code. Every default lives in the `datastore` config KV, is read on
+   boot (rehydrate active), and is **end-user configurable**. Consts are ONLY the
+   fail-closed bootstrap value when the DB has no row. The one irreducible flag is
+   the DB location itself (chicken/egg); everything else — drop/inbox/outbox dirs,
+   gateway URL, egress allowlists, eval label paths, model bindings, sampling —
+   resolves from DB config after open, with a flag/env as an override, not the
+   source of truth.
+3. **DB for domain entities, not just governance.** Today the DB holds only the
+   meta (prompts/policies/sampling/budgets/bundles/feedback/evals/pins/config); the
+   actual events/tasks live as parsed-on-read `.ics` files. Project them into the DB.
+
+## Planned: `datastore.items` projection (unblocks task lifecycle)
+The app's core data isn't queryable and mutable item state has nowhere to live
+(you can't write "done" onto a signed `.ics`). Add a derived items table:
+- Built from the signed `.ics` outbox on write (+ a reindex command); the `.ics`
+  stays the **signed source of truth**, the table is a rebuildable index.
+- Columns for week/month/timeline/chat queries + mutable `status`
+  (`needs_action|done|dismissed`) and a snooze `due` — the one thing NOT
+  re-derivable from the `.ics`.
+- Collapses `allEvents()`'s per-request file scan + the fingerprint cache into real
+  queries, and unblocks task done/snooze/dismiss (APP-FEATURES-PLAN §lifecycle).
