@@ -3,7 +3,7 @@
 // request. Empty (household mode) = no header, unchanged behavior.
 (function(){const f=window.fetch.bind(window);window.fetch=(u,o)=>{o=o||{};const s=typeof u==='string'?u:(u&&u.url)||'';if(__CAP__&&(s.indexOf('/api/')===0||s.indexOf('/ics/')===0)){o.headers=Object.assign({},o.headers||{},{'Authorization':'Bearer '+__CAP__});}return f(u,o);};})();
 const $=s=>document.querySelector(s);
-const TABS=['chat','calendar','week','tasks','review','activity','ask','security','prompts','sampling','models','skills','retrieval','grammar','policies','budgets','eval','incidents'];
+const TABS=['chat','calendar','week','tasks','review','activity','ask','security','prompts','sampling','models','runtime','skills','retrieval','grammar','policies','budgets','eval','incidents'];
 const esc=s=>{const d=document.createElement('div');d.textContent=s||'';return d.innerHTML;};
 const when=e=>e.all_day?((e.due||e.start)+' · all day'):((e.start||e.due)+(e.end?(' – '+e.end.slice(11)):''));
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
@@ -22,6 +22,7 @@ document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
   if(t==='prompts') loadPrompts();
   if(t==='sampling') loadSampling();
   if(t==='models'){loadModels();loadModelCatalog();}
+  if(t==='runtime') loadRuntime();
   if(t==='skills') loadSkills();
   if(t==='retrieval') loadRetrieval();
   if(t==='grammar') loadGrammar();
@@ -33,7 +34,7 @@ document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
 // App = consumer (zero control knobs); Studio = operator (the tuning/governance plane).
 const SURFACES={
   app:['chat','calendar','week','tasks','review','ask'],
-  studio:['security','prompts','sampling','models','skills','retrieval','grammar','policies','budgets','eval','incidents','activity']
+  studio:['security','prompts','sampling','models','runtime','skills','retrieval','grammar','policies','budgets','eval','incidents','activity']
 };
 (function(){
   const vis=(SURFACES[SURFACE]||TABS);
@@ -205,6 +206,19 @@ async function delModel(name){
   const r=await postJSON('/api/modelcatalog/delete',{name:name});
   if(r.ok){loadModelCatalog();loadModels();}
   else{alert(await r.text());}
+}
+async function loadRuntime(){
+  const c=$('#runtimeOut');if(!c)return;const d=await getJSON('/api/runtime');const gw=d.gateway||{};
+  const gwPill=gw.up?'<span class="pill pass">up</span>':'<span class="pill fail">down</span>';
+  let html='<div class="ev"><div><b>gateway</b> '+gwPill+' <span class="mut">'+esc(gw.url||'')+'</span></div></div>';
+  html+='<div class="mut" style="margin:10px 0 4px">model servers <span style="opacity:.7">(assets: '+esc(d.assets_dir||'')+')</span></div>';
+  (d.models||[]).forEach(m=>{
+    const file=m.present?(m.valid_gguf?'<span class="pill pass">file ok</span>':'<span class="pill fail">file invalid</span>'):'<span class="pill fail">file missing</span>';
+    const port=m.port_open?'<span class="pill pass">:'+m.port+' serving</span>':'<span class="pill">:'+m.port+' down</span>';
+    html+='<div class="ev"><div><b>'+esc(m.name)+'</b> '+file+' '+port+' <span class="mut">'+esc(m.file)+'</span></div></div>';
+  });
+  if(!d.models||!d.models.length) html+='<p class="mut">no models in catalog</p>';
+  c.innerHTML=html;
 }
 async function loadSkills(){
   const c=$('#skillList');if(!c)return;const d=await getJSON('/api/skills');const cat=d.catalog||[];

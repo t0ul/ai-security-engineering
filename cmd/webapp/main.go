@@ -55,6 +55,7 @@ func main() {
 	allow := flag.String("allow", envOr("WEBAPP_ALLOW", "schools.nyc.gov,nyc.gov,ps51eliashowe.org,schoolsaccount.nyc"), "comma-separated egress allowlist for action/handbook links (parent domains cover subdomains); set empty to deny all")
 	vmURL := flag.String("microvm", envOr("MICROVM_URL", "http://127.0.0.1:5000"), "MicroVM vsock bridge for in-sandbox fetches")
 	gwFlag := flag.String("gateway", envOr("GATEWAY_URL", "http://127.0.0.1:4000/v1/chat/completions"), "gouncer gateway chat-completions URL (the single source for the chat + health-check endpoint)")
+	assetsDir := flag.String("assets", envOr("WEBAPP_ASSETS", "set-up/vm-assets"), "directory holding the served GGUF models (for the Runtime health panel)")
 	flag.Parse()
 
 	// Single source for the gateway endpoint (was two hardcoded literals). The chat
@@ -477,6 +478,7 @@ func main() {
 			Authz: authz, OperatorToken: opToken, AppToken: appToken, Audit: audit,
 			MCP: mcpReg, Prompts: prompts, Policies: policies, Sampling: sampling, Budgets: budgets, Retrieval: retrieval, Grammars: grammars, Models: models,
 			Skills: skillsPlane, SkillCatalog: skillSupply, ModelCatalog: modelCatalogSvc,
+			AssetsDir: *assetsDir, GatewayURL: *gwFlag, GatewayUp: func() bool { return gw != nil && gw.Up() },
 			Eval:    evalSvc,
 			Bundles: bundleSvc,
 			Profile: profileSvc,

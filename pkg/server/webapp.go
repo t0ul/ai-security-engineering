@@ -125,6 +125,12 @@ type Config struct {
 	// Shown in the Models tab with add/edit/delete. Nil = no catalog card.
 	ModelCatalog ModelCatalogStore
 
+	// Runtime health inputs (the Runtime tab / cmd/preflight-in-console): the asset
+	// dir holding GGUFs, the gateway URL (display), and a gateway health probe.
+	AssetsDir  string
+	GatewayURL string
+	GatewayUp  func() bool
+
 	// Skills, when set, is the governed skill-approval resolver (the pin side of the
 	// skills supply-chain control): which skill versions an operator has approved.
 	// Fail-closed — an unapproved skill is never loadable. Nil = no Skills tab.
@@ -313,6 +319,7 @@ func (s *Server) Handler() http.Handler {
 		mux.HandleFunc("/api/modelcatalog", s.modelCatalogList)
 		mux.HandleFunc("POST /api/modelcatalog/upsert", csrf(s.authz(controlplane.ActionWrite, "model", s.modelCatalogUpsert)))
 		mux.HandleFunc("POST /api/modelcatalog/delete", csrf(s.authz(controlplane.ActionWrite, "model", s.modelCatalogDelete)))
+		mux.HandleFunc("/api/runtime", s.runtimeStatus)
 	}
 	if s.Skills != nil {
 		mux.HandleFunc("/api/skills", s.skillsList)

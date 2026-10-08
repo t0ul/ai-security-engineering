@@ -21,6 +21,7 @@
     <button data-tab="prompts">Prompts</button>
     <button data-tab="sampling">Sampling</button>
     <button data-tab="models">Models</button>
+    <button data-tab="runtime">Runtime</button>
     <button data-tab="skills">Skills</button>
     <button data-tab="retrieval">Retrieval</button>
     <button data-tab="grammar">Grammar</button>
@@ -190,6 +191,13 @@
         </div>
         <div style="margin-top:8px"><button class="go" onclick="saveModel()">Save model</button> <span id="mcMsg" class="mut"></span></div>
       </div>
+    </div>
+  </section>
+  <section id="runtime" class="hide">
+    <div class="card">
+      <strong>Runtime health</strong> <span class="mut">— is the live model path up? (in-console preflight). Chat &amp; email extraction need the gateway + model servers; the governed tabs work without them. If chat is dead, look here.</span>
+      <div id="runtimeOut" style="margin-top:8px"><span class="mut">loading…</span></div>
+      <div style="margin-top:8px"><button class="ghost" onclick="loadRuntime()">Refresh</button> <span class="mut">serve models with <code>modeld -db &lt;inventory.db&gt;</code>; download with <code>prepareassets -db &lt;inventory.db&gt;</code></span></div>
     </div>
   </section>
   <section id="skills" class="hide">
