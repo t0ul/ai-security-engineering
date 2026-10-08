@@ -9,6 +9,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
@@ -44,10 +45,14 @@ import (
 )
 
 func main() {
-	addr := flag.String("addr", "127.0.0.1:8789", "listen address (loopback)")
-	drop := flag.String("drop", defaultDrop(), "drop folder (inbox/outbox/processed/logs)")
-	allow := flag.String("allow", "schools.nyc.gov,nyc.gov,ps51eliashowe.org,schoolsaccount.nyc", "comma-separated egress allowlist for action/handbook links (parent domains cover subdomains); set empty to deny all")
-	vmURL := flag.String("microvm", "http://127.0.0.1:5000", "MicroVM vsock bridge for in-sandbox fetches")
+	// Infra/deploy config is 12-factor: a .env (gitignored) seeds the environment,
+	// each flag defaults to its env var, and an explicit CLI flag overrides. Real
+	// env vars win over .env. Business/behavior config lives in the DB, not here.
+	loadDotenv(".env")
+	addr := flag.String("addr", envOr("WEBAPP_ADDR", "127.0.0.1:8789"), "listen address (loopback)")
+	drop := flag.String("drop", envOr("WEBAPP_DROP", defaultDrop()), "drop folder (inbox/outbox/processed/logs); the SQLite DBs live here")
+	allow := flag.String("allow", envOr("WEBAPP_ALLOW", "schools.nyc.gov,nyc.gov,ps51eliashowe.org,schoolsaccount.nyc"), "comma-separated egress allowlist for action/handbook links (parent domains cover subdomains); set empty to deny all")
+	vmURL := flag.String("microvm", envOr("MICROVM_URL", "http://127.0.0.1:5000"), "MicroVM vsock bridge for in-sandbox fetches")
 	gwFlag := flag.String("gateway", envOr("GATEWAY_URL", "http://127.0.0.1:4000/v1/chat/completions"), "gouncer gateway chat-completions URL (the single source for the chat + health-check endpoint)")
 	flag.Parse()
 
@@ -421,6 +426,34 @@ func envOr(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// loadDotenv seeds the process environment from a KEY=VALUE file (dotenv). A real
+// environment variable always wins over the file (12-factor), and a missing file is
+// fine. No dependency — a few lines of parsing, called once before flags. Values may
+// be quoted; lines starting with # are comments.
+func loadDotenv(path string) {
+	f, err := os.Open(path)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	sc := bufio.NewScanner(f)
+	for sc.Scan() {
+		line := strings.TrimSpace(sc.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		k, v, ok := strings.Cut(line, "=")
+		if !ok {
+			continue
+		}
+		k = strings.TrimSpace(k)
+		v = strings.Trim(strings.TrimSpace(v), `"'`)
+		if _, set := os.LookupEnv(k); !set { // real env wins over the file
+			_ = os.Setenv(k, v)
+		}
+	}
 }
 
 // defaultDrop is ~/Desktop/Email-to-Calendar (Mac-friendly), falling back to the
