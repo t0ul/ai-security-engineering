@@ -17,8 +17,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/t0ul/ai-security-engineering/controlplane"
-	"github.com/t0ul/ai-security-engineering/cpstore"
+	"github.com/t0ul/ai-security-engineering/pkg/controlplane"
+	"github.com/t0ul/ai-security-engineering/pkg/datastore"
 	"github.com/t0ul/gledger"
 	"github.com/t0ul/goverlord"
 )
@@ -39,7 +39,7 @@ func main() {
 		goverlord.Operator{ID: "bob", Roles: []string{controlplane.RoleApprover}},
 		goverlord.Operator{ID: "carol", Roles: []string{controlplane.RoleSRE}},
 	)
-	if inv, ierr := cpstore.Open(envOr("INVENTORY_DB", filepath.Join("controlplane", "logs", "inventory.db"))); ierr == nil {
+	if inv, ierr := datastore.Open(envOr("INVENTORY_DB", filepath.Join("controlplane", "logs", "inventory.db"))); ierr == nil {
 		defer inv.Close()
 		gov.Inventory = inv // approvals + admin actions persist; console reads history
 	}

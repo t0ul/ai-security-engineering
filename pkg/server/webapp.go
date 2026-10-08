@@ -1,0 +1,595 @@
+// Package webapp is the local operator web app for managing the agent: run the
+// security scorecard from the UI, and browse + replay incidents from the
+// chain-verified audit log. It reuses the same Go components the agent runs on
+// (redteam, ir), so the console and the system under test are one binary.
+package server
+
+import (
+	"context"
+	"encoding/base64"
+	"encoding/json"
+	"log"
+	"net/http"
+	"net/url"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/t0ul/ai-security-engineering/pkg/controlplane"
+	"github.com/t0ul/ai-security-engineering/pkg/domain"
+	"github.com/t0ul/ai-security-engineering/pkg/ir"
+	"github.com/t0ul/ai-security-engineering/pkg/netpolicy"
+	"github.com/t0ul/ai-security-engineering/pkg/provenance"
+	"github.com/t0ul/ai-security-engineering/pkg/redteam"
+	"github.com/t0ul/ai-security-engineering/ui"
+	"github.com/t0ul/gledger"
+	"github.com/t0ul/gorauder"
+)
+
+// Model/DTO boundary (MVC): the shared domain nouns live in pkg/domain
+// (Profile/Child/SearchHit/MCPServer); the calendar event's model is
+// pkg/agent/schema.Event. The response shapes defined in THIS package
+// (PromptRow, PolicyRow, SamplingRow, BudgetRow, BundleInfo, EvalResult,
+// PromptTestResult, Anchor, Event) are Controller-owned presentation DTOs by
+// deliberate choice — they are the JSON wire format of specific handlers, not
+// reusable domain types, so they stay next to the handler that serves them.
+
+// Config holds the Server's dependencies — the collaborators main wires in. A nil
+// optional dependency disables its feature (and its route/tab). Internal runtime
+// state (mutexes, caches) lives on Server, not here. Build the Server with New.
+type Config struct {
+	AuditPath string // gledger log to read incidents from
+	OutboxDir string // accepted .ics artifacts to render + offer for download
+	InboxPath string // where the user drops .txt emails (shown in the UI)
+
+	// Egress is the action-link allowlist (deny-by-default). Fetch performs the
+	// vetted fetch — in production controlplane.SandboxFetchTool (in the MicroVM).
+	// Both unset = action links are refused.
+	Egress netpolicy.Policy
+	Fetch  Fetcher
+	// Verifier, when set, checks each .ics against its .sig content credential so
+	// the UI can show whether the agent provably produced it unaltered (M20).
+	Verifier *provenance.Verifier
+	// Safety, when set, is the layered kill switch (M18): Pause refuses new
+	// processing/drops; BlockTools refuses accept/action side effects.
+	Safety *controlplane.Safety
+	// Search, when set, answers Ask-School queries over the (PII-scrubbed)
+	// retrieval corpus. Nil = the Ask tab returns nothing.
+	Search func(query string, k int) ([]domain.SearchHit, error)
+	// Index, when set with Fetch, powers safe handbook link enrichment (R6): it
+	// adds fetched (untrusted, PII-scrubbed) text to the retrieval corpus.
+	Index func(source, text string) error
+	// Flywheel, when set, captures operator accept/reject decisions as durable
+	// ground-truth (the data-flywheel) and reports the running tallies.
+	Flywheel Flywheel
+	// Chat, when set, answers a question grounded in the corpus. Nil = no chat.
+	Chat ChatService
+
+	// Authz, when set, turns the console into an authZ'd API: every mutating or
+	// data-listing endpoint requires a capability Grant (C4b). The operator
+	// holds one broad grant (OperatorToken); the agent and tools get narrower
+	// ones. Nil = the gate is a no-op, so the loopback household app runs
+	// unauthenticated. Verify is fail-closed and the kill switch (Authority.
+	// Halted) revokes every grant, so Halt kills in-flight side effects too.
+	Authz *controlplane.Authority
+	// OperatorToken is the base64url(JSON) operator Grant injected into the Studio
+	// page so the browser presents it on every /api and /ics request. Empty = none.
+	OperatorToken string
+	// AppToken is the NARROW household grant injected into the App page — it covers
+	// only the consumer scopes (list corpus, write calendar/inbox/profile, export
+	// link) and NOTHING on the governed control plane, so the App is cryptographically
+	// unable to reach a governance endpoint. Empty = fall back to OperatorToken.
+	AppToken string
+	// Audit, when set, records every refused capability for the admin trail.
+	Audit *gledger.AuditLog
+
+	// MCP, when set, lists the MCP servers the agent reaches through the gustoms
+	// gateway with their pin status and re-pins one on rug-pull recovery (C6).
+	// Nil = no MCP tab.
+	MCP MCPRegistry
+
+	// Prompts, when set, is the governed prompt resolver (C2): the console lists
+	// each model's active/default system prompt, activates a new versioned+hashed
+	// version, and rolls back to the shipped default. Nil = no Prompts tab.
+	Prompts *controlplane.Prompts
+
+	// Budgets, when set, is the governed budgets/limits resolver (C9): rate/token/
+	// concurrency/spend ceilings + key POINTERS (env-var names, never values). The
+	// "api" budget's RatePerMin is enforced on the console API here; the rest are
+	// gateway-side. Nil = no Budgets tab, no rate limit.
+	Budgets *controlplane.Budgets
+
+	// Sampling, when set, is the governed decoding-params resolver (C5):
+	// temperature/max_tokens/seed per model as versioned, hashed, rollback-able
+	// artifacts. Nil = no Sampling tab.
+	Sampling *controlplane.Sampling
+
+	// Retrieval, when set, is the governed RAG read-knob resolver (top-k per corpus)
+	// as versioned, hashed, rollback-able artifacts. Nil = no Retrieval tab.
+	Retrieval *controlplane.Retrieval
+
+	// Grammars, when set, is the governed output-grammar resolver (the GBNF the
+	// extractor constrains output with) as versioned, hashed, rollback-able
+	// artifacts. Nil = no Grammar tab.
+	Grammars *controlplane.Grammars
+
+	// Models, when set, is the governed model-binding resolver (the logical model
+	// each role routes to) as versioned, hashed, rollback-able artifacts. Nil = no
+	// Models tab.
+	Models *controlplane.Models
+
+	// Skills, when set, is the governed skill-approval resolver (the pin side of the
+	// skills supply-chain control): which skill versions an operator has approved.
+	// Fail-closed — an unapproved skill is never loadable. Nil = no Skills tab.
+	Skills *controlplane.Skills
+
+	// SkillCatalog, when set, is the live consumer of Skills: it loads a named skill
+	// through the governed sign+pin+scope gate and lists the supply for the Studio.
+	SkillCatalog SkillLoader
+
+	// Policies, when set, is the governed policy-allowlist resolver (C8): egress /
+	// exec / guardrail allowlists as versioned, hashed, rollback-able artifacts.
+	// The action egress check resolves its allowlist from here at request time, so
+	// a governed change takes effect with no redeploy. Nil = no Policies tab and
+	// the static Egress is used.
+	Policies *controlplane.Policies
+
+	// Profile, when set, reads/writes the household child profile (R1) in the
+	// governed DB — config lives in the store, not a file or a const. Operator-set,
+	// host-only, never from an email. Enables the My Week tab.
+	Profile ProfileStore
+
+	// Bundles, when set, is the known-good snapshot surface (C10): list saved
+	// snapshots, snapshot the whole governed plane, roll it all back. Nil = no card.
+	Bundles BundleStore
+
+	// Eval backs the Eval tab + Test button (C7). Nil = no Eval tab / Test button.
+	Eval EvalService
+}
+
+// EvalService is the Controller's view of the eval surface (C7): persisted F1
+// history (the trend card), a live eval run that scores + persists, and a shadow
+// prompt test (F1 + ADD-ASR + promotion-gate verdict) that never activates the
+// candidate. The concrete implementation and its model/DB/gateway dependencies
+// live in cmd/webapp, out of the handlers.
+type EvalService interface {
+	History() []EvalResult
+	Run() (results []EvalResult, mode string)
+	Test(name, candidate string) PromptTestResult
+}
+
+// ChatService answers a natural-language question grounded in the corpus. unsafe=true
+// runs the UNDEFENDED path (raw-concat retrieval, no encapsulation/scrub) — the live
+// attack demo showing a poisoned doc's injection land; default is defended
+// (rag.Assemble). appData is the server-supplied trusted app context (this week's
+// schedule). The concrete impl + its deps live in cmd/webapp, out of the handler.
+type ChatService interface {
+	Answer(question string, unsafe bool, appData string) (answer string, sources []string, err error)
+}
+
+// Flywheel captures operator accept/reject decisions as durable ground-truth and
+// reports the running tallies (the data-flywheel).
+type Flywheel interface {
+	Record(decision, source, title string)
+	Stats() (accepts, rejects int)
+}
+
+// MCPRegistry lists the governed MCP servers with pin status and re-pins one on
+// rug-pull recovery (C6).
+type MCPRegistry interface {
+	List() []domain.MCPServer
+	Approve(server string) error
+}
+
+// ProfileStore reads/writes the household child profile (R1) in the governed DB.
+type ProfileStore interface {
+	Load() domain.Profile
+	Save(domain.Profile) error
+}
+
+// BundleStore is the known-good snapshot surface (C10): list, snapshot, roll back.
+type BundleStore interface {
+	List() []BundleInfo
+	Save(label string) error
+	Apply(label string) error
+}
+
+// Server serves the dashboard and its API. Build it with New — the zero value is
+// not ready (its maps are nil). Dependencies live in the embedded Config; the
+// fields below are internal runtime state.
+type Server struct {
+	Config
+
+	// api rate-limit window (the Budgets "api" ceiling, enforced in authz).
+	rlMu     sync.Mutex
+	rlCount  int
+	rlWindow time.Time
+
+	// pending holds issued-but-unconfirmed HITL approvals, keyed by nonce (ASI09:
+	// evidence-first, single-use, clickjack/forgery-resistant confirm).
+	mu   sync.Mutex
+	pend map[string]pending
+
+	// event cache (events.go): the parsed outbox, keyed by a fingerprint of the
+	// .ics/.sig entries so repeated reads don't re-parse+re-verify every file. Any
+	// add/remove/in-place edit changes the fingerprint and invalidates it.
+	evMu    sync.Mutex
+	evCache []Event
+	evFP    string
+}
+
+// New builds a ready Server from its dependencies. It initializes internal state
+// (the HITL pending map) so there is one valid construction path instead of a raw
+// struct literal with lazy map init. Dependencies are optional by design — a nil
+// one disables its feature — so New only warns on obvious mis-wirings rather than
+// failing.
+func New(c Config) *Server {
+	if c.Index != nil && c.Fetch == nil {
+		log.Print("server.New: Index set without Fetch; link enrichment is disabled")
+	}
+	return &Server{Config: c, pend: map[string]pending{}}
+}
+
+// verifySig reports whether <name>.sig is a valid content credential over the
+// given .ics bytes from a trusted agent key.
+func (s *Server) verifySig(name string, content []byte) bool {
+	if s.Verifier == nil {
+		return false
+	}
+	raw, err := os.ReadFile(filepath.Join(s.OutboxDir, name+".sig"))
+	if err != nil {
+		return false
+	}
+	var m provenance.Mark
+	if json.Unmarshal(raw, &m) != nil {
+		return false
+	}
+	return s.Verifier.Verify(content, m) == nil
+}
+
+// Handler returns the app routes.
+func (s *Server) Handler() http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/scorecard", s.scorecard)
+	mux.HandleFunc("/api/incidents", s.incidents)
+	mux.HandleFunc("/api/incident", s.incident)
+	mux.HandleFunc("/api/events", s.events)
+	mux.HandleFunc("/api/items", s.items)
+	mux.HandleFunc("/api/summary", s.summary)
+	mux.HandleFunc("/api/review", s.review)
+	mux.HandleFunc("/api/activity", s.activity)
+	mux.HandleFunc("/api/safety", s.safetyState)
+	// The kill switch is deliberately OUTSIDE the capability gate: engaging Halt
+	// revokes every grant, so a gated killswitch could never be disengaged.
+	mux.HandleFunc("POST /api/killswitch", csrf(s.killswitch))
+	// Ask lists the retrieval corpus — ActionList, the data-residency-sensitive
+	// endpoint (a frontier reader must not harvest it).
+	mux.HandleFunc("/api/ask", s.authz(controlplane.ActionList, "corpus", s.ask))
+	if s.Chat != nil {
+		mux.HandleFunc("POST /api/chat", csrf(s.authz(controlplane.ActionList, "corpus", s.chat)))
+	}
+	if s.MCP != nil {
+		mux.HandleFunc("/api/mcp", s.mcpList)
+		mux.HandleFunc("POST /api/mcp/approve", csrf(s.authz(controlplane.ActionWrite, "mcp", s.mcpApprove)))
+	}
+	if s.Prompts != nil {
+		mux.HandleFunc("/api/prompts", s.promptsList)
+		mux.HandleFunc("POST /api/prompts/activate", csrf(s.authz(controlplane.ActionWrite, "prompts", s.promptsActivate)))
+		mux.HandleFunc("POST /api/prompts/reset", csrf(s.authz(controlplane.ActionWrite, "prompts", s.promptsReset)))
+	}
+	if s.Budgets != nil {
+		mux.HandleFunc("/api/budgets", s.budgetsList)
+		mux.HandleFunc("POST /api/budgets/activate", csrf(s.authz(controlplane.ActionWrite, "budget", s.budgetsActivate)))
+		mux.HandleFunc("POST /api/budgets/reset", csrf(s.authz(controlplane.ActionWrite, "budget", s.budgetsReset)))
+	}
+	if s.Sampling != nil {
+		mux.HandleFunc("/api/sampling", s.samplingList)
+		mux.HandleFunc("POST /api/sampling/activate", csrf(s.authz(controlplane.ActionWrite, "sampling", s.samplingActivate)))
+		mux.HandleFunc("POST /api/sampling/reset", csrf(s.authz(controlplane.ActionWrite, "sampling", s.samplingReset)))
+	}
+	if s.Retrieval != nil {
+		mux.HandleFunc("/api/retrieval", s.retrievalList)
+		mux.HandleFunc("POST /api/retrieval/activate", csrf(s.authz(controlplane.ActionWrite, "retrieval", s.retrievalActivate)))
+		mux.HandleFunc("POST /api/retrieval/reset", csrf(s.authz(controlplane.ActionWrite, "retrieval", s.retrievalReset)))
+	}
+	if s.Grammars != nil {
+		mux.HandleFunc("/api/grammar", s.grammarList)
+		mux.HandleFunc("POST /api/grammar/activate", csrf(s.authz(controlplane.ActionWrite, "grammar", s.grammarActivate)))
+		mux.HandleFunc("POST /api/grammar/reset", csrf(s.authz(controlplane.ActionWrite, "grammar", s.grammarReset)))
+	}
+	if s.Models != nil {
+		mux.HandleFunc("/api/models", s.modelsList)
+		mux.HandleFunc("POST /api/models/activate", csrf(s.authz(controlplane.ActionWrite, "model", s.modelsActivate)))
+		mux.HandleFunc("POST /api/models/reset", csrf(s.authz(controlplane.ActionWrite, "model", s.modelsReset)))
+	}
+	if s.Skills != nil {
+		mux.HandleFunc("/api/skills", s.skillsList)
+		mux.HandleFunc("POST /api/skills/approve", csrf(s.authz(controlplane.ActionWrite, "skill", s.skillsApprove)))
+		mux.HandleFunc("POST /api/skills/reset", csrf(s.authz(controlplane.ActionWrite, "skill", s.skillsReset)))
+		mux.HandleFunc("POST /api/skills/load", csrf(s.authz(controlplane.ActionWrite, "skill", s.skillsLoad)))
+	}
+	if s.Policies != nil {
+		mux.HandleFunc("/api/policies", s.policiesList)
+		mux.HandleFunc("POST /api/policies/activate", csrf(s.authz(controlplane.ActionWrite, "policy", s.policiesActivate)))
+		mux.HandleFunc("POST /api/policies/reset", csrf(s.authz(controlplane.ActionWrite, "policy", s.policiesReset)))
+	}
+	if s.Flywheel != nil {
+		mux.HandleFunc("/api/flywheel", s.flywheel)
+	}
+	if s.Eval != nil {
+		mux.HandleFunc("/api/eval", s.evalList)
+		mux.HandleFunc("POST /api/eval/run", csrf(s.authz(controlplane.ActionWrite, "eval", s.evalRunHandler)))
+		mux.HandleFunc("POST /api/prompts/test", csrf(s.authz(controlplane.ActionWrite, "prompts", s.promptsTest)))
+	}
+	if s.Bundles != nil {
+		mux.HandleFunc("/api/bundles", s.bundlesList)
+		mux.HandleFunc("POST /api/bundles/save", csrf(s.authz(controlplane.ActionWrite, "bundle", s.bundlesSave)))
+		mux.HandleFunc("POST /api/bundles/apply", csrf(s.authz(controlplane.ActionWrite, "bundle", s.bundlesApply)))
+	}
+	if s.Profile != nil {
+		mux.HandleFunc("/api/timeline", s.timeline)
+		mux.HandleFunc("/api/profile", s.profileGet)
+		mux.HandleFunc("POST /api/profile/save", csrf(s.authz(controlplane.ActionWrite, "profile", s.profileSave)))
+	}
+	if s.InboxPath != "" {
+		mux.HandleFunc("POST /api/drop", csrf(s.authz(controlplane.ActionWrite, "inbox", s.drop)))
+	}
+	if s.OutboxDir != "" {
+		mux.HandleFunc("POST /api/accept", csrf(s.authz(controlplane.ActionWrite, "calendar", s.accept)))
+		mux.HandleFunc("POST /api/reject", csrf(s.authz(controlplane.ActionWrite, "calendar", s.reject)))
+		mux.HandleFunc("POST /api/action", csrf(s.authz(controlplane.ActionExport, "link", s.action))) // egress
+	}
+	if s.Fetch != nil && s.Index != nil {
+		mux.HandleFunc("POST /api/enrich", csrf(s.authz(controlplane.ActionExport, "link", s.enrich))) // egress → corpus
+	}
+	if s.OutboxDir != "" {
+		mux.HandleFunc("/ics/", s.serveICS)           // .ics only — NOT the whole outbox (sidecars hold PII)
+		mux.HandleFunc("/api/directory", s.directory) // consolidated contacts (R5)
+	}
+	mux.Handle("/static/", staticHandler())
+	mux.HandleFunc("/studio", s.studio)
+	mux.HandleFunc("/", s.index)
+	return mux
+}
+
+// serveICS serves ONLY .ics artifacts from the outbox by bare basename. The
+// outbox also holds <stem>.summary.json sidecars (contacts/digest/PII), so a
+// blanket file server would leak them.
+func (s *Server) serveICS(w http.ResponseWriter, r *http.Request) {
+	name := strings.TrimPrefix(r.URL.Path, "/ics/")
+	if name == "" || filepath.Base(name) != name || !strings.HasSuffix(strings.ToLower(name), ".ics") {
+		http.NotFound(w, r)
+		return
+	}
+	http.ServeFile(w, r, filepath.Join(s.OutboxDir, name))
+}
+
+// csrf rejects cross-site POSTs. The app binds loopback, but that does NOT stop
+// CSRF — any site the browser visits can POST to 127.0.0.1. A foreign Origin is
+// refused; same-origin fetches (loopback Origin, or no Origin) pass.
+// maxBodyBytes caps a request body so a single large POST cannot force unbounded
+// allocation. Every mutating endpoint flows through csrf, so bounding it here
+// covers them all.
+const maxBodyBytes = 1 << 20 // 1 MiB
+
+func csrf(h http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if o := r.Header.Get("Origin"); o != "" {
+			u, err := url.Parse(o)
+			if err != nil || !isLoopbackHost(u.Hostname()) {
+				http.Error(w, "cross-origin request refused", http.StatusForbidden)
+				return
+			}
+		}
+		r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
+		h(w, r)
+	}
+}
+
+func isLoopbackHost(h string) bool {
+	return h == "127.0.0.1" || h == "localhost" || h == "::1"
+}
+
+// egressPolicy resolves the action-link allowlist live from the governed Policies
+// (C8) when set, keeping every other netpolicy field (DNS pinning, the
+// private/IMDS deny-by-default) intact — a governed widening still cannot reach
+// link-local/RFC1918. Falls back to the static Egress.
+func (s *Server) egressPolicy() netpolicy.Policy {
+	p := s.Egress
+	if s.Policies != nil {
+		p.Allow = s.Policies.Items("egress")
+	}
+	return p
+}
+
+// authz gates a handler on a capability Grant scoped to {action, resource,
+// tenant "public"}. When Authz is unset the gate is a no-op (the household
+// loopback app runs unauthenticated). The caller presents the Grant as
+// "Authorization: Bearer <base64url(JSON)>". Fail-closed: a missing, malformed,
+// unsigned, expired, out-of-scope, or revoked Grant is refused, and Authority.
+// Halted (the kill switch) revokes all grants so Halt stops in-flight work.
+func (s *Server) authz(action, resource string, h http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if s.Authz == nil {
+			h(w, r)
+			return
+		}
+		g, ok := bearerGrant(r)
+		if !ok {
+			s.denyAudit(action, resource, "missing capability")
+			http.Error(w, "missing capability", http.StatusUnauthorized)
+			return
+		}
+		if _, err := s.Authz.Verify(g, controlplane.Capability{Action: action, Resource: resource, Tenant: "public"}); err != nil {
+			s.denyAudit(action, resource, err.Error())
+			http.Error(w, "capability refused: "+err.Error(), http.StatusForbidden)
+			return
+		}
+		if s.overBudget() { // governed per-minute API budget (C9)
+			s.denyAudit(action, resource, "rate budget exceeded")
+			http.Error(w, "rate budget exceeded", http.StatusTooManyRequests)
+			return
+		}
+		h(w, r)
+	}
+}
+
+func (s *Server) denyAudit(action, resource, reason string) {
+	if s.Audit != nil {
+		s.Audit.Emit(gledger.NewTraceID(), "authz", "deny", gledger.F{"action": action, "resource": resource, "reason": reason})
+	}
+}
+
+// bearerGrant extracts a capability Grant from the Authorization: Bearer header.
+func bearerGrant(r *http.Request) (controlplane.Grant, bool) {
+	h := r.Header.Get("Authorization")
+	raw, ok := strings.CutPrefix(h, "Bearer ")
+	if !ok {
+		return controlplane.Grant{}, false
+	}
+	b, err := base64.URLEncoding.DecodeString(strings.TrimSpace(raw))
+	if err != nil {
+		return controlplane.Grant{}, false
+	}
+	var g controlplane.Grant
+	if json.Unmarshal(b, &g) != nil {
+		return controlplane.Grant{}, false
+	}
+	return g, true
+}
+
+// EncodeToken renders a Grant as the base64url(JSON) bearer token the page and
+// API clients present. Used by the host to mint the operator token.
+func EncodeToken(g controlplane.Grant) string {
+	b, _ := json.Marshal(g)
+	return base64.URLEncoding.EncodeToString(b)
+}
+
+type scoreRow struct {
+	Name      string  `json:"name"`
+	Technique string  `json:"technique"`
+	Before    float64 `json:"before"`
+	After     float64 `json:"after"`
+	Pass      bool    `json:"pass"`
+}
+
+func asr(target gorauder.Target, seeds []gorauder.Seed) float64 {
+	return gorauder.NewRunner(target, gorauder.WithScorer(redteam.Scorer())).Run(context.Background(), seeds).ASR()
+}
+
+func (s *Server) scorecard(w http.ResponseWriter, _ *http.Request) {
+	var rows []scoreRow
+	allPass := true
+	for _, c := range redteam.Cases() {
+		before := asr(c.Undefended, c.Seeds) * 100
+		after := asr(c.Defended, c.Seeds) * 100
+		pass := after == 0
+		if !pass {
+			allPass = false
+		}
+		rows = append(rows, scoreRow{c.Name, c.Technique, before, after, pass})
+	}
+	writeJSON(w, map[string]any{"results": rows, "all_pass": allPass})
+}
+
+func (s *Server) incidents(w http.ResponseWriter, _ *http.Request) {
+	events, _ := ir.Load(s.AuditPath)
+	type row struct {
+		ID string `json:"id"`
+		N  int    `json:"n"`
+	}
+	var out []row
+	for _, id := range ir.Traces(events) {
+		out = append(out, row{id, len(ir.Timeline(events, id))})
+	}
+	writeJSON(w, map[string]any{"traces": out})
+}
+
+func (s *Server) incident(w http.ResponseWriter, r *http.Request) {
+	trace := r.URL.Query().Get("trace")
+	events, _ := ir.Load(s.AuditPath)
+	writeJSON(w, map[string]any{"timeline": ir.Timeline(events, trace)})
+}
+
+// index serves the App surface (consumer: Calendar/Week/Tasks/Chat/Ask/Review —
+// zero control knobs). "1 view, 1 job": the governance/tuning plane is a separate
+// surface at /studio.
+func (s *Server) index(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/" {
+		http.NotFound(w, r)
+		return
+	}
+	token := s.AppToken
+	if token == "" {
+		token = s.OperatorToken // fall back when no narrow grant was minted
+	}
+	s.renderSurface(w, "app", token)
+}
+
+// studio serves the Studio surface (operator: the governed control/tuning plane —
+// prompts, sampling, policies, budgets, eval, security, incidents). Co-resident
+// with the App for now; the App page gets the same token, so the capability
+// boundary here is the per-route authz on the governance /api endpoints (a narrow
+// App-scoped grant that can't reach them is the follow-on hardening).
+func (s *Server) studio(w http.ResponseWriter, r *http.Request) {
+	s.renderSurface(w, "studio", s.OperatorToken)
+}
+
+func (s *Server) renderSurface(w http.ResponseWriter, surface, token string) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := ui.RenderDashboard(w, token, surface); err != nil {
+		log.Printf("render %s surface: %v", surface, err)
+	}
+}
+
+// staticHandler serves the embedded CSS/JS under /static/ with a short cache.
+func staticHandler() http.Handler {
+	fs := http.FileServer(http.FS(ui.Static))
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "public, max-age=300")
+		fs.ServeHTTP(w, r)
+	})
+}
+
+// safetyState reports the current kill-switch level.
+func (s *Server) safetyState(w http.ResponseWriter, _ *http.Request) {
+	lvl := "none"
+	allowReq, allowTools := true, true
+	if s.Safety != nil {
+		lvl = s.Safety.Level().String()
+		allowReq, allowTools = s.Safety.AllowRequest(), s.Safety.AllowToolExec()
+	}
+	writeJSON(w, map[string]any{"level": lvl, "allow_request": allowReq, "allow_tools": allowTools})
+}
+
+// killswitch sets the kill level (0 none, 1 block-tools, 2 pause, 3 halt).
+func (s *Server) killswitch(w http.ResponseWriter, r *http.Request) {
+	if s.Safety == nil {
+		http.Error(w, "no kill switch configured", http.StatusNotFound)
+		return
+	}
+	var req struct {
+		Level int `json:"level"`
+	}
+	if json.NewDecoder(r.Body).Decode(&req) != nil || req.Level < 0 || req.Level > 3 {
+		http.Error(w, "bad level", http.StatusBadRequest)
+		return
+	}
+	s.Safety.Set("operator", controlplane.KillLevel(req.Level))
+	writeJSON(w, map[string]any{"ok": true, "level": s.Safety.Level().String()})
+}
+
+// paused reports whether new processing/drops are refused.
+func (s *Server) paused() bool { return s.Safety != nil && !s.Safety.AllowRequest() }
+
+// toolsBlocked reports whether side-effect actions (accept/fetch) are refused.
+func (s *Server) toolsBlocked() bool { return s.Safety != nil && !s.Safety.AllowToolExec() }
+
+func writeJSON(w http.ResponseWriter, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(v); err != nil {
+		log.Printf("writeJSON: encode failed: %v", err)
+	}
+}

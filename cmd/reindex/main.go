@@ -13,7 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/t0ul/ai-security-engineering/rag"
+	"github.com/t0ul/ai-security-engineering/pkg/rag"
 	"github.com/t0ul/goflage"
 )
 

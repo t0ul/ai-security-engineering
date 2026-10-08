@@ -9,6 +9,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
@@ -16,41 +17,52 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 
-	"github.com/t0ul/ai-security-engineering/agent/eval"
-	"github.com/t0ul/ai-security-engineering/agent/extractor"
-	"github.com/t0ul/ai-security-engineering/agent/pipeline"
-	"github.com/t0ul/ai-security-engineering/agent/roster"
-	"github.com/t0ul/ai-security-engineering/agent/tool"
-	"github.com/t0ul/ai-security-engineering/agent/watcher"
-	"github.com/t0ul/ai-security-engineering/controlplane"
-	"github.com/t0ul/ai-security-engineering/cpstore"
-	"github.com/t0ul/ai-security-engineering/durable"
-	"github.com/t0ul/ai-security-engineering/netpolicy"
-	"github.com/t0ul/ai-security-engineering/provenance"
-	"github.com/t0ul/ai-security-engineering/rag"
-	"github.com/t0ul/ai-security-engineering/redteam"
-	"github.com/t0ul/ai-security-engineering/webapp"
+	"github.com/t0ul/ai-security-engineering/pkg/agent/extractor"
+	"github.com/t0ul/ai-security-engineering/pkg/agent/pipeline"
+	"github.com/t0ul/ai-security-engineering/pkg/agent/roster"
+	"github.com/t0ul/ai-security-engineering/pkg/agent/tool"
+	"github.com/t0ul/ai-security-engineering/pkg/agent/watcher"
+	"github.com/t0ul/ai-security-engineering/pkg/controlplane"
+	"github.com/t0ul/ai-security-engineering/pkg/datastore"
+	"github.com/t0ul/ai-security-engineering/pkg/domain"
+	"github.com/t0ul/ai-security-engineering/pkg/durable"
+	"github.com/t0ul/ai-security-engineering/pkg/gateway"
+	"github.com/t0ul/ai-security-engineering/pkg/netpolicy"
+	"github.com/t0ul/ai-security-engineering/pkg/provenance"
+	"github.com/t0ul/ai-security-engineering/pkg/rag"
+	"github.com/t0ul/ai-security-engineering/pkg/server"
 	"github.com/t0ul/gledger"
 	"github.com/t0ul/goflage"
-	"github.com/t0ul/gorauder"
 )
 
 func main() {
-	addr := flag.String("addr", "127.0.0.1:8789", "listen address (loopback)")
-	drop := flag.String("drop", defaultDrop(), "drop folder (inbox/outbox/processed/logs)")
-	allow := flag.String("allow", "schools.nyc.gov,nyc.gov,ps51eliashowe.org,schoolsaccount.nyc", "comma-separated egress allowlist for action/handbook links (parent domains cover subdomains); set empty to deny all")
-	vmURL := flag.String("microvm", "http://127.0.0.1:5000", "MicroVM vsock bridge for in-sandbox fetches")
+	// Infra/deploy config is 12-factor: a .env (gitignored) seeds the environment,
+	// each flag defaults to its env var, and an explicit CLI flag overrides. Real
+	// env vars win over .env. Business/behavior config lives in the DB, not here.
+	loadDotenv(".env")
+	addr := flag.String("addr", envOr("WEBAPP_ADDR", "127.0.0.1:8789"), "listen address (loopback)")
+	drop := flag.String("drop", envOr("WEBAPP_DROP", defaultDrop()), "drop folder (inbox/outbox/processed/logs); the SQLite DBs live here")
+	allow := flag.String("allow", envOr("WEBAPP_ALLOW", "schools.nyc.gov,nyc.gov,ps51eliashowe.org,schoolsaccount.nyc"), "comma-separated egress allowlist for action/handbook links (parent domains cover subdomains); set empty to deny all")
+	vmURL := flag.String("microvm", envOr("MICROVM_URL", "http://127.0.0.1:5000"), "MicroVM vsock bridge for in-sandbox fetches")
+	gwFlag := flag.String("gateway", envOr("GATEWAY_URL", "http://127.0.0.1:4000/v1/chat/completions"), "gouncer gateway chat-completions URL (the single source for the chat + health-check endpoint)")
 	flag.Parse()
+
+	// Single source for the gateway endpoint (was two hardcoded literals). The chat
+	// path posts here; the health check dials the host:port parsed from it.
+	dial := "127.0.0.1:4000"
+	if u, err := url.Parse(*gwFlag); err == nil && u.Host != "" {
+		dial = u.Host
+	}
+	gw = gateway.New(*gwFlag, dial)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -95,10 +107,34 @@ func main() {
 	)
 	var opToken string
 	if g, gerr := authz.Issue(controlplane.Capability{Subject: "operator", Action: controlplane.Scope, Resource: controlplane.Scope, Tenant: controlplane.Scope}, 30*24*time.Hour); gerr == nil {
-		opToken = webapp.EncodeToken(g)
+		opToken = server.EncodeToken(g)
+	}
+	// The App surface runs on a NARROW, least-privilege grant (C4b): it covers only
+	// the household consumer scopes — list the corpus, accept/reject calendar items,
+	// drop emails, save the profile, follow an action link — and NOTHING on the
+	// governed control plane. A multi-scope signed grant (primary + extra) expresses
+	// this; the operator's wildcard grant still drives Studio. So the App page is
+	// cryptographically unable to reach a governance endpoint, not merely UI-hidden.
+	var appToken string
+	if g, gerr := authz.IssueScoped(
+		controlplane.Capability{Subject: "app", Action: controlplane.ActionList, Resource: "corpus", Tenant: "public"},
+		[]controlplane.GrantScope{
+			{Action: controlplane.ActionWrite, Resource: "calendar", Tenant: "public"},
+			{Action: controlplane.ActionWrite, Resource: "inbox", Tenant: "public"},
+			{Action: controlplane.ActionWrite, Resource: "profile", Tenant: "public"},
+			{Action: controlplane.ActionExport, Resource: "link", Tenant: "public"},
+		}, 30*24*time.Hour); gerr == nil {
+		appToken = server.EncodeToken(g)
 	}
 	corpusPath := filepath.Join(*drop, "corpus.db")
-	var search func(string, int) ([]webapp.SearchHit, error)
+	// Declared early so the chat closure below can capture them; assigned once the
+	// governed planes are built further down (consts are the fail-closed default).
+	var prompts *controlplane.Prompts
+	var sampling *controlplane.Sampling
+	var inv *datastore.Store
+	var reader *rag.Store              // RAG read handle; nil if the corpus failed to open
+	var readerGrant controlplane.Grant // the rag-reader NHI grant (C4e)
+	var search func(string, int) ([]domain.SearchHit, error)
 	var enrichIndex func(source, text string) error
 	if corpus, cerr := rag.Open(corpusPath); cerr == nil {
 		defer corpus.Close()
@@ -116,7 +152,7 @@ func main() {
 		// can query but the engine refuses any write, so a bug or injection on the
 		// read path cannot mutate or poison the corpus. Falls back to the writable
 		// handle only if the read-only open fails.
-		reader := corpus
+		reader = corpus
 		if ro, rerr := rag.OpenReadOnly(corpusPath); rerr == nil {
 			defer ro.Close()
 			reader = ro
@@ -125,10 +161,10 @@ func main() {
 		// list/corpus, minted through the residency policy. Verifying it per query
 		// means Halt revokes retrieval too, and a frontier-bound reader would be
 		// refused at issuance (fail-closed: no grant -> no search).
-		readerGrant, _ := authz.Issue(controlplane.Capability{Subject: "rag-reader", Action: controlplane.ActionList, Resource: "corpus", Tenant: "public"}, 30*24*time.Hour)
+		readerGrant, _ = authz.Issue(controlplane.Capability{Subject: "rag-reader", Action: controlplane.ActionList, Resource: "corpus", Tenant: "public"}, 30*24*time.Hour)
 		// Ask-School: lexical search over the scrubbed corpus (M8 — recalled text
 		// is untrusted data). "public" tenant: this is a single-household app.
-		search = func(q string, k int) ([]webapp.SearchHit, error) {
+		search = func(q string, k int) ([]domain.SearchHit, error) {
 			if _, err := authz.Verify(readerGrant, controlplane.Capability{Action: controlplane.ActionList, Resource: "corpus", Tenant: "public"}); err != nil {
 				return nil, fmt.Errorf("rag-reader capability refused: %w", err)
 			}
@@ -136,9 +172,9 @@ func main() {
 			if err != nil {
 				return nil, err
 			}
-			out := make([]webapp.SearchHit, 0, len(chunks))
+			out := make([]domain.SearchHit, 0, len(chunks))
 			for _, c := range chunks {
-				out = append(out, webapp.SearchHit{Source: c.DocID, Snippet: webapp.Snippet(c.Text), Untrusted: c.Prov == rag.Untrusted})
+				out = append(out, domain.SearchHit{Source: c.DocID, Snippet: server.Snippet(c.Text), Untrusted: c.Prov == rag.Untrusted})
 			}
 			return out, nil
 		}
@@ -206,39 +242,17 @@ func main() {
 	// MCP governance tab (C6): surface the gateway's servers, their advertised +
 	// allow-listed tools, the approved pin vs the live manifest (rug-pull alert),
 	// and an operator Approve (re-pin). "blocked" reflects the kill switch.
-	mcpList := func() []webapp.MCPServer {
-		var out []webapp.MCPServer
-		for _, st := range toolGW.Status(context.Background()) {
-			status := "pinned"
-			switch {
-			case st.Err != "":
-				status = "error"
-			case !safety.AllowToolExec():
-				status = "blocked"
-			case st.Pinned == "":
-				status = "unapproved"
-			case st.Mismatch:
-				status = "rug-pull"
-			}
-			out = append(out, webapp.MCPServer{
-				Name: st.Name, Tools: st.Tools, Allowed: st.Allowed,
-				Pinned: shortHash(st.Pinned), Current: shortHash(st.Current), Status: status,
-			})
-		}
-		return out
-	}
-	mcpApprove := func(server string) error {
-		return toolGW.Approve(context.Background(), gledger.NewTraceID(), server)
-	}
+	mcpReg := mcpRegistry{gw: toolGW, safety: safety}
 
 	// Governed prompts (C2): the console lists/activates/rolls-back the system
 	// prompts the LLM planner/coder/extractor resolve at runtime. Activations are
 	// versioned, hashed, audited to gledger, and persisted to the cpstore
 	// inventory so they survive restarts and are attributable.
 	promptDefaults := map[string]string{
-		"planner":   controlplane.PlannerSystemPrompt,
-		"coder":     controlplane.CoderSystemPrompt,
-		"extractor": extractor.ExtractionPrompt,
+		"planner":     controlplane.PlannerSystemPrompt,
+		"coder":       controlplane.CoderSystemPrompt,
+		"extractor":   extractor.ExtractionPrompt,
+		"chat_system": controlplane.ChatSystemPrompt,
 	}
 	// Governed policy allowlists (C8): egress hosts + exec argv[0]s as versioned,
 	// hashed, rollback-able artifacts. The action egress check resolves its
@@ -252,6 +266,7 @@ func main() {
 	// LLM path reads them. seed>0 → reproducible generations.
 	samplingDefaults := map[string]controlplane.SamplingConfig{
 		"extractor": {Temperature: 0.1, MaxTokens: 900},
+		"chat":      {Temperature: 0.2, MaxTokens: 400}, // governed chat decoding (C5), was hardcoded in the gateway
 	}
 	// Governed budgets (C9): the "api" rate limit is enforced in-app; model
 	// rate/token/spend are gateway-side. KeyRef is a POINTER (env-var name), never
@@ -260,24 +275,57 @@ func main() {
 		"api":     {RatePerMin: 0}, // 0 = unlimited until the operator sets one
 		"gateway": {MaxTokens: 900, KeyRef: "GATEWAY_KEY"},
 	}
-	var prompts *controlplane.Prompts
+	// Governed retrieval (RAG read knobs): top-k per corpus was a hardcoded literal
+	// in the chat path; now a governed, versioned, bundle-referenced artifact.
+	retrievalDefaults := map[string]controlplane.RetrievalConfig{
+		"public": {K: 5},
+	}
+	// Governed output grammar (output-schema dimension): the extractor's GBNF was a
+	// const; now a governed, versioned, bundle-referenced artifact (a swapped grammar
+	// silently changes the output contract).
+	grammarDefaults := map[string]string{
+		"extractor": extractor.EventArrayGBNF,
+	}
+	// Governed model bindings: the logical model each role routes to. Was two config
+	// keys (extractor_model / chat_model); now a governed, versioned, bundle-referenced
+	// artifact. A local→frontier swap is where the residency rule bites.
+	modelDefaults := map[string]string{
+		"extractor": "planner",
+		"chat":      "planner",
+	}
+	// Skills supply + governed approvals (the skills dimension's live consumer): the
+	// loader signs its catalog at boot; the plane records which versions the operator
+	// approved. Build the loader first for the catalog names, then the plane, then
+	// attach (plane needs names, loader needs plane).
+	skillSupply, skillNames := newSkillLoader()
 	var policies *controlplane.Policies
-	var sampling *controlplane.Sampling
 	var budgets *controlplane.Budgets
-	var inv *cpstore.Store
-	if db, ierr := cpstore.Open(filepath.Join(*drop, "inventory.db")); ierr == nil {
+	var retrieval *controlplane.Retrieval
+	var grammars *controlplane.Grammars
+	var models *controlplane.Models
+	var skillsPlane *controlplane.Skills
+	if db, ierr := datastore.Open(filepath.Join(*drop, "inventory.db")); ierr == nil {
 		inv = db
 		defer inv.Close()
 		prompts = controlplane.GovernedPrompts(promptDefaults, inv, audit)
 		policies = controlplane.GovernedPolicies(policyDefaults, inv, audit)
 		sampling = controlplane.GovernedSampling(samplingDefaults, inv, audit)
 		budgets = controlplane.GovernedBudgets(budgetDefaults, inv, audit)
+		retrieval = controlplane.GovernedRetrieval(retrievalDefaults, inv, audit)
+		grammars = controlplane.GovernedGrammars(grammarDefaults, inv, audit)
+		models = controlplane.GovernedModels(modelDefaults, inv, audit)
+		skillsPlane = controlplane.GovernedSkills(skillNames, inv, audit)
 	} else {
 		prompts = controlplane.NewPrompts(promptDefaults)
 		policies = controlplane.NewPolicies(policyDefaults)
 		sampling = controlplane.NewSampling(samplingDefaults)
 		budgets = controlplane.NewBudgets(budgetDefaults)
+		retrieval = controlplane.NewRetrieval(retrievalDefaults)
+		grammars = controlplane.NewGrammars(grammarDefaults)
+		models = controlplane.NewModels(modelDefaults)
+		skillsPlane = controlplane.NewSkills(skillNames)
 	}
+	skillSupply.attach(skillsPlane)
 	// Activating the "extractor" sampling drives the live LLM decoding params.
 	baseSampOnActivate := sampling.OnActivate
 	sampling.OnActivate = func(sv controlplane.SamplingVersion) {
@@ -286,6 +334,26 @@ func main() {
 		}
 		if sv.Name == "extractor" {
 			extractor.SetSampling(sv.Config.Temperature, sv.Config.MaxTokens, sv.Config.Seed)
+		}
+	}
+	// Activating the "extractor" grammar drives the live GBNF the extractor sends.
+	baseGramOnActivate := grammars.OnActivate
+	grammars.OnActivate = func(gv controlplane.GrammarVersion) {
+		if baseGramOnActivate != nil {
+			baseGramOnActivate(gv)
+		}
+		if gv.Name == "extractor" {
+			extractor.SetGrammar(gv.Text)
+		}
+	}
+	// Activating the "extractor" model binding drives the live extraction model.
+	baseModOnActivate := models.OnActivate
+	models.OnActivate = func(mv controlplane.ModelVersion) {
+		if baseModOnActivate != nil {
+			baseModOnActivate(mv)
+		}
+		if mv.Name == "extractor" {
+			extractor.SetModel(mv.Model)
 		}
 	}
 	// Activating the "extractor" prompt actually drives the LLM extractor (C5 down
@@ -304,10 +372,9 @@ func main() {
 	// policies, and the child profile persisted by a prior session from cpstore on
 	// boot. The shipped consts remain only the fail-closed default when the DB has
 	// no row for a knob.
-	var profileLoad func() webapp.Profile
-	var profileSave func(webapp.Profile) error
+	var profileSvc server.ProfileStore
 	if inv != nil {
-		for _, n := range []string{"planner", "coder", "extractor"} {
+		for _, n := range []string{"planner", "coder", "extractor", "chat_system"} {
 			if text, ok, _ := inv.LatestPromptText(n); ok {
 				prompts.Rehydrate(n, text)
 			}
@@ -323,6 +390,25 @@ func main() {
 				sampling.Rehydrate("extractor", cfg)
 			}
 		}
+		if cfgJSON, ok, _ := inv.LatestRetrieval("public"); ok {
+			var cfg controlplane.RetrievalConfig
+			if json.Unmarshal([]byte(cfgJSON), &cfg) == nil {
+				retrieval.Rehydrate("public", cfg)
+			}
+		}
+		if text, ok, _ := inv.LatestGrammarText("extractor"); ok {
+			grammars.Rehydrate("extractor", text)
+		}
+		for _, n := range []string{"extractor", "chat"} {
+			if m, ok, _ := inv.LatestModel(n); ok && m != "" {
+				models.Rehydrate(n, m)
+			}
+		}
+		for _, n := range skillNames {
+			if h, ok, _ := inv.LatestSkillPin(n); ok && h != "" {
+				skillsPlane.Rehydrate(n, h)
+			}
+		}
 		for _, n := range []string{"api", "gateway"} {
 			if cfgJSON, ok, _ := inv.LatestBudget(n); ok {
 				var cfg controlplane.BudgetConfig
@@ -332,169 +418,64 @@ func main() {
 			}
 		}
 		extractor.SetExtractionPrompt(prompts.Text("extractor"))
+		extractor.SetGrammar(grammars.Text("extractor"))
+		extractor.SetModel(models.Bound("extractor")) // governed model binding (was extractor_model config key)
 		sc := sampling.Config("extractor")
 		extractor.SetSampling(sc.Temperature, sc.MaxTokens, sc.Seed)
-		// Logical extractor model binding + grammar JSON (C5), from governed config
-		// (DB is the source of truth). Defaults: model "planner", grammar off.
-		if m, ok, _ := inv.GetConfig("extractor_model"); ok && m != "" {
-			extractor.SetModel(m)
-		}
+		// grammar JSON mode (C5) from governed config (DB is the source of truth).
 		if j, ok, _ := inv.GetConfig("extractor_json"); ok && j == "true" {
 			extractor.SetJSONMode(true)
 		}
-		profileLoad = func() webapp.Profile {
-			var p webapp.Profile
-			if v, ok, _ := inv.GetConfig("profile"); ok {
-				_ = json.Unmarshal([]byte(v), &p)
-			}
-			return p
-		}
-		profileSave = func(p webapp.Profile) error {
-			raw, _ := json.Marshal(p)
-			return inv.SetConfig("profile", string(raw))
-		}
+		profileSvc = profileStore{inv: inv}
 	}
 
 	// Data-flywheel: operator accept/reject decisions are durable ground-truth.
-	var feedback func(decision, source, title string)
-	var flywheelStats func() (int, int)
+	var flywheelSvc server.Flywheel
 	if inv != nil {
-		feedback = func(decision, source, title string) {
-			_ = inv.RecordFeedback(source, title, decision)
-			audit.Emit(gledger.NewTraceID(), "feedback", decision, gledger.F{"source": source, "title": title})
-		}
-		flywheelStats = func() (int, int) {
-			a, r, _ := inv.FeedbackStats()
-			return a, r
-		}
+		flywheelSvc = flywheel{inv: inv, audit: audit}
 	}
 
 	// Known-good bundles (C10): snapshot the whole governed plane under a label and
 	// roll it all back in one step. Needs the DB.
-	var bundleList func() []webapp.BundleInfo
-	var bundleSave func(string) error
-	var bundleApply func(string) error
+	var bundleSvc server.BundleStore
 	if inv != nil {
-		bundleList = func() []webapp.BundleInfo {
-			rows, _ := inv.ListBundles(50)
-			out := make([]webapp.BundleInfo, 0, len(rows))
-			for _, b := range rows {
-				out = append(out, webapp.BundleInfo{Label: b.Label, At: b.At.Format("2006-01-02 15:04")})
-			}
-			return out
-		}
-		bundleSave = func(label string) error {
-			b := controlplane.Snapshot(label, prompts, sampling, policies)
-			raw, _ := json.Marshal(b)
-			audit.Emit(gledger.NewTraceID(), "bundle", "saved", gledger.F{"label": label})
-			return inv.SaveBundle(label, string(raw))
-		}
-		bundleApply = func(label string) error {
-			cfg, ok, err := inv.GetBundle(label)
-			if err != nil || !ok {
-				return fmt.Errorf("no such snapshot %q", label)
-			}
-			var b controlplane.Bundle
-			if err := json.Unmarshal([]byte(cfg), &b); err != nil {
-				return err
-			}
-			b.Apply(prompts, sampling, policies)
-			audit.Emit(gledger.NewTraceID(), "bundle", "rolled_back", gledger.F{"label": label})
-			return nil
-		}
+		bundleSvc = bundleStore{inv: inv, audit: audit, prompts: prompts, sampling: sampling, policies: policies, budgets: budgets, retrieval: retrieval, grammars: grammars, models: models}
 	}
 
 	// Eval surfaces (C7): the Eval card + a "Test" button that shadow-evals a
-	// candidate extractor prompt before activation. Live eval and shadow eval
-	// mutate process-global state (EXTRACT_MODE, the extractor prompt override), so
-	// serialize them. Live runs need the gouncer gateway at :4000 (cmd/livecheck /
-	// a running modeld+gouncer); without it the extractor falls back to regex and
-	// we say so.
-	var evalMu sync.Mutex
-	labels := []string{"testdata/emaildrop/labels/3.json", "testdata/emaildrop/labels/1.json"}
-	evalHistory := func() []webapp.EvalResult {
-		if inv == nil {
-			return nil
-		}
-		rows, _ := inv.ListEvals(20)
-		out := make([]webapp.EvalResult, 0, len(rows))
-		for _, e := range rows {
-			out = append(out, webapp.EvalResult{Label: e.Label, F1: e.F1, At: e.At.Format("2006-01-02 15:04")})
-		}
-		return out
-	}
-	evalRun := func() ([]webapp.EvalResult, string) {
-		evalMu.Lock()
-		defer evalMu.Unlock()
-		live := gatewayUp()
-		prev := os.Getenv("EXTRACT_MODE")
-		os.Setenv("EXTRACT_MODE", "llm")
-		defer os.Setenv("EXTRACT_MODE", prev)
-		var out []webapp.EvalResult
-		for _, l := range labels {
-			rep, err := eval.Score(l, true)
-			if err != nil {
-				continue
-			}
-			if inv != nil {
-				_ = inv.RecordEval(rep.Source, rep.F1)
-			}
-			out = append(out, webapp.EvalResult{Label: rep.Source, F1: rep.F1})
-		}
-		return out, evalMode(live)
-	}
-	promptTest := func(name, candidate string) webapp.PromptTestResult {
-		if name != "extractor" {
-			return webapp.PromptTestResult{Note: "shadow eval applies to the 'extractor' prompt (the labeled eval path); planner/coder drive the orchestrator demo, not this eval."}
-		}
-		evalMu.Lock()
-		defer evalMu.Unlock()
-		live := gatewayUp()
-		prevMode := os.Getenv("EXTRACT_MODE")
-		os.Setenv("EXTRACT_MODE", "llm")
-		defer os.Setenv("EXTRACT_MODE", prevMode)
-		extractor.SetExtractionPrompt(candidate)
-		defer extractor.SetExtractionPrompt(prompts.Text("extractor")) // restore the governed-active prompt
+	// candidate extractor prompt before activation. The extraction mode is now
+	// passed explicitly (eval.ScoreWithMode "llm"), not via the process-global
+	// EXTRACT_MODE env; the remaining shared state is the extractor's prompt
+	// override, so these still serialize on evalMu. Live runs need the gouncer
+	// gateway (cmd/livecheck / a running modeld+gouncer); without it the extractor
+	// falls back to regex and we say so.
+	evalSvc := &evalService{inv: inv, gw: gw, prompts: prompts,
+		labels: []string{"testdata/emaildrop/labels/3.json", "testdata/emaildrop/labels/1.json"}}
 
-		rep, err := eval.Score("testdata/emaildrop/labels/1.json", true)
-		f1 := 0.0
-		if err == nil {
-			f1 = rep.F1
-		}
-		baseline := 0.0
-		if inv != nil {
-			if e, ok, _ := inv.LatestEval("samples/1.txt"); ok {
-				baseline = e.F1
-			}
-		}
-		asrPass := true
-		for _, c := range redteam.Cases() {
-			if defendedASR(c) > 0 {
-				asrPass = false
-				break
-			}
-		}
-		asrVal := 0.0
-		if !asrPass {
-			asrVal = 1.0
-		}
-		gateOK, _ := controlplane.PromotionGate{MinF1: baseline, F1: func() float64 { return f1 }, ASR: func() float64 { return asrVal }}.Allow()
-		return webapp.PromptTestResult{F1: f1, Baseline: baseline, ASRPass: asrPass, GateOK: gateOK, Mode: evalMode(live)}
+	// Chat is constructed late (after the governed planes exist) but only when the
+	// corpus opened — reader nil = no Chat tab. Same reader NHI grant as search.
+	var chatSvc server.ChatService
+	if reader != nil {
+		chatSvc = &chatService{reader: reader, grant: readerGrant, authz: authz, gw: gw, prompts: prompts, sampling: sampling, models: models, retrieval: retrieval}
 	}
 
 	srv := &http.Server{
 		Addr: *addr,
-		Handler: (&webapp.Server{
+		Handler: server.New(server.Config{
 			AuditPath: auditPath, OutboxDir: cfg.Outbox, InboxPath: cfg.Inbox,
 			Egress: egress, Fetch: fetch, Verifier: verifier, Safety: safety, Search: search, Index: enrichIndex,
-			Feedback: feedback, FlywheelStats: flywheelStats,
-			Authz: authz, OperatorToken: opToken, Audit: audit,
-			MCP: mcpList, MCPApprove: mcpApprove, Prompts: prompts, Policies: policies, Sampling: sampling, Budgets: budgets,
-			EvalHistory: evalHistory, EvalRun: evalRun, PromptTest: promptTest,
-			BundleList: bundleList, BundleSave: bundleSave, BundleApply: bundleApply,
-			ProfileLoad: profileLoad, ProfileSave: profileSave,
+			Flywheel: flywheelSvc, Chat: chatSvc,
+			Authz: authz, OperatorToken: opToken, AppToken: appToken, Audit: audit,
+			MCP: mcpReg, Prompts: prompts, Policies: policies, Sampling: sampling, Budgets: budgets, Retrieval: retrieval, Grammars: grammars, Models: models,
+			Skills: skillsPlane, SkillCatalog: skillSupply,
+			Eval:    evalSvc,
+			Bundles: bundleSvc,
+			Profile: profileSvc,
 		}).Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      120 * time.Second, // live eval/chat can be slow
+		IdleTimeout:       120 * time.Second,
 	}
 	go func() { <-ctx.Done(); srv.Close() }()
 
@@ -525,36 +506,45 @@ func agentIdentity(path string) (*provenance.Signer, *provenance.Verifier) {
 	return signer, provenance.NewVerifier().Trust(keyID, pub)
 }
 
-// gatewayUp reports whether the gouncer gateway is reachable, so a live eval run
-// can say whether it ran against the model or fell back to regex.
-func gatewayUp() bool {
-	c, err := net.DialTimeout("tcp", "127.0.0.1:4000", 300*time.Millisecond)
+// gw is the chat gateway client (pkg/gateway), set from the -gateway flag in main.
+// The chat path and the eval/health checks go through it. It starts at the
+// fail-closed default so it is never nil before flag parsing.
+var gw = gateway.New("http://127.0.0.1:4000/v1/chat/completions", "127.0.0.1:4000")
+
+// envOr returns the env var value or a fallback.
+func envOr(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
+}
+
+// loadDotenv seeds the process environment from a KEY=VALUE file (dotenv). A real
+// environment variable always wins over the file (12-factor), and a missing file is
+// fine. No dependency — a few lines of parsing, called once before flags. Values may
+// be quoted; lines starting with # are comments.
+func loadDotenv(path string) {
+	f, err := os.Open(path)
 	if err != nil {
-		return false
+		return
 	}
-	_ = c.Close()
-	return true
-}
-
-func evalMode(live bool) string {
-	if live {
-		return "llm (gouncer :4000)"
+	defer f.Close()
+	sc := bufio.NewScanner(f)
+	for sc.Scan() {
+		line := strings.TrimSpace(sc.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		k, v, ok := strings.Cut(line, "=")
+		if !ok {
+			continue
+		}
+		k = strings.TrimSpace(k)
+		v = strings.Trim(strings.TrimSpace(v), `"'`)
+		if _, set := os.LookupEnv(k); !set { // real env wins over the file
+			_ = os.Setenv(k, v)
+		}
 	}
-	return "gateway :4000 down → regex fallback; start cmd/livecheck or modeld+gouncer for the live path"
-}
-
-// defendedASR runs one ADD case's defended target and returns its attack success
-// rate (0 = the control holds).
-func defendedASR(c redteam.Case) float64 {
-	return gorauder.NewRunner(c.Defended, gorauder.WithScorer(redteam.Scorer())).Run(context.Background(), c.Seeds).ASR()
-}
-
-// shortHash trims a hex manifest hash to a display prefix.
-func shortHash(h string) string {
-	if len(h) > 12 {
-		return h[:12]
-	}
-	return h
 }
 
 // defaultDrop is ~/Desktop/Email-to-Calendar (Mac-friendly), falling back to the
@@ -565,4 +555,22 @@ func defaultDrop() string {
 		return "Email-to-Calendar"
 	}
 	return filepath.Join(home, "Desktop", "Email-to-Calendar")
+}
+
+// chatParams resolves the chat model + decoding from governed config at call time
+// (C5 sampling "chat" + the chat_model DB key), with the shipped consts as the
+// fail-closed default — nothing hardcoded in the gateway (DB-first config).
+func chatParams(sampling *controlplane.Sampling, models *controlplane.Models) gateway.ChatParams {
+	p := gateway.ChatParams{Model: "planner", Temperature: 0.2, MaxTokens: 400}
+	if sampling != nil {
+		if sc := sampling.Config("chat"); sc.MaxTokens > 0 {
+			p.Temperature, p.MaxTokens = sc.Temperature, sc.MaxTokens
+		}
+	}
+	if models != nil {
+		if m := models.Bound("chat"); m != "" {
+			p.Model = m // governed model binding (was the chat_model config key)
+		}
+	}
+	return p
 }

@@ -24,9 +24,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/t0ul/ai-security-engineering/agent/eval"
-	"github.com/t0ul/ai-security-engineering/cpstore"
 	"github.com/t0ul/ai-security-engineering/internal/modelserve"
+	"github.com/t0ul/ai-security-engineering/pkg/agent/eval"
+	"github.com/t0ul/ai-security-engineering/pkg/datastore"
 	"github.com/t0ul/gouncer"
 )
 
@@ -100,19 +100,19 @@ func main() {
 	}
 	fmt.Printf("livecheck: gateway up on %s; running eval gates...\n\n", gatewayAddr)
 
-	// 3. Eval gates through the LLM path (extractor -> gouncer -> planner).
-	os.Setenv("EXTRACT_MODE", "llm") // GATEWAY_URL defaults to :4000
+	// 3. Eval gates through the LLM path (extractor -> gouncer -> planner); mode
+	// is passed explicitly via eval.ScoreWithMode, not a global env.
 
 	// Persist F1 to the inventory so the promotion gate can read a real score.
-	var inv *cpstore.Store
-	if db, derr := cpstore.Open(filepath.Join("controlplane", "logs", "inventory.db")); derr == nil {
+	var inv *datastore.Store
+	if db, derr := datastore.Open(filepath.Join("controlplane", "logs", "inventory.db")); derr == nil {
 		inv = db
 		defer inv.Close()
 	}
 
 	allPass := true
 	for _, g := range gates {
-		rep, err := eval.Score(g.label, true)
+		rep, err := eval.ScoreWithMode(g.label, true, "llm")
 		if err != nil {
 			fmt.Printf("ERROR %-40s %v\n", g.label, err)
 			allPass = false

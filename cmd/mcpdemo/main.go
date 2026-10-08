@@ -17,12 +17,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/t0ul/ai-security-engineering/broker"
-	"github.com/t0ul/ai-security-engineering/controlplane"
-	"github.com/t0ul/ai-security-engineering/cpstore"
-	"github.com/t0ul/ai-security-engineering/mcp"
-	"github.com/t0ul/ai-security-engineering/netpolicy"
-	"github.com/t0ul/ai-security-engineering/sandbox"
+	"github.com/t0ul/ai-security-engineering/pkg/broker"
+	"github.com/t0ul/ai-security-engineering/pkg/controlplane"
+	"github.com/t0ul/ai-security-engineering/pkg/datastore"
+	"github.com/t0ul/ai-security-engineering/pkg/mcp"
+	"github.com/t0ul/ai-security-engineering/pkg/netpolicy"
+	"github.com/t0ul/ai-security-engineering/pkg/sandbox"
 	"github.com/t0ul/gledger"
 	"github.com/t0ul/gustoms"
 )
@@ -75,7 +75,7 @@ func run() error {
 
 	// Persist approved MCP manifest pins to the durable inventory (survives
 	// restarts; the console reads real pins).
-	inv, _ := cpstore.Open(filepath.Join("controlplane", "logs", "inventory.db"))
+	inv, _ := datastore.Open(filepath.Join("controlplane", "logs", "inventory.db"))
 	if inv != nil {
 		defer inv.Close()
 	}

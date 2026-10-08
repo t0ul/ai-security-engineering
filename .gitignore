@@ -62,7 +62,7 @@ audit.jsonl
 
 # --- email-to-calendar agent ---
 # real (private) newsletters — NEVER commit; anonymized copies live in samples/
-e-mails/
+examples/
 # watcher runtime dirs: keep the folders, ignore their contents
 module-3/emaildrop/inbox/*
 module-3/emaildrop/outbox/*
@@ -70,10 +70,6 @@ module-3/emaildrop/processed/*
 module-3/emaildrop/logs/*
 !module-3/emaildrop/**/.gitkeep
 
-# scratch: track only the plan-of-record
-scratch/*
-!scratch/syllabus.md
-!scratch/tagging-schema.md
 /launchvm
 
 # governed control-plane demo logs
@@ -81,3 +77,6 @@ controlplane/logs/
 
 # local reference, not a project doc
 docs/course.txt
+
+# internal planning/course docs — not public
+docs/

@@ -23,11 +23,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/t0ul/ai-security-engineering/agent/pipeline"
-	"github.com/t0ul/ai-security-engineering/agent/roster"
-	"github.com/t0ul/ai-security-engineering/agent/tool"
-	"github.com/t0ul/ai-security-engineering/agent/watcher"
-	"github.com/t0ul/ai-security-engineering/rag"
+	"github.com/t0ul/ai-security-engineering/pkg/agent/pipeline"
+	"github.com/t0ul/ai-security-engineering/pkg/agent/roster"
+	"github.com/t0ul/ai-security-engineering/pkg/agent/tool"
+	"github.com/t0ul/ai-security-engineering/pkg/agent/watcher"
+	"github.com/t0ul/ai-security-engineering/pkg/rag"
 	"github.com/t0ul/gledger"
 )
 
