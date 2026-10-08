@@ -263,9 +263,16 @@ func main() {
 	retrievalDefaults := map[string]controlplane.RetrievalConfig{
 		"public": {K: 5},
 	}
+	// Governed output grammar (output-schema dimension): the extractor's GBNF was a
+	// const; now a governed, versioned, bundle-referenced artifact (a swapped grammar
+	// silently changes the output contract).
+	grammarDefaults := map[string]string{
+		"extractor": extractor.EventArrayGBNF,
+	}
 	var policies *controlplane.Policies
 	var budgets *controlplane.Budgets
 	var retrieval *controlplane.Retrieval
+	var grammars *controlplane.Grammars
 	if db, ierr := datastore.Open(filepath.Join(*drop, "inventory.db")); ierr == nil {
 		inv = db
 		defer inv.Close()
@@ -274,12 +281,14 @@ func main() {
 		sampling = controlplane.GovernedSampling(samplingDefaults, inv, audit)
 		budgets = controlplane.GovernedBudgets(budgetDefaults, inv, audit)
 		retrieval = controlplane.GovernedRetrieval(retrievalDefaults, inv, audit)
+		grammars = controlplane.GovernedGrammars(grammarDefaults, inv, audit)
 	} else {
 		prompts = controlplane.NewPrompts(promptDefaults)
 		policies = controlplane.NewPolicies(policyDefaults)
 		sampling = controlplane.NewSampling(samplingDefaults)
 		budgets = controlplane.NewBudgets(budgetDefaults)
 		retrieval = controlplane.NewRetrieval(retrievalDefaults)
+		grammars = controlplane.NewGrammars(grammarDefaults)
 	}
 	// Activating the "extractor" sampling drives the live LLM decoding params.
 	baseSampOnActivate := sampling.OnActivate
@@ -289,6 +298,16 @@ func main() {
 		}
 		if sv.Name == "extractor" {
 			extractor.SetSampling(sv.Config.Temperature, sv.Config.MaxTokens, sv.Config.Seed)
+		}
+	}
+	// Activating the "extractor" grammar drives the live GBNF the extractor sends.
+	baseGramOnActivate := grammars.OnActivate
+	grammars.OnActivate = func(gv controlplane.GrammarVersion) {
+		if baseGramOnActivate != nil {
+			baseGramOnActivate(gv)
+		}
+		if gv.Name == "extractor" {
+			extractor.SetGrammar(gv.Text)
 		}
 	}
 	// Activating the "extractor" prompt actually drives the LLM extractor (C5 down
@@ -331,6 +350,9 @@ func main() {
 				retrieval.Rehydrate("public", cfg)
 			}
 		}
+		if text, ok, _ := inv.LatestGrammarText("extractor"); ok {
+			grammars.Rehydrate("extractor", text)
+		}
 		for _, n := range []string{"api", "gateway"} {
 			if cfgJSON, ok, _ := inv.LatestBudget(n); ok {
 				var cfg controlplane.BudgetConfig
@@ -340,6 +362,7 @@ func main() {
 			}
 		}
 		extractor.SetExtractionPrompt(prompts.Text("extractor"))
+		extractor.SetGrammar(grammars.Text("extractor"))
 		sc := sampling.Config("extractor")
 		extractor.SetSampling(sc.Temperature, sc.MaxTokens, sc.Seed)
 		// Logical extractor model binding + grammar JSON (C5), from governed config
@@ -363,7 +386,7 @@ func main() {
 	// roll it all back in one step. Needs the DB.
 	var bundleSvc server.BundleStore
 	if inv != nil {
-		bundleSvc = bundleStore{inv: inv, audit: audit, prompts: prompts, sampling: sampling, policies: policies, budgets: budgets, retrieval: retrieval}
+		bundleSvc = bundleStore{inv: inv, audit: audit, prompts: prompts, sampling: sampling, policies: policies, budgets: budgets, retrieval: retrieval, grammars: grammars}
 	}
 
 	// Eval surfaces (C7): the Eval card + a "Test" button that shadow-evals a

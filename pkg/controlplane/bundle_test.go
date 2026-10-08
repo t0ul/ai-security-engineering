@@ -11,8 +11,9 @@ func TestBundleSnapshotApply(t *testing.T) {
 	pol := NewPolicies(map[string][]string{"egress": {"a.com"}})
 	bud := NewBudgets(map[string]BudgetConfig{"api": {RatePerMin: 60}})
 	ret := NewRetrieval(map[string]RetrievalConfig{"public": {K: 5}})
+	gram := NewGrammars(map[string]string{"extractor": "GOOD-GRAMMAR"})
 
-	good := Snapshot("good", p, s, pol, bud, ret) // capture the known-good defaults
+	good := Snapshot("good", p, s, pol, bud, ret, gram) // capture the known-good defaults
 
 	// Drift every knob.
 	p.Activate("extractor", "BROKEN")
@@ -20,8 +21,9 @@ func TestBundleSnapshotApply(t *testing.T) {
 	pol.Activate("egress", []string{"evil.com"})
 	bud.Activate("api", BudgetConfig{RatePerMin: 100000})
 	ret.Activate("public", RetrievalConfig{K: 999})
+	gram.Activate("extractor", "TAMPERED-GRAMMAR")
 
-	good.Apply(p, s, pol, bud, ret) // one-step rollback
+	good.Apply(p, s, pol, bud, ret, gram) // one-step rollback
 
 	if p.Text("extractor") != "DEFAULT" {
 		t.Errorf("prompt not rolled back: %q", p.Text("extractor"))
@@ -37,5 +39,8 @@ func TestBundleSnapshotApply(t *testing.T) {
 	}
 	if c := ret.Config("public"); c.K != 5 {
 		t.Errorf("retrieval not rolled back: %+v", c)
+	}
+	if g := gram.Text("extractor"); g != "GOOD-GRAMMAR" {
+		t.Errorf("grammar not rolled back: %q", g)
 	}
 }

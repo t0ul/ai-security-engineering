@@ -23,6 +23,7 @@ type Store struct{ db *sql.DB }
 
 const schema = `
 CREATE TABLE IF NOT EXISTS prompts(name TEXT, version TEXT, hash TEXT, text TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS grammars(name TEXT, version TEXT, hash TEXT, text TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS approvals(id TEXT, proposer TEXT, approver TEXT, perm TEXT, note TEXT, version INTEGER, at DATETIME DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS mcp_pins(server TEXT, hash TEXT, approved_by TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS eval_scores(label TEXT, f1 REAL, at DATETIME DEFAULT CURRENT_TIMESTAMP);
@@ -207,6 +208,26 @@ func (s *Store) LatestRetrieval(name string) (config string, ok bool, err error)
 // resolver can rehydrate the active prompt on boot (the DB is the source of truth).
 func (s *Store) LatestPromptText(name string) (text string, ok bool, err error) {
 	row := s.db.QueryRow(`SELECT text FROM prompts WHERE name=? ORDER BY at DESC, rowid DESC LIMIT 1`, name)
+	switch e := row.Scan(&text); e {
+	case nil:
+		return text, true, nil
+	case sql.ErrNoRows:
+		return "", false, nil
+	default:
+		return "", false, e
+	}
+}
+
+// RecordGrammar persists a governed output-grammar activation.
+func (s *Store) RecordGrammar(name, version, hash, text string) error {
+	_, err := s.db.Exec(`INSERT INTO grammars(name,version,hash,text) VALUES(?,?,?,?)`, name, version, hash, text)
+	return err
+}
+
+// LatestGrammarText returns the most recent persisted grammar text for name, so
+// the resolver can rehydrate the active grammar on boot.
+func (s *Store) LatestGrammarText(name string) (text string, ok bool, err error) {
+	row := s.db.QueryRow(`SELECT text FROM grammars WHERE name=? ORDER BY at DESC, rowid DESC LIMIT 1`, name)
 	switch e := row.Scan(&text); e {
 	case nil:
 		return text, true, nil

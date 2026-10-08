@@ -109,9 +109,10 @@ func sampling() (float64, int, int) {
 // extractor's model is a config edit, not code. jsonMode sends a GBNF grammar so
 // the model can only emit a valid JSON event array (valid-by-construction).
 var (
-	modelMu       sync.RWMutex
-	modelOverride string
-	jsonMode      bool
+	modelMu         sync.RWMutex
+	modelOverride   string
+	jsonMode        bool
+	grammarOverride string
 )
 
 // SetModel binds the logical extraction model (e.g. "extractor"); "" clears it,
@@ -129,6 +130,25 @@ func SetJSONMode(on bool) {
 	modelMu.Unlock()
 }
 
+// SetGrammar sets the GBNF grammar used in JSON mode (a governed artifact); ""
+// falls back to the shipped default EventArrayGBNF.
+func SetGrammar(g string) {
+	modelMu.Lock()
+	grammarOverride = g
+	modelMu.Unlock()
+}
+
+// activeGrammar is the governed grammar override, or the shipped default.
+func activeGrammar() string {
+	modelMu.RLock()
+	g := grammarOverride
+	modelMu.RUnlock()
+	if g != "" {
+		return g
+	}
+	return EventArrayGBNF
+}
+
 func extractionModel() string {
 	modelMu.RLock()
 	o := modelOverride
@@ -139,8 +159,9 @@ func extractionModel() string {
 	return env("EXTRACTOR_MODEL", env("PLANNER_MODEL", "planner"))
 }
 
-// eventArrayGBNF constrains output to a JSON array of {title,when,where} objects.
-const eventArrayGBNF = `root ::= ws "[" ws (obj (ws "," ws obj)*)? ws "]" ws
+// EventArrayGBNF constrains output to a JSON array of {title,when,where} objects.
+// It is the shipped-default grammar; the governed Grammars plane can override it.
+const EventArrayGBNF = `root ::= ws "[" ws (obj (ws "," ws obj)*)? ws "]" ws
 obj ::= "{" ws "\"title\"" ws ":" ws str ws "," ws "\"when\"" ws ":" ws str ws "," ws "\"where\"" ws ":" ws str ws "}"
 str ::= "\"" ([^"\\] | "\\" .)* "\""
 ws ::= [ \t\n]*`
@@ -164,7 +185,7 @@ func extractionPayload(emailText string) map[string]any {
 	jm := jsonMode
 	modelMu.RUnlock()
 	if jm {
-		p["grammar"] = eventArrayGBNF // valid-by-construction JSON (llama.cpp GBNF)
+		p["grammar"] = activeGrammar() // valid-by-construction JSON (llama.cpp GBNF), governed
 	}
 	return p
 }
