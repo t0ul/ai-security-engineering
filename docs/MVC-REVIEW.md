@@ -5,19 +5,26 @@ now (thin root, `pkg/` libs, `pkg/domain`/`pkg/server`/`ui`). These are the thin
 left that a Go reviewer flags. Ordered by payoff. Each: **what · where · why ·
 fix**. Nothing here is on fire; the top three are the real architecture smells.
 
-## Status (2026-10-08)
-Fixed and committed on `refactor/layout`: **#4** (explicit extraction mode, no
-global env), **#5** (single-source gateway URL), **#6** (bounded bodies), **#7**
-(server timeouts), **#8** (html/template `.gohtml` + `ui/static` split), **#9**
-(outbox cache, caught a real stale-signature bug), **#10** (mux method routing),
-**#11** (DTO boundary documented), **#12** (writeJSON logs, vet clean). **#1** is
-partly done — the gateway/chat domain logic moved to `pkg/gateway` with unit tests.
+## Status (2026-10-08) — ALL 12 DONE
+Fixed and committed on `refactor/layout`:
+- **#1** gateway/chat logic → `pkg/gateway` (unit-tested); the eval/bundle/profile/
+  mcp/flywheel logic → typed services in `cmd/webapp/services.go`. `main.go` 710→450,
+  the god-function is gone (main is config + wiring).
+- **#2** the func-field god-struct is now interfaces: `EvalService`, `Flywheel`,
+  `MCPRegistry`, `ProfileStore`, `BundleStore` (func-fields ~14 → 4 idiomatic
+  single-method ones: Search/Index/Fetch/Chat).
+- **#3** `server.New(Config)` constructor: deps in an embedded `Config`, eager
+  `pend` init (lazy guard dropped), light mis-wiring validation.
+- **#4** explicit extraction mode (`eval.ScoreWithMode`), no global `EXTRACT_MODE`.
+- **#5** single-source gateway URL (`-gateway` flag).
+- **#6** bounded bodies (`MaxBytesReader` in csrf). **#7** server timeouts.
+- **#8** view → `html/template` `.gohtml` + CSS/JS to `ui/static`.
+- **#9** outbox cache by entry fingerprint — caught a real stale-signature bug.
+- **#10** mux method routing. **#11** DTO boundary documented. **#12** writeJSON
+  logs; `go vet` clean.
 
-**Remaining = the dependency-injection redesign** (one coherent change, do together):
-the rest of **#1** (relocate the eval/bundle/profile closures out of `main`), **#2**
-(func-field god-struct → interfaces), **#3** (constructor). These reshape the
-`Server` struct and `main`'s wiring, so they belong in one focused pass rather than
-piecemeal. Plan below.
+Every commit kept `go build`/`-tags live`/`go test ./...` (36 ok)/`go vet`/
+`cmd/scorecard` (32/0) green; the refactored view + API surfaces verified live.
 
 ## P1 — architecture (worth doing first)
 
@@ -85,8 +92,8 @@ piecemeal. Plan below.
 - **`go vet ./pkg/server/` is not clean** — "using resp before checking for errors" ×4 in [webapp_test.go:34+](pkg/server/webapp_test.go). Fix the tests; keep vet green in CI.
 - **`context.Background()` in [webapp.go:351](pkg/server/webapp.go)** (`defendedASR`) — if that ever runs on a request path, thread `r.Context()` so a client disconnect cancels the work.
 
-## Plan for the remaining DI redesign (#1 cont. + #2 + #3)
-Do it in one focused pass, behavior-preserving, green after each step:
+## How the DI redesign was done (#1 cont. + #2 + #3) — DONE
+Executed in the steps below, behavior-preserving, green after each:
 1. **Split `Server` fields.** Move the ~25 dependency fields into an embedded
    `Config` struct; leave the internal state (`mu`/`pend`, `rl*`, `ev*`) on
    `Server`. Handlers keep using `s.X` (promotion), so only the type def changes.
