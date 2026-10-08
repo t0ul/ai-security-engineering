@@ -1,5 +1,14 @@
 # Integration gaps — library-proven vs wired-into-the-app
 
+> **STATUS TRUTH-UP (2026-10-08).** The MED "governed-agent story that isn't on the
+> app path" section is now largely STALE — the control-plane build wired it in:
+> the app runs GovernedPrompts/Policies/Sampling/Budgets (+ rehydrate), Authz
+> capability tokens, the kill switch, and surfaces MCP pin status via the gustoms
+> tool gateway (Security tab). Still deliberately ADD-only (ready when a surface
+> needs them, not bugs): `captoken`, `quorum`, `memory`, aidr auto-contain, A2A
+> signing + the CaMeL orchestrator on the app path. HIGH items (goflage scrub,
+> provenance, HITL) were already fixed. Net: this ledger is near-empty of real gaps.
+
 Honest ledger (code-verified) of controls that pass their ADD/unit tests but are
 NOT on the real app's path (`cmd/webapp` → watcher → pipeline → webapp.Server).
 These were marked "✅ shipped" meaning *the library exists and its ADD case is

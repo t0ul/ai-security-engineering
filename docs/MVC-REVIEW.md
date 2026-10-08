@@ -92,6 +92,22 @@ Every commit kept `go build`/`-tags live`/`go test ./...` (36 ok)/`go vet`/
 - **`go vet ./pkg/server/` is not clean** — "using resp before checking for errors" ×4 in [webapp_test.go:34+](pkg/server/webapp_test.go). Fix the tests; keep vet green in CI.
 - **`context.Background()` in [webapp.go:351](pkg/server/webapp.go)** (`defendedASR`) — if that ever runs on a request path, thread `r.Context()` so a client disconnect cancels the work.
 
+## Follow-up review (post-merge) — 3 gaps, all FIXED
+A second pass found three real gaps in the above work:
+- **A — chat bypassed governed Sampling.** `pkg/gateway` hardcoded
+  `model/temperature/max_tokens` — contradicts the DB-first thesis. FIXED:
+  `ChatAnswer` takes `ChatParams`; `cmd/webapp` resolves them from the C5 sampling
+  plane ("chat") + a `chat_model` DB key, consts only as fail-closed default.
+- **B — "testable" services had no tests.** FIXED: a fake-backed
+  `TestBundleStoreInterfaceWiring` exercises the Controller through the
+  `BundleStore` interface (list + save) with no DB/model — the point of #2.
+- **C — `defaultDrop` misplaced in `services.go`.** FIXED: moved back to `main.go`
+  (it's config, not a service).
+
+Also standing now: **Design principles** (MVC, DB-first incl. paths, DB for domain
+entities) + a planned **`datastore.items` projection** — see REFACTOR-PLAN.md. Open
+gap, not a bug: the DB holds only governance meta, not the events/tasks themselves.
+
 ## How the DI redesign was done (#1 cont. + #2 + #3) — DONE
 Executed in the steps below, behavior-preserving, green after each:
 1. **Split `Server` fields.** Move the ~25 dependency fields into an embedded

@@ -1,7 +1,20 @@
 # Platform Backlog — intended scope vs built
 
-Reconciles the skeleton draft (`scratch/skeleton-draft.md`) and the syllabus
-(`scratch/syllabus.md`) against what the Go fold-in actually built. Legend:
+> **STATUS TRUTH-UP (2026-10-08).** Several rows below are STALE — they predate the
+> control-plane build + the layout refactor. Corrections:
+> - **M14 governed control plane** is now ✅ (not 🟡): prompts/policies/sampling/
+>   budgets are governed, versioned, rollback-able, DB-rehydrated artifacts; the app
+>   wires them + Authz capability tokens + kill switch.
+> - **App (owner use)** is ✅ (not ⬜): APP-FEATURES-PLAN A1–A8 all shipped; 14 tabs
+>   live (calendar/chat/week/tasks/review/activity/ask/security/prompts/sampling/
+>   policies/budgets/eval/incidents). One real item left: **task lifecycle**
+>   (done/snooze/dismiss) — needs the planned `datastore.items` projection.
+> - See `docs/MVC-REVIEW.md` (12 findings + 3 follow-up gaps, all fixed) and
+>   `docs/REFACTOR-PLAN.md` (design principles). Genuinely-open = task lifecycle +
+>   deliberately-deferred ADD-only primitives (captoken/quorum/memory/aidr-auto/A2A).
+
+Reconciles the skeleton draft (`docs/history/skeleton-draft.md`) and the syllabus
+(`docs/SYLLABUS.md`) against what the Go fold-in actually built. Legend:
 ✅ built & tested · 🟡 partial · ⬜ not built.
 
 ## Track I — build & harden
