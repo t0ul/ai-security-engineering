@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/t0ul/ai-security-engineering/pkg/controlplane"
+	"github.com/t0ul/ai-security-engineering/pkg/domain"
 	"github.com/t0ul/ai-security-engineering/pkg/ir"
 	"github.com/t0ul/ai-security-engineering/pkg/netpolicy"
 	"github.com/t0ul/ai-security-engineering/pkg/provenance"
@@ -45,7 +46,7 @@ type Server struct {
 	Safety *controlplane.Safety
 	// Search, when set, answers Ask-School queries over the (PII-scrubbed)
 	// retrieval corpus. Nil = the Ask tab returns nothing.
-	Search func(query string, k int) ([]SearchHit, error)
+	Search func(query string, k int) ([]domain.SearchHit, error)
 	// Index, when set with Fetch, powers safe handbook link enrichment (R6): it
 	// adds fetched (untrusted, PII-scrubbed) text to the retrieval corpus.
 	Index func(source, text string) error
@@ -74,7 +75,7 @@ type Server struct {
 	// MCP, when set, lists the MCP servers the agent reaches through the gustoms
 	// gateway with their pin status (C6). MCPApprove re-pins a server to its
 	// current manifest (rug-pull recovery, dual-control). Nil = no MCP tab.
-	MCP        func() []MCPServer
+	MCP        func() []domain.MCPServer
 	MCPApprove func(server string) error
 
 	// Prompts, when set, is the governed prompt resolver (C2): the console lists
@@ -106,8 +107,8 @@ type Server struct {
 	// ProfileLoad/ProfileSave, when set, read/write the household child profile
 	// (R1) in the governed DB — config lives in the store, not a file or a const.
 	// Operator-set, host-only, never from an email. Enables the My Week tab.
-	ProfileLoad func() Profile
-	ProfileSave func(Profile) error
+	ProfileLoad func() domain.Profile
+	ProfileSave func(domain.Profile) error
 
 	// Bundle surfaces (C10): BundleList shows saved known-good snapshots; BundleSave
 	// snapshots the whole governed plane; BundleApply rolls it all back. Nil = no

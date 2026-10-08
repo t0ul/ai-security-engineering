@@ -16,6 +16,7 @@ import (
 	"github.com/t0ul/ai-security-engineering/pkg/agent/pipeline"
 	"github.com/t0ul/ai-security-engineering/pkg/agent/schema"
 	"github.com/t0ul/ai-security-engineering/pkg/controlplane"
+	"github.com/t0ul/ai-security-engineering/pkg/domain"
 	"github.com/t0ul/ai-security-engineering/pkg/netpolicy"
 	"github.com/t0ul/ai-security-engineering/pkg/provenance"
 	"github.com/t0ul/ai-security-engineering/pkg/server"
@@ -366,9 +367,9 @@ func TestKillSwitchGatesSideEffects(t *testing.T) {
 func TestAskSearchesCorpus(t *testing.T) {
 	var gotQuery string
 	srv := httptest.NewServer((&server.Server{
-		Search: func(q string, k int) ([]server.SearchHit, error) {
+		Search: func(q string, k int) ([]domain.SearchHit, error) {
 			gotQuery = q
-			return []server.SearchHit{{Source: "handbook.txt", Snippet: "the nurse is in Room 219", Untrusted: true}}, nil
+			return []domain.SearchHit{{Source: "handbook.txt", Snippet: "the nurse is in Room 219", Untrusted: true}}, nil
 		},
 	}).Handler())
 	defer srv.Close()
@@ -376,7 +377,7 @@ func TestAskSearchesCorpus(t *testing.T) {
 	resp, _ := http.Get(srv.URL + "/api/ask?q=nurse")
 	defer resp.Body.Close()
 	var out struct {
-		Hits []server.SearchHit `json:"hits"`
+		Hits []domain.SearchHit `json:"hits"`
 	}
 	json.NewDecoder(resp.Body).Decode(&out)
 	if gotQuery != "nurse" || len(out.Hits) != 1 || !strings.Contains(out.Hits[0].Snippet, "Room 219") {

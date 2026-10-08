@@ -34,6 +34,7 @@ import (
 	"github.com/t0ul/ai-security-engineering/pkg/agent/watcher"
 	"github.com/t0ul/ai-security-engineering/pkg/controlplane"
 	"github.com/t0ul/ai-security-engineering/pkg/datastore"
+	"github.com/t0ul/ai-security-engineering/pkg/domain"
 	"github.com/t0ul/ai-security-engineering/pkg/durable"
 	"github.com/t0ul/ai-security-engineering/pkg/netpolicy"
 	"github.com/t0ul/ai-security-engineering/pkg/provenance"
@@ -98,7 +99,7 @@ func main() {
 		opToken = server.EncodeToken(g)
 	}
 	corpusPath := filepath.Join(*drop, "corpus.db")
-	var search func(string, int) ([]server.SearchHit, error)
+	var search func(string, int) ([]domain.SearchHit, error)
 	var chat func(string, bool) (string, []string, error)
 	var enrichIndex func(source, text string) error
 	if corpus, cerr := rag.Open(corpusPath); cerr == nil {
@@ -129,7 +130,7 @@ func main() {
 		readerGrant, _ := authz.Issue(controlplane.Capability{Subject: "rag-reader", Action: controlplane.ActionList, Resource: "corpus", Tenant: "public"}, 30*24*time.Hour)
 		// Ask-School: lexical search over the scrubbed corpus (M8 — recalled text
 		// is untrusted data). "public" tenant: this is a single-household app.
-		search = func(q string, k int) ([]server.SearchHit, error) {
+		search = func(q string, k int) ([]domain.SearchHit, error) {
 			if _, err := authz.Verify(readerGrant, controlplane.Capability{Action: controlplane.ActionList, Resource: "corpus", Tenant: "public"}); err != nil {
 				return nil, fmt.Errorf("rag-reader capability refused: %w", err)
 			}
@@ -137,9 +138,9 @@ func main() {
 			if err != nil {
 				return nil, err
 			}
-			out := make([]server.SearchHit, 0, len(chunks))
+			out := make([]domain.SearchHit, 0, len(chunks))
 			for _, c := range chunks {
-				out = append(out, server.SearchHit{Source: c.DocID, Snippet: server.Snippet(c.Text), Untrusted: c.Prov == rag.Untrusted})
+				out = append(out, domain.SearchHit{Source: c.DocID, Snippet: server.Snippet(c.Text), Untrusted: c.Prov == rag.Untrusted})
 			}
 			return out, nil
 		}
@@ -240,8 +241,8 @@ func main() {
 	// MCP governance tab (C6): surface the gateway's servers, their advertised +
 	// allow-listed tools, the approved pin vs the live manifest (rug-pull alert),
 	// and an operator Approve (re-pin). "blocked" reflects the kill switch.
-	mcpList := func() []server.MCPServer {
-		var out []server.MCPServer
+	mcpList := func() []domain.MCPServer {
+		var out []domain.MCPServer
 		for _, st := range toolGW.Status(context.Background()) {
 			status := "pinned"
 			switch {
@@ -254,7 +255,7 @@ func main() {
 			case st.Mismatch:
 				status = "rug-pull"
 			}
-			out = append(out, server.MCPServer{
+			out = append(out, domain.MCPServer{
 				Name: st.Name, Tools: st.Tools, Allowed: st.Allowed,
 				Pinned: shortHash(st.Pinned), Current: shortHash(st.Current), Status: status,
 			})
@@ -338,8 +339,8 @@ func main() {
 	// policies, and the child profile persisted by a prior session from cpstore on
 	// boot. The shipped consts remain only the fail-closed default when the DB has
 	// no row for a knob.
-	var profileLoad func() server.Profile
-	var profileSave func(server.Profile) error
+	var profileLoad func() domain.Profile
+	var profileSave func(domain.Profile) error
 	if inv != nil {
 		for _, n := range []string{"planner", "coder", "extractor"} {
 			if text, ok, _ := inv.LatestPromptText(n); ok {
@@ -376,14 +377,14 @@ func main() {
 		if j, ok, _ := inv.GetConfig("extractor_json"); ok && j == "true" {
 			extractor.SetJSONMode(true)
 		}
-		profileLoad = func() server.Profile {
-			var p server.Profile
+		profileLoad = func() domain.Profile {
+			var p domain.Profile
 			if v, ok, _ := inv.GetConfig("profile"); ok {
 				_ = json.Unmarshal([]byte(v), &p)
 			}
 			return p
 		}
-		profileSave = func(p server.Profile) error {
+		profileSave = func(p domain.Profile) error {
 			raw, _ := json.Marshal(p)
 			return inv.SetConfig("profile", string(raw))
 		}

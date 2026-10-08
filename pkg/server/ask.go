@@ -3,16 +3,9 @@ package server
 import (
 	"net/http"
 	"strings"
-)
 
-// SearchHit is one Ask-School result: a snippet from a past email/handbook, with
-// its source and whether it is untrusted (recalled content is data, not
-// instructions — M8). Contacts/secrets were scrubbed at index time (M3).
-type SearchHit struct {
-	Source    string `json:"source"`
-	Snippet   string `json:"snippet"`
-	Untrusted bool   `json:"untrusted"`
-}
+	"github.com/t0ul/ai-security-engineering/pkg/domain"
+)
 
 // ask answers a free-text question by lexical retrieval over the corpus. The
 // query is FTS5-escaped by the store (no operator injection); results are
@@ -20,7 +13,7 @@ type SearchHit struct {
 func (s *Server) ask(w http.ResponseWriter, r *http.Request) {
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
 	if s.Search == nil || q == "" {
-		writeJSON(w, map[string]any{"hits": []SearchHit{}})
+		writeJSON(w, map[string]any{"hits": []domain.SearchHit{}})
 		return
 	}
 	hits, err := s.Search(q, 8)
