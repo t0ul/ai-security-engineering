@@ -38,7 +38,7 @@ import (
 	"github.com/t0ul/ai-security-engineering/pkg/netpolicy"
 	"github.com/t0ul/ai-security-engineering/pkg/provenance"
 	"github.com/t0ul/ai-security-engineering/pkg/rag"
-	"github.com/t0ul/ai-security-engineering/redteam"
+	"github.com/t0ul/ai-security-engineering/pkg/redteam"
 	"github.com/t0ul/ai-security-engineering/webapp"
 	"github.com/t0ul/gledger"
 	"github.com/t0ul/goflage"

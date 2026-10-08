@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/t0ul/ai-security-engineering/internal/assets"
 	"github.com/t0ul/ai-security-engineering/pkg/agent/a2a"
 	"github.com/t0ul/ai-security-engineering/pkg/agent/ensemble"
 	"github.com/t0ul/ai-security-engineering/pkg/agent/guard"
@@ -22,7 +23,6 @@ import (
 	"github.com/t0ul/ai-security-engineering/pkg/dataset"
 	"github.com/t0ul/ai-security-engineering/pkg/durable"
 	"github.com/t0ul/ai-security-engineering/pkg/hitl"
-	"github.com/t0ul/ai-security-engineering/internal/assets"
 	"github.com/t0ul/ai-security-engineering/pkg/ir"
 	"github.com/t0ul/ai-security-engineering/pkg/memory"
 	"github.com/t0ul/ai-security-engineering/pkg/netpolicy"
