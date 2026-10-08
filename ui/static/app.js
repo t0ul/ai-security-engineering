@@ -154,27 +154,57 @@ async function activateSampling(name){
   await postJSON('/api/sampling/activate',{name:name,config:cfg});loadSampling();
 }
 async function resetSampling(name){await postJSON('/api/sampling/reset',{name:name});loadSampling();}
+let __CAT__=[];
+// options for a role's model <select>: every catalog name, plus the current binding
+// if it is not (any longer) in the catalog, so a stale binding stays visible.
+function modelOpts(cur){
+  let o=__CAT__.map(e=>'<option'+(e.name===cur?' selected':'')+'>'+esc(e.name)+'</option>').join('');
+  if(!__CAT__.some(e=>e.name===cur)) o+='<option selected>'+esc(cur)+'</option>';
+  return o;
+}
 async function loadModels(){
-  const c=$('#modelsList');if(!c)return;const d=await getJSON('/api/models');const ms=d.models||[];
+  const c=$('#modelsList');if(!c)return;
+  const [d,cd]=await Promise.all([getJSON('/api/models'),getJSON('/api/modelcatalog')]);
+  const ms=d.models||[]; __CAT__=cd.catalog||[];
   if(!ms.length){c.innerHTML='<p class="mut">no roles registered</p>';return;}
   c.innerHTML=ms.map(m=>{const governed=m.version>0;
     return '<div class="ev"><div><b>'+esc(m.name)+'</b> <span class="pill '+(governed?'pass':'')+'">v'+m.version+'</span> <span class="mut">'+esc(m.hash)+'</span>'+
-      '<div style="margin-top:6px">model <input id="md_'+esc(m.name)+'" value="'+esc(m.model)+'" style="width:180px"></div>'+
-      '<div style="margin-top:6px"><button class="go" onclick="activateModel(\''+esc(m.name)+'\')">Activate</button>'+
+      '<div style="margin-top:6px">model <select id="md_'+esc(m.name)+'">'+modelOpts(m.model)+'</select></div>'+
+      '<div style="margin-top:6px"><button class="go" onclick="activateModel(\''+esc(m.name)+'\')">Bind</button>'+
       (governed?(' <button class="ghost" onclick="resetModel(\''+esc(m.name)+'\')">Reset to default</button>'):'')+'</div></div></div>';
   }).join('');
 }
 async function activateModel(name){await postJSON('/api/models/activate',{name:name,model:$('#md_'+name).value});loadModels();}
 async function resetModel(name){await postJSON('/api/models/reset',{name:name});loadModels();}
 async function loadModelCatalog(){
-  const c=$('#modelCatalog');if(!c)return;const d=await getJSON('/api/modelcatalog');const cat=d.catalog||[];
+  const c=$('#modelCatalog');if(!c)return;const d=await getJSON('/api/modelcatalog');const cat=d.catalog||[];__CAT__=cat;
   if(!cat.length){c.innerHTML='<p class="mut">catalog empty</p>';return;}
   c.innerHTML=cat.map(m=>{
     const pin=m.pinned?'<span class="pill pass">SHA pinned</span>':'<span class="pill">magic-verify only</span>';
     return '<div class="ev"><div><b>'+esc(m.name)+'</b> '+pin+' <span class="mut">:'+m.port+' · ctx '+m.ctx+' · '+esc(m.host)+'</span>'+
       '<div class="mut" style="margin-top:4px">'+esc(m.file)+'</div>'+
-      '<div class="mut" style="margin-top:2px;word-break:break-all">'+esc(m.url)+'</div></div></div>';
+      '<div class="mut" style="margin-top:2px;word-break:break-all">'+esc(m.url)+'</div>'+
+      '<div style="margin-top:6px"><button class="ghost" onclick="editModel(\''+esc(m.name)+'\')">Edit</button> '+
+      '<button class="ghost" onclick="delModel(\''+esc(m.name)+'\')">Delete</button></div></div></div>';
   }).join('');
+}
+function editModel(name){const m=__CAT__.find(e=>e.name===name);if(!m)return;
+  $('#mc_name').value=m.name;$('#mc_file').value=m.file;$('#mc_url').value=m.url;
+  $('#mc_sha').value=m.sha256||'';$('#mc_port').value=m.port||'';$('#mc_ctx').value=m.ctx||'';
+  $('#mcMsg').textContent='editing '+name;}
+async function saveModel(){
+  const body={name:$('#mc_name').value.trim(),file:$('#mc_file').value.trim(),url:$('#mc_url').value.trim(),
+    sha256:$('#mc_sha').value.trim(),port:parseInt($('#mc_port').value)||0,ctx:parseInt($('#mc_ctx').value)||0};
+  if(!body.name||!body.url||!body.file){$('#mcMsg').textContent='name, url and file are required';return;}
+  const r=await postJSON('/api/modelcatalog/upsert',body);
+  if(r.ok){$('#mcMsg').textContent='saved ✓';['mc_name','mc_file','mc_url','mc_sha','mc_port','mc_ctx'].forEach(id=>$('#'+id).value='');loadModelCatalog();loadModels();}
+  else{$('#mcMsg').textContent='error: '+(await r.text());}
+}
+async function delModel(name){
+  if(!confirm('Delete model "'+name+'" from the catalog?'))return;
+  const r=await postJSON('/api/modelcatalog/delete',{name:name});
+  if(r.ok){loadModelCatalog();loadModels();}
+  else{alert(await r.text());}
 }
 async function loadSkills(){
   const c=$('#skillList');if(!c)return;const d=await getJSON('/api/skills');const cat=d.catalog||[];

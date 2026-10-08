@@ -374,7 +374,7 @@ func main() {
 	// boot. The shipped consts remain only the fail-closed default when the DB has
 	// no row for a knob.
 	var profileSvc server.ProfileStore
-	var modelCatalogSvc server.ModelCatalogLister
+	var modelCatalogSvc server.ModelCatalogStore
 	if inv != nil {
 		for _, n := range []string{"planner", "coder", "extractor", "chat_system"} {
 			if text, ok, _ := inv.LatestPromptText(n); ok {

@@ -176,8 +176,20 @@
       <div id="modelsList"><span class="mut">loading…</span></div>
     </div>
     <div class="card">
-      <strong>Model catalog</strong> <span class="mut">— the DB-backed registry of which models exist: verified download URL + SHA pin (M10), local file, serve port/ctx. Single source of truth — <code>prepareassets</code> (download) and <code>modeld</code> (serve) read this same catalog. Consts are only the fail-closed bootstrap seed. (Edit/download from here: next slice.)</span>
+      <strong>Model catalog</strong> <span class="mut">— the DB-backed registry of which models exist: verified download URL + SHA pin (M10), local file, serve port/ctx. Single source of truth — <code>prepareassets</code> (download) and <code>modeld</code> (serve) read this same catalog. Consts are only the fail-closed bootstrap seed.</span>
       <div id="modelCatalog" style="margin-top:8px"><span class="mut">loading…</span></div>
+      <div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px">
+        <strong>Add / edit model</strong> <span class="mut">— same name edits in place (swap a model out). SHA pins the content (M10); leave empty for GGUF-magic verify only.</span>
+        <div class="mgrid" style="margin-top:8px">
+          <input id="mc_name" placeholder="logical name (e.g. planner)">
+          <input id="mc_file" placeholder="file (e.g. llama-3.2-3b.gguf)">
+          <input id="mc_url" placeholder="download URL (.gguf)" style="grid-column:1/3">
+          <input id="mc_sha" placeholder="sha256 pin (optional)" style="grid-column:1/3">
+          <input id="mc_port" type="number" placeholder="port">
+          <input id="mc_ctx" type="number" placeholder="ctx">
+        </div>
+        <div style="margin-top:8px"><button class="go" onclick="saveModel()">Save model</button> <span id="mcMsg" class="mut"></span></div>
+      </div>
     </div>
   </section>
   <section id="skills" class="hide">

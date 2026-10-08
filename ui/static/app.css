@@ -61,5 +61,6 @@
   .msg.a{background:var(--card);border:1px solid var(--line);align-self:flex-start;border-bottom-left-radius:4px}
   .msg .src{font-size:11px;color:var(--mut);margin-top:6px}
   .chatrow{display:flex;gap:8px;margin-top:10px} .chatrow input{flex:1}
-  input{font:inherit;background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:9px;padding:8px 11px}
+  input,select{font:inherit;background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:9px;padding:8px 11px}
+  .mgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px} .mgrid input{width:100%}
   @media (max-width:640px){.app{flex-direction:column}.sidebar{width:auto;flex:none;height:auto;position:static;display:flex;gap:12px;overflow-x:auto}.sidebar nav{flex-direction:row;flex-wrap:wrap}.sidebar nav .grp{display:none}}

@@ -120,10 +120,10 @@ type Config struct {
 	// Models tab.
 	Models *controlplane.Models
 
-	// ModelCatalog, when set, reads the DB-backed model catalog (single source of
-	// truth for which models exist: verified URL/SHA, file, serve port/ctx). Shown
-	// read-only in the Models tab. Nil = no catalog card.
-	ModelCatalog ModelCatalogLister
+	// ModelCatalog, when set, reads and writes the DB-backed model catalog (single
+	// source of truth for which models exist: verified URL/SHA, file, serve port/ctx).
+	// Shown in the Models tab with add/edit/delete. Nil = no catalog card.
+	ModelCatalog ModelCatalogStore
 
 	// Skills, when set, is the governed skill-approval resolver (the pin side of the
 	// skills supply-chain control): which skill versions an operator has approved.
@@ -311,6 +311,8 @@ func (s *Server) Handler() http.Handler {
 	}
 	if s.ModelCatalog != nil {
 		mux.HandleFunc("/api/modelcatalog", s.modelCatalogList)
+		mux.HandleFunc("POST /api/modelcatalog/upsert", csrf(s.authz(controlplane.ActionWrite, "model", s.modelCatalogUpsert)))
+		mux.HandleFunc("POST /api/modelcatalog/delete", csrf(s.authz(controlplane.ActionWrite, "model", s.modelCatalogDelete)))
 	}
 	if s.Skills != nil {
 		mux.HandleFunc("/api/skills", s.skillsList)
