@@ -36,8 +36,10 @@ import (
 // deliberate choice — they are the JSON wire format of specific handlers, not
 // reusable domain types, so they stay next to the handler that serves them.
 
-// Server serves the dashboard and its API.
-type Server struct {
+// Config holds the Server's dependencies — the collaborators main wires in. A nil
+// optional dependency disables its feature (and its route/tab). Internal runtime
+// state (mutexes, caches) lives on Server, not here. Build the Server with New.
+type Config struct {
 	AuditPath string // gledger log to read incidents from
 	OutboxDir string // accepted .ics artifacts to render + offer for download
 	InboxPath string // where the user drops .txt emails (shown in the UI)
@@ -96,10 +98,7 @@ type Server struct {
 	// concurrency/spend ceilings + key POINTERS (env-var names, never values). The
 	// "api" budget's RatePerMin is enforced on the console API here; the rest are
 	// gateway-side. Nil = no Budgets tab, no rate limit.
-	Budgets  *controlplane.Budgets
-	rlMu     sync.Mutex
-	rlCount  int
-	rlWindow time.Time
+	Budgets *controlplane.Budgets
 
 	// Sampling, when set, is the governed decoding-params resolver (C5):
 	// temperature/max_tokens/seed per model as versioned, hashed, rollback-able
@@ -133,6 +132,18 @@ type Server struct {
 	EvalHistory func() []EvalResult
 	EvalRun     func() ([]EvalResult, string)
 	PromptTest  func(name, candidate string) PromptTestResult
+}
+
+// Server serves the dashboard and its API. Build it with New — the zero value is
+// not ready (its maps are nil). Dependencies live in the embedded Config; the
+// fields below are internal runtime state.
+type Server struct {
+	Config
+
+	// api rate-limit window (the Budgets "api" ceiling, enforced in authz).
+	rlMu     sync.Mutex
+	rlCount  int
+	rlWindow time.Time
 
 	// pending holds issued-but-unconfirmed HITL approvals, keyed by nonce (ASI09:
 	// evidence-first, single-use, clickjack/forgery-resistant confirm).
@@ -145,6 +156,21 @@ type Server struct {
 	evMu    sync.Mutex
 	evCache []Event
 	evFP    string
+}
+
+// New builds a ready Server from its dependencies. It initializes internal state
+// (the HITL pending map) so there is one valid construction path instead of a raw
+// struct literal with lazy map init. Dependencies are optional by design — a nil
+// one disables its feature — so New only warns on obvious mis-wirings rather than
+// failing.
+func New(c Config) *Server {
+	if (c.ProfileLoad == nil) != (c.ProfileSave == nil) {
+		log.Print("server.New: ProfileLoad/ProfileSave should be set together; the My Week tab may half-work")
+	}
+	if c.Index != nil && c.Fetch == nil {
+		log.Print("server.New: Index set without Fetch; link enrichment is disabled")
+	}
+	return &Server{Config: c, pend: map[string]pending{}}
 }
 
 // verifySig reports whether <name>.sig is a valid content credential over the

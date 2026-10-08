@@ -537,7 +537,7 @@ func main() {
 
 	srv := &http.Server{
 		Addr: *addr,
-		Handler: (&server.Server{
+		Handler: server.New(server.Config{
 			AuditPath: auditPath, OutboxDir: cfg.Outbox, InboxPath: cfg.Inbox,
 			Egress: egress, Fetch: fetch, Verifier: verifier, Safety: safety, Search: search, Index: enrichIndex,
 			Feedback: feedback, FlywheelStats: flywheelStats, Chat: chat,

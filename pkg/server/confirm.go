@@ -22,10 +22,7 @@ type pending struct {
 func (s *Server) storePending(nonce string, p pending) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.pend == nil {
-		s.pend = map[string]pending{}
-	}
-	s.pend[nonce] = p
+	s.pend[nonce] = p // initialized by New
 }
 
 func (s *Server) takePending(nonce string) (pending, bool) {
