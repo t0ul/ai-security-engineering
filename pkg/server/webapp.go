@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -247,6 +248,11 @@ func (s *Server) serveICS(w http.ResponseWriter, r *http.Request) {
 // csrf rejects cross-site POSTs. The app binds loopback, but that does NOT stop
 // CSRF — any site the browser visits can POST to 127.0.0.1. A foreign Origin is
 // refused; same-origin fetches (loopback Origin, or no Origin) pass.
+// maxBodyBytes caps a request body so a single large POST cannot force unbounded
+// allocation. Every mutating endpoint flows through csrf, so bounding it here
+// covers them all.
+const maxBodyBytes = 1 << 20 // 1 MiB
+
 func csrf(h http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if o := r.Header.Get("Origin"); o != "" {
@@ -256,6 +262,7 @@ func csrf(h http.HandlerFunc) http.HandlerFunc {
 				return
 			}
 		}
+		r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
 		h(w, r)
 	}
 }
@@ -436,5 +443,7 @@ func (s *Server) toolsBlocked() bool { return s.Safety != nil && !s.Safety.Allow
 
 func writeJSON(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(v)
+	if err := json.NewEncoder(w).Encode(v); err != nil {
+		log.Printf("writeJSON: encode failed: %v", err)
+	}
 }

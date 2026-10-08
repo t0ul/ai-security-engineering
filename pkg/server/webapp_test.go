@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -30,7 +31,7 @@ func TestEventsAPIReadsICS(t *testing.T) {
 
 	srv := httptest.NewServer((&server.Server{OutboxDir: dir}).Handler())
 	defer srv.Close()
-	resp, _ := http.Get(srv.URL + "/api/events")
+	resp := mustGet(t, srv.URL+"/api/events")
 	defer resp.Body.Close()
 	var out struct {
 		Events []server.Event `json:"events"`
@@ -51,7 +52,7 @@ func TestEventsAPIReadsTaskAndAction(t *testing.T) {
 
 	srv := httptest.NewServer((&server.Server{OutboxDir: dir}).Handler())
 	defer srv.Close()
-	resp, _ := http.Get(srv.URL + "/api/events")
+	resp := mustGet(t, srv.URL+"/api/events")
 	defer resp.Body.Close()
 	var out struct {
 		Events []server.Event `json:"events"`
@@ -93,7 +94,7 @@ func TestItemsAPIFiltersByKind(t *testing.T) {
 	srv := httptest.NewServer((&server.Server{OutboxDir: dir}).Handler())
 	defer srv.Close()
 
-	resp, _ := http.Get(srv.URL + "/api/items?kind=task")
+	resp := mustGet(t, srv.URL+"/api/items?kind=task")
 	defer resp.Body.Close()
 	var out struct {
 		Items []server.Event `json:"items"`
@@ -110,7 +111,7 @@ func TestSummaryAndReviewAPI(t *testing.T) {
 	srv := httptest.NewServer((&server.Server{OutboxDir: dir}).Handler())
 	defer srv.Close()
 
-	resp, _ := http.Get(srv.URL + "/api/summary?file=wk.summary.json")
+	resp := mustGet(t, srv.URL+"/api/summary?file=wk.summary.json")
 	defer resp.Body.Close()
 	var sum pipeline.EmailSummary
 	json.NewDecoder(resp.Body).Decode(&sum)
@@ -118,7 +119,7 @@ func TestSummaryAndReviewAPI(t *testing.T) {
 		t.Fatalf("summary contacts missing: %+v", sum.Tools)
 	}
 
-	rv, _ := http.Get(srv.URL + "/api/review")
+	rv := mustGet(t, srv.URL+"/api/review")
 	defer rv.Body.Close()
 	var out struct {
 		Items []server.Event `json:"items"`
@@ -133,7 +134,7 @@ func TestSummaryAPIRejectsTraversal(t *testing.T) {
 	dir := t.TempDir()
 	srv := httptest.NewServer((&server.Server{OutboxDir: dir}).Handler())
 	defer srv.Close()
-	resp, _ := http.Get(srv.URL + "/api/summary?file=../../etc/passwd")
+	resp := mustGet(t, srv.URL+"/api/summary?file=../../etc/passwd")
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("traversal not rejected: %d", resp.StatusCode)
@@ -172,7 +173,7 @@ func TestAcceptRequiresHITLConfirm(t *testing.T) {
 	defer srv.Close()
 
 	// Phase 1 alone must NOT write anything.
-	r1, _ := http.Post(srv.URL+"/api/accept", "application/json", strings.NewReader(`{"file":"wk.summary.json","index":0}`))
+	r1 := mustPost(t, srv.URL+"/api/accept", "application/json", strings.NewReader(`{"file":"wk.summary.json","index":0}`))
 	r1.Body.Close()
 	if entries, _ := os.ReadDir(dir); hasAccept(entries) {
 		t.Fatal("the challenge phase must not write an .ics")
@@ -192,7 +193,7 @@ func TestAcceptForgedNonceRefused(t *testing.T) {
 	defer srv.Close()
 
 	// A confirm with a nonce that was never issued (forged/replayed) is refused.
-	resp, _ := http.Post(srv.URL+"/api/accept", "application/json",
+	resp := mustPost(t, srv.URL+"/api/accept", "application/json",
 		strings.NewReader(`{"file":"wk.summary.json","index":0,"nonce":"deadbeef","confirm":true}`))
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusForbidden {
@@ -269,12 +270,12 @@ func TestICSServesOnlyICS(t *testing.T) {
 	srv := httptest.NewServer((&server.Server{OutboxDir: dir}).Handler())
 	defer srv.Close()
 
-	r1, _ := http.Get(srv.URL + "/ics/wk.summary.json")
+	r1 := mustGet(t, srv.URL+"/ics/wk.summary.json")
 	r1.Body.Close()
 	if r1.StatusCode != http.StatusNotFound {
 		t.Fatalf("the PII sidecar must NOT be served, got %d", r1.StatusCode)
 	}
-	r2, _ := http.Get(srv.URL + "/ics/wk.events.ics")
+	r2 := mustGet(t, srv.URL+"/ics/wk.events.ics")
 	r2.Body.Close()
 	if r2.StatusCode != http.StatusOK {
 		t.Fatalf(".ics should be served, got %d", r2.StatusCode)
@@ -308,7 +309,7 @@ func TestEventsReportProvenance(t *testing.T) {
 	srv := httptest.NewServer((&server.Server{OutboxDir: dir, Verifier: provenance.NewVerifier().Trust("email-agent", pub)}).Handler())
 	defer srv.Close()
 	get := func() server.Event {
-		resp, _ := http.Get(srv.URL + "/api/events")
+		resp := mustGet(t, srv.URL+"/api/events")
 		defer resp.Body.Close()
 		var out struct {
 			Events []server.Event `json:"events"`
@@ -336,11 +337,11 @@ func TestKillSwitchGatesSideEffects(t *testing.T) {
 	srv := httptest.NewServer((&server.Server{OutboxDir: dir, InboxPath: t.TempDir(), Safety: safety}).Handler())
 	defer srv.Close()
 	setLevel := func(l int) {
-		r, _ := http.Post(srv.URL+"/api/killswitch", "application/json", strings.NewReader(fmt.Sprintf(`{"level":%d}`, l)))
+		r := mustPost(t, srv.URL+"/api/killswitch", "application/json", strings.NewReader(fmt.Sprintf(`{"level":%d}`, l)))
 		r.Body.Close()
 	}
 	drop := func() int {
-		r, _ := http.Post(srv.URL+"/api/drop", "application/x-www-form-urlencoded", strings.NewReader("text=hi"))
+		r := mustPost(t, srv.URL+"/api/drop", "application/x-www-form-urlencoded", strings.NewReader("text=hi"))
 		r.Body.Close()
 		return r.StatusCode
 	}
@@ -353,7 +354,7 @@ func TestKillSwitchGatesSideEffects(t *testing.T) {
 	if drop() == http.StatusServiceUnavailable {
 		t.Fatal("block-tools should still allow drops")
 	}
-	r, _ := http.Post(srv.URL+"/api/accept", "application/json", strings.NewReader(`{"file":"wk.summary.json","index":0}`))
+	r := mustPost(t, srv.URL+"/api/accept", "application/json", strings.NewReader(`{"file":"wk.summary.json","index":0}`))
 	r.Body.Close()
 	if r.StatusCode != http.StatusServiceUnavailable {
 		t.Fatalf("block-tools accept should be 503, got %d", r.StatusCode)
@@ -374,7 +375,7 @@ func TestAskSearchesCorpus(t *testing.T) {
 	}).Handler())
 	defer srv.Close()
 
-	resp, _ := http.Get(srv.URL + "/api/ask?q=nurse")
+	resp := mustGet(t, srv.URL+"/api/ask?q=nurse")
 	defer resp.Body.Close()
 	var out struct {
 		Hits []domain.SearchHit `json:"hits"`
@@ -433,7 +434,7 @@ func TestIncidentsAPI(t *testing.T) {
 
 	srv := httptest.NewServer((&server.Server{AuditPath: path}).Handler())
 	defer srv.Close()
-	resp, _ := http.Get(srv.URL + "/api/incidents")
+	resp := mustGet(t, srv.URL+"/api/incidents")
 	defer resp.Body.Close()
 	var out struct {
 		Traces []struct {
@@ -445,4 +446,24 @@ func TestIncidentsAPI(t *testing.T) {
 	if len(out.Traces) != 1 || out.Traces[0].N != 2 {
 		t.Fatalf("expected one 2-event incident, got %+v", out.Traces)
 	}
+}
+
+// mustGet / mustPost do the request and fail the test on a transport error, so
+// callers can defer-close the body without a vet "used before error check".
+func mustGet(t *testing.T, url string) *http.Response {
+	t.Helper()
+	resp, err := http.Get(url)
+	if err != nil {
+		t.Fatalf("GET %s: %v", url, err)
+	}
+	return resp
+}
+
+func mustPost(t *testing.T, url, contentType string, body io.Reader) *http.Response {
+	t.Helper()
+	resp, err := http.Post(url, contentType, body)
+	if err != nil {
+		t.Fatalf("POST %s: %v", url, err)
+	}
+	return resp
 }

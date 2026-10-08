@@ -543,6 +543,9 @@ func main() {
 			ProfileLoad: profileLoad, ProfileSave: profileSave,
 		}).Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      120 * time.Second, // live eval/chat can be slow
+		IdleTimeout:       120 * time.Second,
 	}
 	go func() { <-ctx.Done(); srv.Close() }()
 
