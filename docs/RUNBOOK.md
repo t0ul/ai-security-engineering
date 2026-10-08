@@ -72,26 +72,45 @@ vz needs a codesigned binary with the virtualization entitlement, so build + sig
 (not `go run`):
 
 ```bash
+# rebuild the guest daemon first — a bare launchvm does NOT, and a stale baked
+# detonationd silently drops the hardened no-shell argv path (arg-injection/ASI05).
+GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o set-up/vm-assets/detonationd ./cmd/detonationd
 go build -o launchvm ./cmd/launchvm
 codesign --entitlements set-up/entitlements.plist -s - --force launchvm
-./launchvm
+./launchvm                                   # bridge defaults to 127.0.0.1:5000
+# macOS AirPlay Receiver squats on :5000. If the bridge logs "address already in
+# use", either turn AirPlay Receiver off (System Settings → General → AirDrop &
+# Handoff) or move the bridge and tell the app to match:
+#   ./launchvm -bridge 127.0.0.1:5050   +   cmd/webapp -microvm http://127.0.0.1:5050
 ```
-Watch for `vsock bridge up: 127.0.0.1:5000 -> guest vsock:5000` and, in the guest
+Watch for `vsock bridge up: 127.0.0.1:<port> -> guest vsock:5000` and, in the guest
 console, `detonationd started`.
 
 **Assets are already staged** (`set-up/vm-assets/`: `Image`, `alpine-root`,
 `initramfs*`, `sandbox_init.sh`, a static `detonationd`, `vmfetch`, both GGUFs), so
-no `prepareassets` download is needed; and the host chain is verified to build and
-the guest `detonationd` to cross-compile to a static arm64 ELF.
+no `prepareassets` download is needed. Still rebuild the guest `detonationd` (one
+line above) whenever `cmd/detonationd` or `sandbox/` changed — the baked binary is
+a gitignored artifact and can lag the source, and nothing fails loudly when it does:
+the legacy `command` path keeps working while `argv` quietly returns "no command
+provided".
 
-**Verify the chamber (acceptance checks once booted):**
-1. **Isolation works** — an allow-listed `sandbox_exec` of `uname -a && whoami`
-   returns output from *inside* the VM (via `controlplane.Interpreter` → vsock:5000),
-   not the host.
-2. **Non-root** — that `whoami` is not `root` (the guest drops privileges).
-3. **Egress dead** — a direct `web_fetch` from the guest to a non-allow-listed host
-   fails (no NIC); only a `vmfetch` through the host broker (netpolicy chokepoint)
-   to an allow-listed host succeeds.
+**Verify the chamber (acceptance checks once booted).** The daemon speaks HTTP/1.1
+over the bridge (any path; JSON body in, `{"output","trace_id"}` out), so you can
+probe it directly without the app — the hardened `argv` form must return output,
+not "no command provided":
+```bash
+curl -s -X POST http://127.0.0.1:5050/ \
+  -d '{"argv":["sh","-c","uname -a; whoami; ip addr 2>&1 | head -3"],"trace_id":"verify"}'
+```
+1. **Isolation works** — that probe (or an allow-listed `sandbox_exec` of
+   `uname -a && whoami` via `controlplane.Interpreter` → vsock:5000) returns output
+   from *inside* the VM (`Linux localhost … aarch64`), not the host.
+2. **Non-root** — that `whoami` is `sandbox` (uid 1000), not `root` (the guest drops
+   privileges).
+3. **Egress dead** — the probe's `ip addr` shows only `lo` (no `eth0`, no route);
+   a direct `web_fetch` from the guest to a non-allow-listed host fails (no NIC);
+   only a `vmfetch` through the host broker (netpolicy chokepoint) to an allow-listed
+   host succeeds.
 4. **Ephemeral** — state does not persist across a reboot (Alpine in RAM).
 5. `ForbiddenSignatures` / argv-allowlist still refuse a destructive command
    (`AllowlistBypass` holds live, not just in the offline scorecard).
@@ -114,6 +133,8 @@ GATEWAY_URL=http://127.0.0.1:4000/v1/chat/completions \
 MICROVM_URL=http://127.0.0.1:5000 \
 go run ./cmd/controlplane
 ```
+`MICROVM_URL` must match the `launchvm -bridge` address — use
+`http://127.0.0.1:5050` if you moved the bridge off AirPlay's :5000.
 Approve the plan at the `Approve plan? (y/N)` prompt; confirm the final output has
 the image URL stripped and `chain_ok=true`.
 
