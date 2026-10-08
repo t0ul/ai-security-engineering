@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/t0ul/ai-security-engineering/internal/modelcatalog"
+	"github.com/t0ul/ai-security-engineering/internal/modelstack"
 	"github.com/t0ul/ai-security-engineering/pkg/agent/extractor"
 	"github.com/t0ul/ai-security-engineering/pkg/agent/pipeline"
 	"github.com/t0ul/ai-security-engineering/pkg/agent/roster"
@@ -57,6 +58,7 @@ func main() {
 	gwFlag := flag.String("gateway", envOr("GATEWAY_URL", "http://127.0.0.1:4000/v1/chat/completions"), "gouncer gateway chat-completions URL (the single source for the chat + health-check endpoint)")
 	assetsDir := flag.String("assets", envOr("WEBAPP_ASSETS", "set-up/vm-assets"), "directory holding the served GGUF models (for the Runtime health panel)")
 	seedDir := flag.String("seed", envOr("WEBAPP_SEED", "examples"), "dir of example emails to ingest into the inbox on first run (empty to disable)")
+	autoModels := flag.Bool("automodels", envOr("WEBAPP_AUTOMODELS", "true") != "false", "automatically bring the local models up on startup (planner/coder + gateway) so chat & extraction work out of the box")
 	flag.Parse()
 
 	// Single source for the gateway endpoint (was two hardcoded literals). The chat
@@ -420,10 +422,42 @@ func main() {
 			log.Printf("webapp: seed model catalog: %v", err)
 		}
 		modelCatalogSvc = inv // *datastore.Store satisfies server.ModelCatalogLister
-		// First-run convenience: ingest the example emails so a fresh drop isn't empty
-		// and the operator doesn't re-drag emails every boot. Processed .ics persist in
-		// the outbox; the marker makes this exactly-once per drop.
-		seedEmails(inv, cfg.Inbox, cfg.Outbox, *seedDir)
+		// Bring the local models up automatically on startup (planner/coder + gateway),
+		// so chat & extraction work out of the box — then seed the example emails so they
+		// are extracted via the LLM (clean) rather than the regex fallback (noisy). The
+		// model load runs in the background so the UI comes up immediately; emails seed
+		// once the gateway is ready. -automodels=false (or WEBAPP_AUTOMODELS=false) skips
+		// the auto-start and seeds with offline extraction.
+		modelCatalog, _ := inv.ListModelCatalog()
+		startModelsAndSeed := func() {
+			if gatewayReachable(dial) {
+				os.Setenv("EXTRACT_MODE", "llm")
+				log.Printf("webapp: gateway already up on %s — extracting via the LLM", dial)
+				seedEmails(inv, cfg.Inbox, cfg.Outbox, *seedDir)
+				return
+			}
+			if ok, reason := modelstack.Available(*assetsDir, modelCatalog); !ok {
+				log.Printf("webapp: models not auto-started (%s) — using offline extraction", reason)
+				seedEmails(inv, cfg.Inbox, cfg.Outbox, *seedDir)
+				return
+			}
+			log.Printf("webapp: bringing up local models in the background (first load is slow)…")
+			stack, err := modelstack.Start(ctx, *assetsDir, dial, modelCatalog, 180*time.Second)
+			if err != nil {
+				log.Printf("webapp: model auto-start failed (%v) — using offline extraction", err)
+				seedEmails(inv, cfg.Inbox, cfg.Outbox, *seedDir)
+				return
+			}
+			go func() { <-ctx.Done(); stack.Close() }()
+			os.Setenv("EXTRACT_MODE", "llm") // LLM-only extraction (no noisy regex fallback)
+			log.Printf("webapp: models up on %s — seeding + extracting emails via the LLM", dial)
+			seedEmails(inv, cfg.Inbox, cfg.Outbox, *seedDir)
+		}
+		if *autoModels {
+			go startModelsAndSeed()
+		} else {
+			seedEmails(inv, cfg.Inbox, cfg.Outbox, *seedDir)
+		}
 		for _, n := range []string{"api", "gateway"} {
 			if cfgJSON, ok, _ := inv.LatestBudget(n); ok {
 				var cfg controlplane.BudgetConfig

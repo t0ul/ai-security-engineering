@@ -2,13 +2,26 @@ package main
 
 import (
 	"log"
+	"net"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/t0ul/ai-security-engineering/pkg/datastore"
 )
+
+// gatewayReachable reports whether a model gateway is already listening at addr
+// (host:port), so the webapp can reuse it instead of starting its own.
+func gatewayReachable(addr string) bool {
+	c, err := net.DialTimeout("tcp", addr, 300*time.Millisecond)
+	if err != nil {
+		return false
+	}
+	_ = c.Close()
+	return true
+}
 
 // seedEmails ingests the example emails into the inbox on first run, so a fresh drop
 // folder isn't empty and the operator doesn't have to re-drag emails every boot. The
