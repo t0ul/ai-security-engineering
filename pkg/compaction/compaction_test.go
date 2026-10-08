@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/t0ul/ai-security-engineering/agent/guard"
-	"github.com/t0ul/ai-security-engineering/compaction"
+	"github.com/t0ul/ai-security-engineering/pkg/compaction"
 )
 
 // concat is a faithful stub summarizer: it includes every turn's text verbatim,

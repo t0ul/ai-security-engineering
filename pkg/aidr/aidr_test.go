@@ -4,8 +4,8 @@ import (
 	"testing"
 
 	"github.com/t0ul/ai-security-engineering/controlplane"
-	"github.com/t0ul/ai-security-engineering/ir"
 	"github.com/t0ul/ai-security-engineering/pkg/aidr"
+	"github.com/t0ul/ai-security-engineering/pkg/ir"
 )
 
 func TestPolicyBlockEscalatesToBlockTools(t *testing.T) {

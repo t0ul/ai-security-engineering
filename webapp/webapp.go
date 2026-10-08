@@ -17,7 +17,7 @@ import (
 	"time"
 
 	"github.com/t0ul/ai-security-engineering/controlplane"
-	"github.com/t0ul/ai-security-engineering/ir"
+	"github.com/t0ul/ai-security-engineering/pkg/ir"
 	"github.com/t0ul/ai-security-engineering/pkg/netpolicy"
 	"github.com/t0ul/ai-security-engineering/pkg/provenance"
 	"github.com/t0ul/ai-security-engineering/redteam"

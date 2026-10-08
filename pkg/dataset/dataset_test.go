@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/t0ul/ai-security-engineering/dataset"
+	"github.com/t0ul/ai-security-engineering/pkg/dataset"
 	"github.com/t0ul/ai-security-engineering/pkg/provenance"
 )
 

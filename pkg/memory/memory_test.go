@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/t0ul/ai-security-engineering/memory"
+	"github.com/t0ul/ai-security-engineering/pkg/memory"
 )
 
 func TestScopeIsolation(t *testing.T) {

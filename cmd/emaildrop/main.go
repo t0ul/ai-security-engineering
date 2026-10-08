@@ -27,7 +27,7 @@ import (
 	"github.com/t0ul/ai-security-engineering/agent/roster"
 	"github.com/t0ul/ai-security-engineering/agent/tool"
 	"github.com/t0ul/ai-security-engineering/agent/watcher"
-	"github.com/t0ul/ai-security-engineering/rag"
+	"github.com/t0ul/ai-security-engineering/pkg/rag"
 	"github.com/t0ul/gledger"
 )
 
