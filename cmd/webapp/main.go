@@ -56,6 +56,7 @@ func main() {
 	vmURL := flag.String("microvm", envOr("MICROVM_URL", "http://127.0.0.1:5000"), "MicroVM vsock bridge for in-sandbox fetches")
 	gwFlag := flag.String("gateway", envOr("GATEWAY_URL", "http://127.0.0.1:4000/v1/chat/completions"), "gouncer gateway chat-completions URL (the single source for the chat + health-check endpoint)")
 	assetsDir := flag.String("assets", envOr("WEBAPP_ASSETS", "set-up/vm-assets"), "directory holding the served GGUF models (for the Runtime health panel)")
+	seedDir := flag.String("seed", envOr("WEBAPP_SEED", "examples"), "dir of example emails to ingest into the inbox on first run (empty to disable)")
 	flag.Parse()
 
 	// Single source for the gateway endpoint (was two hardcoded literals). The chat
@@ -419,6 +420,10 @@ func main() {
 			log.Printf("webapp: seed model catalog: %v", err)
 		}
 		modelCatalogSvc = inv // *datastore.Store satisfies server.ModelCatalogLister
+		// First-run convenience: ingest the example emails so a fresh drop isn't empty
+		// and the operator doesn't re-drag emails every boot. Processed .ics persist in
+		// the outbox; the marker makes this exactly-once per drop.
+		seedEmails(inv, cfg.Inbox, cfg.Outbox, *seedDir)
 		for _, n := range []string{"api", "gateway"} {
 			if cfgJSON, ok, _ := inv.LatestBudget(n); ok {
 				var cfg controlplane.BudgetConfig
