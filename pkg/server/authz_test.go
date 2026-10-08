@@ -1,8 +1,11 @@
 package server
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -10,91 +13,93 @@ import (
 	"github.com/t0ul/ai-security-engineering/pkg/provenance"
 )
 
-// authzFixture returns a Server with authZ enabled plus a freshly minted
-// operator token (base64url Grant) scoped broadly.
-func authzFixture(t *testing.T) (*Server, string, *controlplane.Authority) {
+func bearer(t *testing.T, g controlplane.Grant) string {
 	t.Helper()
-	signer, pub, err := provenance.NewSigner("agent")
+	b, err := json.Marshal(g)
 	if err != nil {
-		t.Fatalf("signer: %v", err)
+		t.Fatal(err)
 	}
-	authority := controlplane.NewAuthority(signer, provenance.NewVerifier().Trust("agent", pub))
-	g, err := authority.Issue(controlplane.Capability{Subject: "operator", Action: controlplane.Scope, Resource: controlplane.Scope, Tenant: controlplane.Scope}, time.Hour)
+	return "Bearer " + base64.URLEncoding.EncodeToString(b)
+}
+
+// TestEndpointAuthzLeastPrivilege locks the Pass-2 security fix that the suite had
+// missed: operator reads AND the kill switch require the operator grant; the narrow App
+// grant (list/corpus + consumer writes, nothing operator/safety) and an anonymous caller
+// are refused; consumer reads still work for the App grant; and the kill switch is
+// break-glass — an operator can DISENGAGE a halt even though Halt revoked every grant.
+// Real Authority + real signed grants + a real httptest Server — no mocks.
+func TestEndpointAuthzLeastPrivilege(t *testing.T) {
+	signer, pub, err := provenance.NewSigner("op")
 	if err != nil {
-		t.Fatalf("issue: %v", err)
+		t.Fatal(err)
 	}
-	return &Server{Authz: authority}, EncodeToken(g), authority
-}
-
-// gate wraps a trivial 200 handler so we test the capability check in isolation,
-// independent of any real endpoint's downstream behavior.
-func gate(s *Server, action, resource string) http.HandlerFunc {
-	return s.authz(action, resource, func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
-}
-
-func call(h http.HandlerFunc, token string) int {
-	r := httptest.NewRequest(http.MethodPost, "/api/accept", nil)
-	if token != "" {
-		r.Header.Set("Authorization", "Bearer "+token)
+	authz := controlplane.NewAuthority(signer, provenance.NewVerifier().Trust("op", pub))
+	opGrant, err := authz.Issue(controlplane.Capability{Subject: controlplane.Scope, Action: controlplane.Scope, Resource: controlplane.Scope, Tenant: "public"}, time.Hour)
+	if err != nil {
+		t.Fatal(err)
 	}
-	w := httptest.NewRecorder()
-	h(w, r)
-	return w.Code
-}
-
-func TestAuthzNilIsNoOp(t *testing.T) {
-	s := &Server{} // Authz unset = household mode
-	if code := call(gate(s, controlplane.ActionWrite, "calendar"), ""); code != http.StatusOK {
-		t.Fatalf("no-op gate should pass without a token, got %d", code)
+	appGrant, err := authz.IssueScoped(
+		controlplane.Capability{Subject: "app", Action: controlplane.ActionList, Resource: "corpus", Tenant: "public"},
+		[]controlplane.GrantScope{{Action: controlplane.ActionWrite, Resource: "calendar"}, {Action: controlplane.ActionWrite, Resource: "profile"}},
+		time.Hour)
+	if err != nil {
+		t.Fatal(err)
 	}
-}
+	opTok, appTok := bearer(t, opGrant), bearer(t, appGrant)
 
-func TestAuthzMissingToken(t *testing.T) {
-	s, _, _ := authzFixture(t)
-	if code := call(gate(s, controlplane.ActionWrite, "calendar"), ""); code != http.StatusUnauthorized {
-		t.Fatalf("missing token should be 401, got %d", code)
-	}
-}
+	safety := controlplane.NewSafety(nil)
+	srv := httptest.NewServer(New(Config{
+		Authz:     authz,
+		Safety:    safety,
+		Prompts:   controlplane.NewPrompts(map[string]string{"chat_system": "x"}), // registers /api/prompts (operator read)
+		OutboxDir: t.TempDir(),                                                     // registers /api/events (consumer read)
+	}).Handler())
+	defer srv.Close()
 
-func TestAuthzValidOperatorToken(t *testing.T) {
-	s, tok, _ := authzFixture(t)
-	// The broad operator grant covers write/calendar, export/link, and list/corpus.
-	for _, sc := range []struct{ action, resource string }{
-		{controlplane.ActionWrite, "calendar"},
-		{controlplane.ActionExport, "link"},
-		{controlplane.ActionList, "corpus"},
-	} {
-		if code := call(gate(s, sc.action, sc.resource), tok); code != http.StatusOK {
-			t.Fatalf("operator token should pass %s/%s, got %d", sc.action, sc.resource, code)
+	do := func(method, path, tok, body string) int {
+		req, _ := http.NewRequest(method, srv.URL+path, strings.NewReader(body))
+		if tok != "" {
+			req.Header.Set("Authorization", tok)
 		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		return resp.StatusCode
 	}
-}
 
-func TestAuthzOverScopedTokenRefused(t *testing.T) {
-	s, _, authority := authzFixture(t)
-	// A grant scoped only to read the calendar must not drive a write or an export.
-	g, _ := authority.Issue(controlplane.Capability{Subject: "viewer", Action: controlplane.ActionRead, Resource: "calendar", Tenant: "public"}, time.Hour)
-	tok := EncodeToken(g)
-	if code := call(gate(s, controlplane.ActionWrite, "calendar"), tok); code != http.StatusForbidden {
-		t.Fatalf("read grant must not authorize a write, got %d", code)
+	// Operator read: operator OK, App forbidden, anonymous unauthorized.
+	if c := do("GET", "/api/prompts", opTok, ""); c != http.StatusOK {
+		t.Errorf("operator /api/prompts: got %d, want 200", c)
 	}
-	if code := call(gate(s, controlplane.ActionExport, "link"), tok); code != http.StatusForbidden {
-		t.Fatalf("read-calendar grant must not authorize link export, got %d", code)
+	if c := do("GET", "/api/prompts", appTok, ""); c != http.StatusForbidden {
+		t.Errorf("App token must NOT read operator state: /api/prompts got %d, want 403", c)
 	}
-}
+	if c := do("GET", "/api/prompts", "", ""); c != http.StatusUnauthorized {
+		t.Errorf("anonymous /api/prompts: got %d, want 401", c)
+	}
 
-// TestAuthzHaltRevokesInFlight is the kill-switch-as-revocation invariant at the
-// HTTP layer: a valid operator token stops authorizing the instant Halt engages.
-func TestAuthzHaltRevokesInFlight(t *testing.T) {
-	s, tok, authority := authzFixture(t)
-	halted := false
-	authority.Halted = func() bool { return halted }
-	h := gate(s, controlplane.ActionWrite, "calendar")
-	if code := call(h, tok); code != http.StatusOK {
-		t.Fatalf("token should pass before halt, got %d", code)
+	// Consumer read: the App grant can read the household calendar.
+	if c := do("GET", "/api/events", appTok, ""); c != http.StatusOK {
+		t.Errorf("App token should read /api/events: got %d, want 200", c)
 	}
-	halted = true
-	if code := call(h, tok); code != http.StatusForbidden {
-		t.Fatalf("halt must revoke the in-flight token, got %d", code)
+
+	// Kill switch: operator can engage; App token cannot.
+	if c := do("POST", "/api/killswitch", opTok, `{"level":3}`); c != http.StatusOK {
+		t.Errorf("operator killswitch engage: got %d, want 200", c)
+	}
+	if c := do("POST", "/api/killswitch", appTok, `{"level":3}`); c != http.StatusForbidden {
+		t.Errorf("App token must NOT toggle the kill switch: got %d, want 403", c)
+	}
+
+	// Break-glass: with Halt engaged (which revokes every grant), the operator can STILL
+	// disengage via the kill switch — a normal gate would deadlock here.
+	authz.Halted = func() bool { return safety.Level() >= controlplane.LevelHalt }
+	if _, err := authz.Verify(opGrant, controlplane.Capability{Action: controlplane.ActionWrite, Resource: "safety", Tenant: "public"}); err == nil {
+		t.Fatal("precondition: normal Verify should refuse during Halt (revoked)")
+	}
+	if c := do("POST", "/api/killswitch", opTok, `{"level":0}`); c != http.StatusOK {
+		t.Errorf("operator disengage during Halt (break-glass): got %d, want 200", c)
 	}
 }

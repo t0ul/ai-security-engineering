@@ -331,18 +331,25 @@ func (s *Server) verifySig(name string, content []byte) bool {
 // Handler returns the app routes.
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/scorecard", s.scorecard)
-	mux.HandleFunc("/api/incidents", s.incidents)
-	mux.HandleFunc("/api/incident", s.incident)
-	mux.HandleFunc("/api/events", s.events)
-	mux.HandleFunc("/api/items", s.items)
-	mux.HandleFunc("/api/summary", s.summary)
-	mux.HandleFunc("/api/review", s.review)
-	mux.HandleFunc("/api/activity", s.activity)
-	mux.HandleFunc("/api/safety", s.safetyState)
-	// The kill switch is deliberately OUTSIDE the capability gate: engaging Halt
-	// revokes every grant, so a gated killswitch could never be disengaged.
-	mux.HandleFunc("POST /api/killswitch", csrf(s.killswitch))
+	// Reads are capability-gated in two tiers so the App token (list/corpus) can read
+	// the HOUSEHOLD views it needs but NOT operator/governance state or its PII, and a
+	// foreign/no token reads nothing. Operator reads require list/"operator", which only
+	// the operator (wildcard) grant covers. (Household mode = Authz nil = all no-ops.)
+	op := func(h http.HandlerFunc) http.HandlerFunc { return s.authz(controlplane.ActionList, "operator", h) }
+	consumer := func(h http.HandlerFunc) http.HandlerFunc { return s.authz(controlplane.ActionList, "corpus", h) }
+	mux.HandleFunc("/api/scorecard", op(s.scorecard))
+	mux.HandleFunc("/api/incidents", op(s.incidents))
+	mux.HandleFunc("/api/incident", op(s.incident))
+	mux.HandleFunc("/api/activity", op(s.activity))
+	mux.HandleFunc("/api/safety", op(s.safetyState))
+	mux.HandleFunc("/api/events", consumer(s.events))
+	mux.HandleFunc("/api/items", consumer(s.items))
+	mux.HandleFunc("/api/summary", consumer(s.summary))
+	mux.HandleFunc("/api/review", consumer(s.review))
+	// The kill switch is break-glass gated (authzGlass): scope is enforced (the App
+	// token cannot toggle it), but the Halt/revocation and rate checks are bypassed so
+	// an operator can always DISENGAGE a halt that revoked every grant.
+	mux.HandleFunc("POST /api/killswitch", csrf(s.authzGlass(controlplane.ActionWrite, "safety", s.killswitch)))
 	// Ask lists the retrieval corpus — ActionList, the data-residency-sensitive
 	// endpoint (a frontier reader must not harvest it).
 	mux.HandleFunc("/api/ask", s.authz(controlplane.ActionList, "corpus", s.ask))
@@ -355,77 +362,77 @@ func (s *Server) Handler() http.Handler {
 		mux.HandleFunc("POST /api/chat/clear", csrf(s.authz(controlplane.ActionList, "corpus", s.chatClear)))
 	}
 	if s.MCP != nil {
-		mux.HandleFunc("/api/mcp", s.mcpList)
+		mux.HandleFunc("/api/mcp", op(s.mcpList))
 		mux.HandleFunc("POST /api/mcp/approve", csrf(s.authz(controlplane.ActionWrite, "mcp", s.mcpApprove)))
 	}
 	if s.Prompts != nil {
-		mux.HandleFunc("/api/prompts", s.promptsList)
+		mux.HandleFunc("/api/prompts", op(s.promptsList))
 		mux.HandleFunc("POST /api/prompts/activate", csrf(s.authz(controlplane.ActionWrite, "prompts", s.promptsActivate)))
 		mux.HandleFunc("POST /api/prompts/reset", csrf(s.authz(controlplane.ActionWrite, "prompts", s.promptsReset)))
 	}
 	if s.Budgets != nil {
-		mux.HandleFunc("/api/budgets", s.budgetsList)
+		mux.HandleFunc("/api/budgets", op(s.budgetsList))
 		mux.HandleFunc("POST /api/budgets/activate", csrf(s.authz(controlplane.ActionWrite, "budget", s.budgetsActivate)))
 		mux.HandleFunc("POST /api/budgets/reset", csrf(s.authz(controlplane.ActionWrite, "budget", s.budgetsReset)))
 	}
 	if s.Sampling != nil {
-		mux.HandleFunc("/api/sampling", s.samplingList)
+		mux.HandleFunc("/api/sampling", op(s.samplingList))
 		mux.HandleFunc("POST /api/sampling/activate", csrf(s.authz(controlplane.ActionWrite, "sampling", s.samplingActivate)))
 		mux.HandleFunc("POST /api/sampling/reset", csrf(s.authz(controlplane.ActionWrite, "sampling", s.samplingReset)))
 	}
 	if s.Retrieval != nil {
-		mux.HandleFunc("/api/retrieval", s.retrievalList)
+		mux.HandleFunc("/api/retrieval", op(s.retrievalList))
 		mux.HandleFunc("POST /api/retrieval/activate", csrf(s.authz(controlplane.ActionWrite, "retrieval", s.retrievalActivate)))
 		mux.HandleFunc("POST /api/retrieval/reset", csrf(s.authz(controlplane.ActionWrite, "retrieval", s.retrievalReset)))
 	}
 	if s.Grammars != nil {
-		mux.HandleFunc("/api/grammar", s.grammarList)
+		mux.HandleFunc("/api/grammar", op(s.grammarList))
 		mux.HandleFunc("POST /api/grammar/activate", csrf(s.authz(controlplane.ActionWrite, "grammar", s.grammarActivate)))
 		mux.HandleFunc("POST /api/grammar/reset", csrf(s.authz(controlplane.ActionWrite, "grammar", s.grammarReset)))
 	}
 	if s.Models != nil {
-		mux.HandleFunc("/api/models", s.modelsList)
+		mux.HandleFunc("/api/models", op(s.modelsList))
 		mux.HandleFunc("POST /api/models/activate", csrf(s.authz(controlplane.ActionWrite, "model", s.modelsActivate)))
 		mux.HandleFunc("POST /api/models/reset", csrf(s.authz(controlplane.ActionWrite, "model", s.modelsReset)))
 	}
 	if s.ModelCatalog != nil {
-		mux.HandleFunc("/api/modelcatalog", s.modelCatalogList)
+		mux.HandleFunc("/api/modelcatalog", op(s.modelCatalogList))
 		mux.HandleFunc("POST /api/modelcatalog/upsert", csrf(s.authz(controlplane.ActionWrite, "model", s.modelCatalogUpsert)))
 		mux.HandleFunc("POST /api/modelcatalog/delete", csrf(s.authz(controlplane.ActionWrite, "model", s.modelCatalogDelete)))
-		mux.HandleFunc("/api/runtime", s.runtimeStatus)
+		mux.HandleFunc("/api/runtime", op(s.runtimeStatus))
 	}
 	if s.RAG != nil {
-		mux.HandleFunc("/api/rag", s.ragGet)
+		mux.HandleFunc("/api/rag", op(s.ragGet))
 		mux.HandleFunc("POST /api/rag/save", csrf(s.authz(controlplane.ActionWrite, "rag", s.ragSave)))
 		mux.HandleFunc("POST /api/rag/reindex", csrf(s.authz(controlplane.ActionWrite, "rag", s.ragReindex)))
 	}
 	if s.Skills != nil {
-		mux.HandleFunc("/api/skills", s.skillsList)
+		mux.HandleFunc("/api/skills", op(s.skillsList))
 		mux.HandleFunc("POST /api/skills/approve", csrf(s.authz(controlplane.ActionWrite, "skill", s.skillsApprove)))
 		mux.HandleFunc("POST /api/skills/reset", csrf(s.authz(controlplane.ActionWrite, "skill", s.skillsReset)))
 		mux.HandleFunc("POST /api/skills/load", csrf(s.authz(controlplane.ActionWrite, "skill", s.skillsLoad)))
 	}
 	if s.Policies != nil {
-		mux.HandleFunc("/api/policies", s.policiesList)
+		mux.HandleFunc("/api/policies", op(s.policiesList))
 		mux.HandleFunc("POST /api/policies/activate", csrf(s.authz(controlplane.ActionWrite, "policy", s.policiesActivate)))
 		mux.HandleFunc("POST /api/policies/reset", csrf(s.authz(controlplane.ActionWrite, "policy", s.policiesReset)))
 	}
 	if s.Flywheel != nil {
-		mux.HandleFunc("/api/flywheel", s.flywheel)
+		mux.HandleFunc("/api/flywheel", op(s.flywheel))
 	}
 	if s.Eval != nil {
-		mux.HandleFunc("/api/eval", s.evalList)
+		mux.HandleFunc("/api/eval", op(s.evalList))
 		mux.HandleFunc("POST /api/eval/run", csrf(s.authz(controlplane.ActionWrite, "eval", s.evalRunHandler)))
 		mux.HandleFunc("POST /api/prompts/test", csrf(s.authz(controlplane.ActionWrite, "prompts", s.promptsTest)))
 	}
 	if s.Bundles != nil {
-		mux.HandleFunc("/api/bundles", s.bundlesList)
+		mux.HandleFunc("/api/bundles", op(s.bundlesList))
 		mux.HandleFunc("POST /api/bundles/save", csrf(s.authz(controlplane.ActionWrite, "bundle", s.bundlesSave)))
 		mux.HandleFunc("POST /api/bundles/apply", csrf(s.authz(controlplane.ActionWrite, "bundle", s.bundlesApply)))
 	}
 	if s.Profile != nil {
-		mux.HandleFunc("/api/timeline", s.timeline)
-		mux.HandleFunc("/api/profile", s.profileGet)
+		mux.HandleFunc("/api/timeline", consumer(s.timeline))
+		mux.HandleFunc("/api/profile", consumer(s.profileGet))
 		mux.HandleFunc("POST /api/profile/save", csrf(s.authz(controlplane.ActionWrite, "profile", s.profileSave)))
 	}
 	if s.InboxPath != "" {
@@ -440,8 +447,8 @@ func (s *Server) Handler() http.Handler {
 		mux.HandleFunc("POST /api/enrich", csrf(s.authz(controlplane.ActionExport, "link", s.enrich))) // egress → corpus
 	}
 	if s.OutboxDir != "" {
-		mux.HandleFunc("/ics/", s.serveICS)           // .ics only — NOT the whole outbox (sidecars hold PII)
-		mux.HandleFunc("/api/directory", s.directory) // consolidated contacts (R5)
+		mux.HandleFunc("/ics/", consumer(s.serveICS))           // .ics only — NOT the whole outbox (sidecars hold PII)
+		mux.HandleFunc("/api/directory", consumer(s.directory)) // consolidated contacts (R5)
 	}
 	mux.Handle("/static/", staticHandler())
 	mux.HandleFunc("/studio", s.studio)
@@ -525,6 +532,31 @@ func (s *Server) authz(action, resource string, h http.HandlerFunc) http.Handler
 		if s.overBudget() { // governed per-minute API budget (C9)
 			s.denyAudit(action, resource, "rate budget exceeded")
 			http.Error(w, "rate budget exceeded", http.StatusTooManyRequests)
+			return
+		}
+		h(w, r)
+	}
+}
+
+// authzGlass gates the kill-switch endpoint: break-glass authz (VerifyGlass bypasses
+// the Halt/revocation check so the operator can DISENGAGE a halt that revoked every
+// grant), and no rate-budget gate (halting must always be reachable). Scope is still
+// enforced, so a narrow token (e.g. the App token) cannot toggle the switch.
+func (s *Server) authzGlass(action, resource string, h http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if s.Authz == nil {
+			h(w, r)
+			return
+		}
+		g, ok := bearerGrant(r)
+		if !ok {
+			s.denyAudit(action, resource, "missing capability")
+			http.Error(w, "missing capability", http.StatusUnauthorized)
+			return
+		}
+		if _, err := s.Authz.VerifyGlass(g, controlplane.Capability{Action: action, Resource: resource, Tenant: "public"}); err != nil {
+			s.denyAudit(action, resource, err.Error())
+			http.Error(w, "capability refused: "+err.Error(), http.StatusForbidden)
 			return
 		}
 		h(w, r)

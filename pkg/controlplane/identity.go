@@ -308,3 +308,29 @@ func (a *Authority) Verify(g Grant, want Capability) (Capability, error) {
 	}
 	return Capability{}, ErrGrantScope
 }
+
+// VerifyGlass is Verify WITHOUT the kill-switch (Halted) and per-subject revocation
+// checks — the break-glass path for the kill-switch endpoint itself. Engaging Halt
+// revokes every grant, so a normally-gated kill switch could never be DISENGAGED;
+// this lets the operator always reach it. It still enforces signature, subject,
+// expiry, and scope, so a narrow (e.g. App) token cannot toggle the switch.
+func (a *Authority) VerifyGlass(g Grant, want Capability) (Capability, error) {
+	if err := a.verifier.Verify(g.signedPayload(), g.Mark); err != nil {
+		return Capability{}, ErrGrantSignature
+	}
+	if !a.now().Before(g.Expires) {
+		return Capability{}, ErrGrantExpired
+	}
+	if want.Subject != "" && want.Subject != g.Subject {
+		return Capability{}, ErrGrantScope
+	}
+	if covers(g.Action, want.Action) && covers(g.Resource, want.Resource) && covers(g.Tenant, want.Tenant) {
+		return g.Capability, nil
+	}
+	for _, s := range g.Extra {
+		if covers(s.Action, want.Action) && covers(s.Resource, want.Resource) && covers(s.Tenant, want.Tenant) {
+			return Capability{Subject: g.Subject, Action: s.Action, Resource: s.Resource, Tenant: s.Tenant, Issued: g.Issued, Expires: g.Expires}, nil
+		}
+	}
+	return Capability{}, ErrGrantScope
+}
