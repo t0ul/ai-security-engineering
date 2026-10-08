@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS admin_audit(actor TEXT, action TEXT, detail TEXT, at 
 CREATE TABLE IF NOT EXISTS policies(name TEXT, version TEXT, hash TEXT, items TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS config(key TEXT PRIMARY KEY, value TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS sampling(name TEXT, version TEXT, hash TEXT, config TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS retrieval(name TEXT, version TEXT, hash TEXT, config TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS bundles(label TEXT, config TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS budgets(name TEXT, version TEXT, hash TEXT, config TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS feedback(source TEXT, title TEXT, decision TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);`
@@ -172,6 +173,26 @@ func (s *Store) RecordSampling(name, version, hash, config string) error {
 // so the resolver can rehydrate the active sampling on boot.
 func (s *Store) LatestSampling(name string) (config string, ok bool, err error) {
 	row := s.db.QueryRow(`SELECT config FROM sampling WHERE name=? ORDER BY at DESC, rowid DESC LIMIT 1`, name)
+	switch e := row.Scan(&config); e {
+	case nil:
+		return config, true, nil
+	case sql.ErrNoRows:
+		return "", false, nil
+	default:
+		return "", false, e
+	}
+}
+
+// RecordRetrieval persists a governed retrieval-config activation.
+func (s *Store) RecordRetrieval(name, version, hash, config string) error {
+	_, err := s.db.Exec(`INSERT INTO retrieval(name,version,hash,config) VALUES(?,?,?,?)`, name, version, hash, config)
+	return err
+}
+
+// LatestRetrieval returns the most recent persisted retrieval config JSON for
+// name, so the resolver can rehydrate the active retrieval on boot.
+func (s *Store) LatestRetrieval(name string) (config string, ok bool, err error) {
+	row := s.db.QueryRow(`SELECT config FROM retrieval WHERE name=? ORDER BY at DESC, rowid DESC LIMIT 1`, name)
 	switch e := row.Scan(&config); e {
 	case nil:
 		return config, true, nil

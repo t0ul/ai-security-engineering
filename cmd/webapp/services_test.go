@@ -112,3 +112,41 @@ func TestChatServiceDefendsRAGInjectionLive(t *testing.T) {
 		t.Errorf("UNSAFE path should expose the injection (so the control is proven), got: %s", raw)
 	}
 }
+
+// Governed retrieval k must actually drive the chat read path (not a hardcoded
+// literal). Two docs match the query; with the governed k=1 the chat returns at
+// most one source. Real corpus, real plane, real service — no mocks.
+func TestChatServiceUsesGovernedK(t *testing.T) {
+	store, err := rag.Open(filepath.Join(t.TempDir(), "corpus.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { store.Close() })
+	for _, id := range []string{"a.txt", "b.txt"} {
+		if err := store.Add(rag.Doc{ID: id, Text: "October book fair in the gym.", Prov: rag.Untrusted}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	authz := liveAuthority(t)
+	grant, _ := authz.Issue(controlplane.Capability{Subject: "rag-reader", Action: controlplane.ActionList, Resource: "corpus", Tenant: "public"}, time.Hour)
+	ret := controlplane.NewRetrieval(map[string]controlplane.RetrievalConfig{"public": {K: 1}})
+	cs := &chatService{
+		reader: store, grant: grant, authz: authz,
+		gw:        gateway.New("http://127.0.0.1:1/x", "127.0.0.1:1"),
+		prompts:   controlplane.NewPrompts(map[string]string{"chat_system": "sys"}),
+		retrieval: ret,
+	}
+	_, sources, err := cs.Answer("what is on in October", false, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sources) != 1 {
+		t.Fatalf("governed k=1 should cap retrieval at 1 source, got %d: %v", len(sources), sources)
+	}
+	// Rollback to k=2 via the plane → both docs retrievable.
+	ret.Activate("public", controlplane.RetrievalConfig{K: 2})
+	_, sources2, _ := cs.Answer("what is on in October", false, "")
+	if len(sources2) != 2 {
+		t.Fatalf("governed k=2 should return 2 sources, got %d: %v", len(sources2), sources2)
+	}
+}

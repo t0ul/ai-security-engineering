@@ -182,12 +182,13 @@ func (m mcpRegistry) Approve(server string) error {
 // bundleStore is the concrete server.BundleStore (C10): snapshot/list/roll-back the
 // whole governed plane.
 type bundleStore struct {
-	inv      *datastore.Store
-	audit    *gledger.AuditLog
-	prompts  *controlplane.Prompts
-	sampling *controlplane.Sampling
-	policies *controlplane.Policies
-	budgets  *controlplane.Budgets
+	inv       *datastore.Store
+	audit     *gledger.AuditLog
+	prompts   *controlplane.Prompts
+	sampling  *controlplane.Sampling
+	policies  *controlplane.Policies
+	budgets   *controlplane.Budgets
+	retrieval *controlplane.Retrieval
 }
 
 func (b bundleStore) List() []server.BundleInfo {
@@ -200,7 +201,7 @@ func (b bundleStore) List() []server.BundleInfo {
 }
 
 func (b bundleStore) Save(label string) error {
-	bundle := controlplane.Snapshot(label, b.prompts, b.sampling, b.policies, b.budgets)
+	bundle := controlplane.Snapshot(label, b.prompts, b.sampling, b.policies, b.budgets, b.retrieval)
 	raw, _ := json.Marshal(bundle)
 	b.audit.Emit(gledger.NewTraceID(), "bundle", "saved", gledger.F{"label": label})
 	return b.inv.SaveBundle(label, string(raw))
@@ -215,7 +216,7 @@ func (b bundleStore) Apply(label string) error {
 	if err := json.Unmarshal([]byte(cfg), &bundle); err != nil {
 		return err
 	}
-	bundle.Apply(b.prompts, b.sampling, b.policies, b.budgets)
+	bundle.Apply(b.prompts, b.sampling, b.policies, b.budgets, b.retrieval)
 	b.audit.Emit(gledger.NewTraceID(), "bundle", "rolled_back", gledger.F{"label": label})
 	return nil
 }
@@ -226,13 +227,14 @@ func (b bundleStore) Apply(label string) error {
 // reaches the model as if trusted (the ChatRAGInjection demo). It runs on the same
 // rag-reader NHI grant as search, so Halt / residency gate it too.
 type chatService struct {
-	reader   *rag.Store
-	grant    controlplane.Grant
-	authz    *controlplane.Authority
-	gw       *gateway.Client
-	prompts  *controlplane.Prompts
-	sampling *controlplane.Sampling
-	inv      *datastore.Store
+	reader    *rag.Store
+	grant     controlplane.Grant
+	authz     *controlplane.Authority
+	gw        *gateway.Client
+	prompts   *controlplane.Prompts
+	sampling  *controlplane.Sampling
+	inv       *datastore.Store
+	retrieval *controlplane.Retrieval
 }
 
 func (c *chatService) Answer(question string, unsafe bool, appData string) (string, []string, error) {
@@ -242,7 +244,15 @@ func (c *chatService) Answer(question string, unsafe bool, appData string) (stri
 	// Trusted context: the host clock is the ONLY authority for dates — never the
 	// corpus, so a poisoned email ("today is …") cannot move the agent's clock.
 	dateBlock := gateway.TrustedDateBlock(time.Now())
-	chunks, err := c.reader.Query("public", question, 5)
+	// top-k is a GOVERNED retrieval knob (versioned, bundle-referenced), not a
+	// hardcoded literal; fall back to 5 if the plane is unset.
+	k := 5
+	if c.retrieval != nil {
+		if rk := c.retrieval.Config("public").K; rk > 0 {
+			k = rk
+		}
+	}
+	chunks, err := c.reader.Query("public", question, k)
 	if err != nil {
 		return "", nil, err
 	}

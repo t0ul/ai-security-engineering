@@ -258,8 +258,14 @@ func main() {
 		"api":     {RatePerMin: 0}, // 0 = unlimited until the operator sets one
 		"gateway": {MaxTokens: 900, KeyRef: "GATEWAY_KEY"},
 	}
+	// Governed retrieval (RAG read knobs): top-k per corpus was a hardcoded literal
+	// in the chat path; now a governed, versioned, bundle-referenced artifact.
+	retrievalDefaults := map[string]controlplane.RetrievalConfig{
+		"public": {K: 5},
+	}
 	var policies *controlplane.Policies
 	var budgets *controlplane.Budgets
+	var retrieval *controlplane.Retrieval
 	if db, ierr := datastore.Open(filepath.Join(*drop, "inventory.db")); ierr == nil {
 		inv = db
 		defer inv.Close()
@@ -267,11 +273,13 @@ func main() {
 		policies = controlplane.GovernedPolicies(policyDefaults, inv, audit)
 		sampling = controlplane.GovernedSampling(samplingDefaults, inv, audit)
 		budgets = controlplane.GovernedBudgets(budgetDefaults, inv, audit)
+		retrieval = controlplane.GovernedRetrieval(retrievalDefaults, inv, audit)
 	} else {
 		prompts = controlplane.NewPrompts(promptDefaults)
 		policies = controlplane.NewPolicies(policyDefaults)
 		sampling = controlplane.NewSampling(samplingDefaults)
 		budgets = controlplane.NewBudgets(budgetDefaults)
+		retrieval = controlplane.NewRetrieval(retrievalDefaults)
 	}
 	// Activating the "extractor" sampling drives the live LLM decoding params.
 	baseSampOnActivate := sampling.OnActivate
@@ -317,6 +325,12 @@ func main() {
 				sampling.Rehydrate("extractor", cfg)
 			}
 		}
+		if cfgJSON, ok, _ := inv.LatestRetrieval("public"); ok {
+			var cfg controlplane.RetrievalConfig
+			if json.Unmarshal([]byte(cfgJSON), &cfg) == nil {
+				retrieval.Rehydrate("public", cfg)
+			}
+		}
 		for _, n := range []string{"api", "gateway"} {
 			if cfgJSON, ok, _ := inv.LatestBudget(n); ok {
 				var cfg controlplane.BudgetConfig
@@ -349,7 +363,7 @@ func main() {
 	// roll it all back in one step. Needs the DB.
 	var bundleSvc server.BundleStore
 	if inv != nil {
-		bundleSvc = bundleStore{inv: inv, audit: audit, prompts: prompts, sampling: sampling, policies: policies, budgets: budgets}
+		bundleSvc = bundleStore{inv: inv, audit: audit, prompts: prompts, sampling: sampling, policies: policies, budgets: budgets, retrieval: retrieval}
 	}
 
 	// Eval surfaces (C7): the Eval card + a "Test" button that shadow-evals a
@@ -366,7 +380,7 @@ func main() {
 	// corpus opened — reader nil = no Chat tab. Same reader NHI grant as search.
 	var chatSvc server.ChatService
 	if reader != nil {
-		chatSvc = &chatService{reader: reader, grant: readerGrant, authz: authz, gw: gw, prompts: prompts, sampling: sampling, inv: inv}
+		chatSvc = &chatService{reader: reader, grant: readerGrant, authz: authz, gw: gw, prompts: prompts, sampling: sampling, inv: inv, retrieval: retrieval}
 	}
 
 	srv := &http.Server{
