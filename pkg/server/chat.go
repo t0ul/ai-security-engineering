@@ -27,7 +27,7 @@ func (s *Server) chat(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "question required", http.StatusBadRequest)
 		return
 	}
-	answer, sources, err := s.Chat(req.Question, req.Unsafe, s.weekScheduleBlock(time.Now()))
+	answer, sources, err := s.Chat.Answer(req.Question, req.Unsafe, s.weekScheduleBlock(time.Now()))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

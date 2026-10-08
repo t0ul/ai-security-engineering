@@ -110,8 +110,9 @@ func main() {
 	var prompts *controlplane.Prompts
 	var sampling *controlplane.Sampling
 	var inv *datastore.Store
+	var reader *rag.Store              // RAG read handle; nil if the corpus failed to open
+	var readerGrant controlplane.Grant // the rag-reader NHI grant (C4e)
 	var search func(string, int) ([]domain.SearchHit, error)
-	var chat func(string, bool, string) (string, []string, error)
 	var enrichIndex func(source, text string) error
 	if corpus, cerr := rag.Open(corpusPath); cerr == nil {
 		defer corpus.Close()
@@ -129,7 +130,7 @@ func main() {
 		// can query but the engine refuses any write, so a bug or injection on the
 		// read path cannot mutate or poison the corpus. Falls back to the writable
 		// handle only if the read-only open fails.
-		reader := corpus
+		reader = corpus
 		if ro, rerr := rag.OpenReadOnly(corpusPath); rerr == nil {
 			defer ro.Close()
 			reader = ro
@@ -138,7 +139,7 @@ func main() {
 		// list/corpus, minted through the residency policy. Verifying it per query
 		// means Halt revokes retrieval too, and a frontier-bound reader would be
 		// refused at issuance (fail-closed: no grant -> no search).
-		readerGrant, _ := authz.Issue(controlplane.Capability{Subject: "rag-reader", Action: controlplane.ActionList, Resource: "corpus", Tenant: "public"}, 30*24*time.Hour)
+		readerGrant, _ = authz.Issue(controlplane.Capability{Subject: "rag-reader", Action: controlplane.ActionList, Resource: "corpus", Tenant: "public"}, 30*24*time.Hour)
 		// Ask-School: lexical search over the scrubbed corpus (M8 — recalled text
 		// is untrusted data). "public" tenant: this is a single-household app.
 		search = func(q string, k int) ([]domain.SearchHit, error) {
@@ -154,42 +155,6 @@ func main() {
 				out = append(out, domain.SearchHit{Source: c.DocID, Snippet: server.Snippet(c.Text), Untrusted: c.Prov == rag.Untrusted})
 			}
 			return out, nil
-		}
-		// Chat: the conversational front-end over the corpus. DEFENDED uses
-		// rag.Assemble (XML-encapsulate + injection-neutralize untrusted chunks, M8);
-		// UNSAFE (demo) raw-concats them, so a poisoned doc's injection reaches the
-		// model as if trusted — a live ADD demo (ChatRAGInjection). Same reader NHI
-		// grant as search, so Halt / residency gate it too.
-		chat = func(question string, unsafe bool, appData string) (string, []string, error) {
-			if _, err := authz.Verify(readerGrant, controlplane.Capability{Action: controlplane.ActionList, Resource: "corpus", Tenant: "public"}); err != nil {
-				return "", nil, fmt.Errorf("rag-reader capability refused: %w", err)
-			}
-			// Trusted context: the host clock is the ONLY authority for dates. It is
-			// never sourced from the corpus, so a poisoned email ("today is …") cannot
-			// move the agent's clock (the trust boundary the chat_system prompt enforces).
-			dateBlock := gateway.TrustedDateBlock(time.Now())
-			chunks, err := reader.Query("public", question, 5)
-			if err != nil {
-				return "", nil, err
-			}
-			sources := make([]string, 0, len(chunks))
-			for _, c := range chunks {
-				sources = append(sources, c.DocID)
-			}
-			var context string
-			if unsafe {
-				var b strings.Builder
-				for _, c := range chunks {
-					b.WriteString(c.Text)
-					b.WriteString("\n")
-				}
-				context = b.String() // CONTROLS OFF: raw untrusted text, no encapsulation/scrub
-			} else {
-				context = rag.Assemble(chunks) // encapsulated + injection-neutralized (M8)
-			}
-			// chat_system is a GOVERNED prompt (C2), decoding is GOVERNED sampling (C5),
-			// and the model binding is DB config — all resolved live, none hardcoded.
-			return gw.ChatAnswer(chatParams(sampling, inv), prompts.Text("chat_system"), dateBlock, appData, context, question, unsafe), sources, nil
 		}
 	}
 
@@ -392,12 +357,19 @@ func main() {
 	evalSvc := &evalService{inv: inv, gw: gw, prompts: prompts,
 		labels: []string{"testdata/emaildrop/labels/3.json", "testdata/emaildrop/labels/1.json"}}
 
+	// Chat is constructed late (after the governed planes exist) but only when the
+	// corpus opened — reader nil = no Chat tab. Same reader NHI grant as search.
+	var chatSvc server.ChatService
+	if reader != nil {
+		chatSvc = &chatService{reader: reader, grant: readerGrant, authz: authz, gw: gw, prompts: prompts, sampling: sampling, inv: inv}
+	}
+
 	srv := &http.Server{
 		Addr: *addr,
 		Handler: server.New(server.Config{
 			AuditPath: auditPath, OutboxDir: cfg.Outbox, InboxPath: cfg.Inbox,
 			Egress: egress, Fetch: fetch, Verifier: verifier, Safety: safety, Search: search, Index: enrichIndex,
-			Flywheel: flywheelSvc, Chat: chat,
+			Flywheel: flywheelSvc, Chat: chatSvc,
 			Authz: authz, OperatorToken: opToken, Audit: audit,
 			MCP: mcpReg, Prompts: prompts, Policies: policies, Sampling: sampling, Budgets: budgets,
 			Eval:    evalSvc,

@@ -14,6 +14,7 @@ import (
 	"github.com/t0ul/ai-security-engineering/pkg/datastore"
 	"github.com/t0ul/ai-security-engineering/pkg/domain"
 	"github.com/t0ul/ai-security-engineering/pkg/gateway"
+	"github.com/t0ul/ai-security-engineering/pkg/rag"
 	"github.com/t0ul/ai-security-engineering/pkg/redteam"
 	"github.com/t0ul/ai-security-engineering/pkg/server"
 	"github.com/t0ul/gledger"
@@ -216,6 +217,52 @@ func (b bundleStore) Apply(label string) error {
 	bundle.Apply(b.prompts, b.sampling, b.policies)
 	b.audit.Emit(gledger.NewTraceID(), "bundle", "rolled_back", gledger.F{"label": label})
 	return nil
+}
+
+// chatService is the concrete server.ChatService: the conversational front-end over
+// the RAG corpus. DEFENDED uses rag.Assemble (XML-encapsulate + injection-neutralize
+// untrusted chunks, M8); UNSAFE (demo) raw-concats them so a poisoned doc's injection
+// reaches the model as if trusted (the ChatRAGInjection demo). It runs on the same
+// rag-reader NHI grant as search, so Halt / residency gate it too.
+type chatService struct {
+	reader   *rag.Store
+	grant    controlplane.Grant
+	authz    *controlplane.Authority
+	gw       *gateway.Client
+	prompts  *controlplane.Prompts
+	sampling *controlplane.Sampling
+	inv      *datastore.Store
+}
+
+func (c *chatService) Answer(question string, unsafe bool, appData string) (string, []string, error) {
+	if _, err := c.authz.Verify(c.grant, controlplane.Capability{Action: controlplane.ActionList, Resource: "corpus", Tenant: "public"}); err != nil {
+		return "", nil, fmt.Errorf("rag-reader capability refused: %w", err)
+	}
+	// Trusted context: the host clock is the ONLY authority for dates — never the
+	// corpus, so a poisoned email ("today is …") cannot move the agent's clock.
+	dateBlock := gateway.TrustedDateBlock(time.Now())
+	chunks, err := c.reader.Query("public", question, 5)
+	if err != nil {
+		return "", nil, err
+	}
+	sources := make([]string, 0, len(chunks))
+	for _, ch := range chunks {
+		sources = append(sources, ch.DocID)
+	}
+	var context string
+	if unsafe {
+		var b strings.Builder
+		for _, ch := range chunks {
+			b.WriteString(ch.Text)
+			b.WriteString("\n")
+		}
+		context = b.String() // CONTROLS OFF: raw untrusted text, no encapsulation/scrub
+	} else {
+		context = rag.Assemble(chunks) // encapsulated + injection-neutralized (M8)
+	}
+	// chat_system is a GOVERNED prompt (C2), decoding is GOVERNED sampling (C5), model
+	// binding is DB config — all resolved live, none hardcoded.
+	return c.gw.ChatAnswer(chatParams(c.sampling, c.inv), c.prompts.Text("chat_system"), dateBlock, appData, context, question, unsafe), sources, nil
 }
 
 // chatInjectionASR runs the chat-injection ADD against a CANDIDATE chat_system

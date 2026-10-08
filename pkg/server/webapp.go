@@ -64,10 +64,8 @@ type Config struct {
 	// Flywheel, when set, captures operator accept/reject decisions as durable
 	// ground-truth (the data-flywheel) and reports the running tallies.
 	Flywheel Flywheel
-	// Chat, when set, answers a question grounded in the corpus. unsafe=true runs
-	// the UNDEFENDED path (raw-concat retrieval, no encapsulation/scrub) — the live
-	// attack demo showing a poisoned doc's injection land; default is defended.
-	Chat func(question string, unsafe bool, appData string) (answer string, sources []string, err error)
+	// Chat, when set, answers a question grounded in the corpus. Nil = no chat.
+	Chat ChatService
 
 	// Authz, when set, turns the console into an authZ'd API: every mutating or
 	// data-listing endpoint requires a capability Grant (C4b). The operator
@@ -132,6 +130,15 @@ type EvalService interface {
 	History() []EvalResult
 	Run() (results []EvalResult, mode string)
 	Test(name, candidate string) PromptTestResult
+}
+
+// ChatService answers a natural-language question grounded in the corpus. unsafe=true
+// runs the UNDEFENDED path (raw-concat retrieval, no encapsulation/scrub) — the live
+// attack demo showing a poisoned doc's injection land; default is defended
+// (rag.Assemble). appData is the server-supplied trusted app context (this week's
+// schedule). The concrete impl + its deps live in cmd/webapp, out of the handler.
+type ChatService interface {
+	Answer(question string, unsafe bool, appData string) (answer string, sources []string, err error)
 }
 
 // Flywheel captures operator accept/reject decisions as durable ground-truth and
