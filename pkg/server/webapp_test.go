@@ -467,3 +467,40 @@ func mustPost(t *testing.T, url, contentType string, body io.Reader) *http.Respo
 	}
 	return resp
 }
+
+// fakeBundles is an in-memory server.BundleStore — the point of the interface
+// refactor: the Controller is testable with a fake, no DB/model/governed plane.
+type fakeBundles struct{ saved []string }
+
+func (f *fakeBundles) List() []server.BundleInfo {
+	return []server.BundleInfo{{Label: "known-good", At: "2026-10-08"}}
+}
+func (f *fakeBundles) Save(label string) error  { f.saved = append(f.saved, label); return nil }
+func (f *fakeBundles) Apply(label string) error { return nil }
+
+func TestBundleStoreInterfaceWiring(t *testing.T) {
+	fake := &fakeBundles{}
+	srv := httptest.NewServer(server.New(server.Config{Bundles: fake}).Handler())
+	defer srv.Close()
+
+	resp := mustGet(t, srv.URL+"/api/bundles")
+	defer resp.Body.Close()
+	var listed struct {
+		Bundles []server.BundleInfo `json:"bundles"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&listed); err != nil {
+		t.Fatal(err)
+	}
+	if len(listed.Bundles) != 1 || listed.Bundles[0].Label != "known-good" {
+		t.Fatalf("expected the fakes bundle, got %+v", listed.Bundles)
+	}
+
+	sr := mustPost(t, srv.URL+"/api/bundles/save", "application/json", strings.NewReader(`{"label":"nightly"}`))
+	sr.Body.Close()
+	if sr.StatusCode != http.StatusOK {
+		t.Fatalf("save status = %d", sr.StatusCode)
+	}
+	if len(fake.saved) != 1 || fake.saved[0] != "nightly" {
+		t.Fatalf("fake should have recorded the save, got %v", fake.saved)
+	}
+}
