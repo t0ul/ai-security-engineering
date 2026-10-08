@@ -1,8 +1,8 @@
 package controlplane
 
 // Known-good bundle (C10): an atomic snapshot of the whole governed plane —
-// every prompt, sampling config, and policy allowlist at their current active
-// values — that the operator can roll the entire plane back to in one step. The
+// every prompt, sampling config, policy allowlist, and budget at their current
+// active values — that the operator can roll the entire plane back to in one step. The
 // ties-it-together capstone of the governed-knob set: when a change (or a chain
 // of changes) goes wrong, restore a labeled safe point instead of reverting each
 // knob by hand.
@@ -13,12 +13,13 @@ type Bundle struct {
 	Prompts  map[string]string         `json:"prompts"`
 	Sampling map[string]SamplingConfig `json:"sampling"`
 	Policies map[string][]string       `json:"policies"`
+	Budgets  map[string]BudgetConfig   `json:"budgets,omitempty"`
 }
 
 // Snapshot captures the current active (or shipped-default) value of every knob
 // across the resolvers into a labeled bundle. Nil resolvers are skipped.
-func Snapshot(label string, p *Prompts, s *Sampling, pol *Policies) Bundle {
-	b := Bundle{Label: label, Prompts: map[string]string{}, Sampling: map[string]SamplingConfig{}, Policies: map[string][]string{}}
+func Snapshot(label string, p *Prompts, s *Sampling, pol *Policies, bud *Budgets) Bundle {
+	b := Bundle{Label: label, Prompts: map[string]string{}, Sampling: map[string]SamplingConfig{}, Policies: map[string][]string{}, Budgets: map[string]BudgetConfig{}}
 	if p != nil {
 		for _, v := range p.List() {
 			b.Prompts[v.Name] = v.Text
@@ -34,6 +35,11 @@ func Snapshot(label string, p *Prompts, s *Sampling, pol *Policies) Bundle {
 			b.Policies[v.Name] = v.Items
 		}
 	}
+	if bud != nil {
+		for _, v := range bud.List() {
+			b.Budgets[v.Name] = v.Config
+		}
+	}
 	return b
 }
 
@@ -41,7 +47,7 @@ func Snapshot(label string, p *Prompts, s *Sampling, pol *Policies) Bundle {
 // itself a governed, audited, persisted set of activations (each resolver's
 // OnActivate fires, driving the extractor prompt/sampling hooks too). Nil
 // resolvers are skipped.
-func (b Bundle) Apply(p *Prompts, s *Sampling, pol *Policies) {
+func (b Bundle) Apply(p *Prompts, s *Sampling, pol *Policies, bud *Budgets) {
 	if p != nil {
 		for name, text := range b.Prompts {
 			p.Activate(name, text)
@@ -55,6 +61,11 @@ func (b Bundle) Apply(p *Prompts, s *Sampling, pol *Policies) {
 	if pol != nil {
 		for name, items := range b.Policies {
 			pol.Activate(name, items)
+		}
+	}
+	if bud != nil {
+		for name, cfg := range b.Budgets {
+			bud.Activate(name, cfg)
 		}
 	}
 }

@@ -187,6 +187,7 @@ type bundleStore struct {
 	prompts  *controlplane.Prompts
 	sampling *controlplane.Sampling
 	policies *controlplane.Policies
+	budgets  *controlplane.Budgets
 }
 
 func (b bundleStore) List() []server.BundleInfo {
@@ -199,7 +200,7 @@ func (b bundleStore) List() []server.BundleInfo {
 }
 
 func (b bundleStore) Save(label string) error {
-	bundle := controlplane.Snapshot(label, b.prompts, b.sampling, b.policies)
+	bundle := controlplane.Snapshot(label, b.prompts, b.sampling, b.policies, b.budgets)
 	raw, _ := json.Marshal(bundle)
 	b.audit.Emit(gledger.NewTraceID(), "bundle", "saved", gledger.F{"label": label})
 	return b.inv.SaveBundle(label, string(raw))
@@ -214,7 +215,7 @@ func (b bundleStore) Apply(label string) error {
 	if err := json.Unmarshal([]byte(cfg), &bundle); err != nil {
 		return err
 	}
-	bundle.Apply(b.prompts, b.sampling, b.policies)
+	bundle.Apply(b.prompts, b.sampling, b.policies, b.budgets)
 	b.audit.Emit(gledger.NewTraceID(), "bundle", "rolled_back", gledger.F{"label": label})
 	return nil
 }
