@@ -12,9 +12,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/t0ul/ai-security-engineering/agent/ics"
-	"github.com/t0ul/ai-security-engineering/agent/pipeline"
-	"github.com/t0ul/ai-security-engineering/agent/schema"
+	"github.com/t0ul/ai-security-engineering/pkg/agent/ics"
+	"github.com/t0ul/ai-security-engineering/pkg/agent/pipeline"
+	"github.com/t0ul/ai-security-engineering/pkg/agent/schema"
 	"github.com/t0ul/ai-security-engineering/controlplane"
 	"github.com/t0ul/ai-security-engineering/pkg/netpolicy"
 	"github.com/t0ul/ai-security-engineering/pkg/provenance"

@@ -6,8 +6,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/t0ul/ai-security-engineering/agent/pipeline"
-	"github.com/t0ul/ai-security-engineering/agent/schema"
+	"github.com/t0ul/ai-security-engineering/pkg/agent/pipeline"
+	"github.com/t0ul/ai-security-engineering/pkg/agent/schema"
 	"github.com/t0ul/ai-security-engineering/pkg/hitl"
 )
 

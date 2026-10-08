@@ -18,7 +18,7 @@ import (
 	"runtime/debug"
 	"strings"
 
-	"github.com/t0ul/ai-security-engineering/agent/extractor"
+	"github.com/t0ul/ai-security-engineering/pkg/agent/extractor"
 	"github.com/t0ul/ai-security-engineering/controlplane"
 )
 

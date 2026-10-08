@@ -20,7 +20,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/t0ul/ai-security-engineering/agent/eval"
+	"github.com/t0ul/ai-security-engineering/pkg/agent/eval"
 	"github.com/t0ul/ai-security-engineering/internal/livemodel"
 )
 
