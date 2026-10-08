@@ -304,7 +304,7 @@ and GBNF grammar-constrained JSON (`extractor.SetModel`/`SetJSONMode`).
 **Post 29 · Live red-team: ADD against the real model** ✅
 The offline ADD scorecard proves the controls deterministically; this is the
 companion that runs the model-dependent attacks through the **actual llama/qwen**
-(`go test -tags live ./livetest/`). Shipped: `TestLiveEvalF1` (live F1 1.00/1.00)
+(`go test -tags live ./pkg/livetest/`). Shipped: `TestLiveEvalF1` (live F1 1.00/1.00)
 and a 5-case `TestLiveScorecard` — extraction-injection (LLM01), hallucination-
 reconcile (LLM09), prompt-leak (LLM07), url-exfil (LLM05), pii-echo (LLM02). Two
 visibly flip undefended→defended on the live model: **hallucination** (the live

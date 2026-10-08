@@ -145,7 +145,7 @@ Each is offline-doable except where noted. Blog: Posts 25–28 in docs/COURSE-OU
 Non-goals (not gaps): managed frameworks (OpenAI Agents SDK/Mastra/Voltagent), Cloudflare Durable Objects, Braintrust/Laminar SaaS, TS/React, arbitrary-code "code mode" (we run an argv allowlist by design).
 
 ## Live-model work (2026-10-07) — models verified UP (not blocked)
-Live path proven this session: cmd/livecheck + livetest F1=1.00/1.00; live ADD scorecard (injection + hallucination) green. These were mislabeled "model-blocked" — they just need modeld serving, which works. Run: `go test -tags live ./livetest/ -v`.
+Live path proven this session: cmd/livecheck + livetest F1=1.00/1.00; live ADD scorecard (injection + hallucination) green. These were mislabeled "model-blocked" — they just need modeld serving, which works. Run: `go test -tags live ./pkg/livetest/ -v`.
 - ✅ Live test layer: `internal/livemodel` harness + `livetest/` (TestLiveEvalF1, TestLiveScorecard). Behind `//go:build live`; offline suite unaffected.
 - 🟡 **Expand live ADD** (reader-facing payoff): ✅ added prompt-leak, url-exfil, pii-echo → `TestLiveScorecard` is 5 cases; 2 flip live (hallucination, prompt-leak). Remaining: a stronger injection payload the raw 3B reliably obeys (so injection's undefended=true is visible), and a `-tags live` scorecard CLI mirroring cmd/scorecard.
 - ⬜ **C5** sampling + model-swap plane: logical `extractor` model binding (route extraction to its own gouncer model), `rt.Sampling` (temp/top_p/stop/seed governed; seed→reproducible), GBNF/response_format grammar JSON on extraction. Gated by promotion gate; model swap re-evals grants (C4e residency).

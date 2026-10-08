@@ -18,10 +18,10 @@ invariant is something a plain unit test can't express.
 ## See it yourself
 - **Offline (no model, deterministic, CI):** `go run ./cmd/scorecard` prints the
   whole ledger — `technique | risk | before 100% | after 0% | ok` for every case.
-  `go test ./redteam/` enforces the invariant (undefended 100%, defended 0%).
+  `go test ./pkg/redteam/` enforces the invariant (undefended 100%, defended 0%).
   These are white-box in-process pairs: they prove the **controls**, fast, with no
   llama/qwen (see `docs/ADD-FRAMEWORK.md`).
-- **Live (real llama/qwen):** `go test -tags live ./livetest/ -v` runs the
+- **Live (real llama/qwen):** `go test -tags live ./pkg/livetest/ -v` runs the
   model-dependent attacks through the actual models — `TestLiveScorecard` (5 cases)
   and `TestLiveEvalF1` / `TestLivePassK`. Honest rule live: gate on the defended
   path, *observe* undefended (a live 3B may resist a payload on its own — reported,
@@ -33,6 +33,7 @@ Each row: the control, the attack it answers, and the before→after evidence.
 | Control (what we built) | Attack it stops (the why) | Evidence |
 | --- | --- | --- |
 | `agent/guard` + CaMeL quarantine + gumpers | Indirect prompt injection in an email rewrites the agent's behavior | `indirect-injection` / `extraction-injection` 100%→0% (+ live) |
+| `rag.Assemble` encapsulation + governed `chat_system` prompt | Poisoned corpus doc hijacks the chat answer; the chat trusts an email's date | `chat-rag-injection` 100%→0%; prompt-isolated chat-injection via the Prompts **Test** button (live); date comes only from the host clock, never the corpus |
 | `guard.DetectPromptLeak` | Model coerced to echo its own system prompt | `prompt-leak` 100%→0% (flips **live**) |
 | `ics.SanitizeField` / `SanitizeMarkdown` | `.ics`/output exfil via tracking pixels, `javascript:`/`data:` URLs | `url-exfil` 100%→0% |
 | `goflage` PII scrub | Staff/student PII or secrets echoed out of the agent | `pii-secret-leak` / `canary-exfil` 100%→0% |

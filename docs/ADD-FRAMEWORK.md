@@ -18,7 +18,7 @@ rides `go test`; it is not a scanner, a CLI, or a product.
 > controls hold against the attack patterns — **not** that attacks ran against a
 > live model.
 >
-> **Live** (`go test -tags live ./livetest/ -v`): the model-dependent checks run
+> **Live** (`go test -tags live ./pkg/livetest/ -v`): the model-dependent checks run
 > against the REAL llama/qwen stack (`internal/livemodel` boots the models + the
 > in-process gouncer gateway, same as `cmd/livecheck`). Today: `TestLiveEvalF1`
 > (live extraction scored against the labeled emails — 3.txt F1=1.00, 1.txt
