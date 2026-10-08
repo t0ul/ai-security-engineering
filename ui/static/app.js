@@ -21,7 +21,7 @@ document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
   if(t==='security'){loadKill();loadMCP();loadBundles();}
   if(t==='prompts') loadPrompts();
   if(t==='sampling') loadSampling();
-  if(t==='models') loadModels();
+  if(t==='models'){loadModels();loadModelCatalog();}
   if(t==='skills') loadSkills();
   if(t==='retrieval') loadRetrieval();
   if(t==='grammar') loadGrammar();
@@ -166,6 +166,16 @@ async function loadModels(){
 }
 async function activateModel(name){await postJSON('/api/models/activate',{name:name,model:$('#md_'+name).value});loadModels();}
 async function resetModel(name){await postJSON('/api/models/reset',{name:name});loadModels();}
+async function loadModelCatalog(){
+  const c=$('#modelCatalog');if(!c)return;const d=await getJSON('/api/modelcatalog');const cat=d.catalog||[];
+  if(!cat.length){c.innerHTML='<p class="mut">catalog empty</p>';return;}
+  c.innerHTML=cat.map(m=>{
+    const pin=m.pinned?'<span class="pill pass">SHA pinned</span>':'<span class="pill">magic-verify only</span>';
+    return '<div class="ev"><div><b>'+esc(m.name)+'</b> '+pin+' <span class="mut">:'+m.port+' · ctx '+m.ctx+' · '+esc(m.host)+'</span>'+
+      '<div class="mut" style="margin-top:4px">'+esc(m.file)+'</div>'+
+      '<div class="mut" style="margin-top:2px;word-break:break-all">'+esc(m.url)+'</div></div></div>';
+  }).join('');
+}
 async function loadSkills(){
   const c=$('#skillList');if(!c)return;const d=await getJSON('/api/skills');const cat=d.catalog||[];
   if(!cat.length){c.innerHTML='<p class="mut">no skills in the catalog</p>';}

@@ -374,6 +374,7 @@ func main() {
 	// boot. The shipped consts remain only the fail-closed default when the DB has
 	// no row for a knob.
 	var profileSvc server.ProfileStore
+	var modelCatalogSvc server.ModelCatalogLister
 	if inv != nil {
 		for _, n := range []string{"planner", "coder", "extractor", "chat_system"} {
 			if text, ok, _ := inv.LatestPromptText(n); ok {
@@ -416,6 +417,7 @@ func main() {
 		if _, err := inv.SeedModelCatalogIfEmpty(modelcatalog.DefaultSeed()); err != nil {
 			log.Printf("webapp: seed model catalog: %v", err)
 		}
+		modelCatalogSvc = inv // *datastore.Store satisfies server.ModelCatalogLister
 		for _, n := range []string{"api", "gateway"} {
 			if cfgJSON, ok, _ := inv.LatestBudget(n); ok {
 				var cfg controlplane.BudgetConfig
@@ -474,7 +476,7 @@ func main() {
 			Flywheel: flywheelSvc, Chat: chatSvc,
 			Authz: authz, OperatorToken: opToken, AppToken: appToken, Audit: audit,
 			MCP: mcpReg, Prompts: prompts, Policies: policies, Sampling: sampling, Budgets: budgets, Retrieval: retrieval, Grammars: grammars, Models: models,
-			Skills: skillsPlane, SkillCatalog: skillSupply,
+			Skills: skillsPlane, SkillCatalog: skillSupply, ModelCatalog: modelCatalogSvc,
 			Eval:    evalSvc,
 			Bundles: bundleSvc,
 			Profile: profileSvc,

@@ -175,6 +175,10 @@
       <strong>Models</strong> <span class="mut">— governed model bindings: the logical model each role (extractor, chat) routes to. Versioned, hashed, rollback; bundle-referenced. A local→frontier swap is where data-residency bites.</span>
       <div id="modelsList"><span class="mut">loading…</span></div>
     </div>
+    <div class="card">
+      <strong>Model catalog</strong> <span class="mut">— the DB-backed registry of which models exist: verified download URL + SHA pin (M10), local file, serve port/ctx. Single source of truth — <code>prepareassets</code> (download) and <code>modeld</code> (serve) read this same catalog. Consts are only the fail-closed bootstrap seed. (Edit/download from here: next slice.)</span>
+      <div id="modelCatalog" style="margin-top:8px"><span class="mut">loading…</span></div>
+    </div>
   </section>
   <section id="skills" class="hide">
     <div class="card">

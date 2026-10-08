@@ -120,6 +120,11 @@ type Config struct {
 	// Models tab.
 	Models *controlplane.Models
 
+	// ModelCatalog, when set, reads the DB-backed model catalog (single source of
+	// truth for which models exist: verified URL/SHA, file, serve port/ctx). Shown
+	// read-only in the Models tab. Nil = no catalog card.
+	ModelCatalog ModelCatalogLister
+
 	// Skills, when set, is the governed skill-approval resolver (the pin side of the
 	// skills supply-chain control): which skill versions an operator has approved.
 	// Fail-closed — an unapproved skill is never loadable. Nil = no Skills tab.
@@ -303,6 +308,9 @@ func (s *Server) Handler() http.Handler {
 		mux.HandleFunc("/api/models", s.modelsList)
 		mux.HandleFunc("POST /api/models/activate", csrf(s.authz(controlplane.ActionWrite, "model", s.modelsActivate)))
 		mux.HandleFunc("POST /api/models/reset", csrf(s.authz(controlplane.ActionWrite, "model", s.modelsReset)))
+	}
+	if s.ModelCatalog != nil {
+		mux.HandleFunc("/api/modelcatalog", s.modelCatalogList)
 	}
 	if s.Skills != nil {
 		mux.HandleFunc("/api/skills", s.skillsList)
@@ -544,11 +552,14 @@ func (s *Server) renderSurface(w http.ResponseWriter, surface, token string) {
 	}
 }
 
-// staticHandler serves the embedded CSS/JS under /static/ with a short cache.
+// staticHandler serves the embedded CSS/JS under /static/. The assets are embedded
+// and not content-hashed, so a max-age cache serves stale JS for its whole window
+// after any rebuild/deploy (and breaks QA). no-cache forces revalidation every load;
+// the files are tiny and local, so the cost is negligible.
 func staticHandler() http.Handler {
 	fs := http.FileServer(http.FS(ui.Static))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Cache-Control", "public, max-age=300")
+		w.Header().Set("Cache-Control", "no-cache")
 		fs.ServeHTTP(w, r)
 	})
 }
