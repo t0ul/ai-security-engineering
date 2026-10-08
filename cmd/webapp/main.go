@@ -24,6 +24,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -73,6 +74,18 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	// Shutdown cleanups (model servers, embed server). Registered as they start and
+	// run SYNCHRONOUSLY on shutdown (LIFO) — NOT in a goroutine that races the process
+	// exit — so spawned llama.cpp processes are actually killed before we exit, not
+	// orphaned. Thread-safe: model auto-start runs in a background goroutine.
+	var cleanupMu sync.Mutex
+	var cleanups []func()
+	addCleanup := func(f func()) {
+		cleanupMu.Lock()
+		cleanups = append(cleanups, f)
+		cleanupMu.Unlock()
+	}
 
 	cfg := watcher.NewConfig(*drop)
 	auditPath := filepath.Join(cfg.Logs, "audit.jsonl")
@@ -457,7 +470,7 @@ func main() {
 				embedders = append(embedders, m.Name)
 			}
 			embedMgr := newEmbedManager(ctx, modelstack.BinPath(), *assetsDir, modelCatalog)
-			go func() { <-ctx.Done(); embedMgr.stop() }()
+			addCleanup(embedMgr.stop)
 			ragLabSvc = newRAGLab(inv, corpusWritable, cfg.Processed, embedders, ragApplyEmbed(corpusWritable, reader, embedMgr, &ragSemantic))
 		}
 		startModelsAndSeed := func() {
@@ -474,12 +487,14 @@ func main() {
 			}
 			log.Printf("webapp: bringing up local models in the background (first load is slow)…")
 			stack, err := modelstack.Start(ctx, *assetsDir, dial, modelCatalog, 180*time.Second)
+			if err == nil {
+				addCleanup(stack.Close)
+			}
 			if err != nil {
 				log.Printf("webapp: model auto-start failed (%v) — using offline extraction", err)
 				seedEmails(inv, cfg.Inbox, cfg.Outbox, *seedDir)
 				return
 			}
-			go func() { <-ctx.Done(); stack.Close() }()
 			os.Setenv("EXTRACT_MODE", "llm") // LLM-only extraction (no noisy regex fallback)
 			log.Printf("webapp: models up on %s — seeding + extracting emails via the LLM", dial)
 			seedEmails(inv, cfg.Inbox, cfg.Outbox, *seedDir)
@@ -558,13 +573,28 @@ func main() {
 		WriteTimeout:      120 * time.Second, // live eval/chat can be slow
 		IdleTimeout:       120 * time.Second,
 	}
-	go func() { <-ctx.Done(); srv.Close() }()
-
 	fmt.Printf("agent console: http://%s\n", *addr)
 	fmt.Printf("drop .txt emails into: %s\n", cfg.Inbox)
-	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		log.Fatalf("webapp: %v", err)
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("webapp: %v", err)
+		}
+	}()
+
+	// Block until a signal cancels ctx, then shut down DETERMINISTICALLY: stop the
+	// HTTP server, then run the model cleanups synchronously (each waits for its
+	// spawned llama.cpp process group to actually die) BEFORE returning. No orphans.
+	<-ctx.Done()
+	log.Println("webapp: shutting down — stopping model servers…")
+	shutCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	_ = srv.Shutdown(shutCtx)
+	cancel()
+	cleanupMu.Lock()
+	for i := len(cleanups) - 1; i >= 0; i-- {
+		cleanups[i]()
 	}
+	cleanupMu.Unlock()
+	log.Println("webapp: stopped.")
 }
 
 // agentIdentity loads (or creates) the persistent ed25519 seed at path and
