@@ -103,7 +103,7 @@ func main() {
 	// governed planes are built further down (consts are the fail-closed default).
 	var prompts *controlplane.Prompts
 	var search func(string, int) ([]domain.SearchHit, error)
-	var chat func(string, bool) (string, []string, error)
+	var chat func(string, bool, string) (string, []string, error)
 	var enrichIndex func(source, text string) error
 	if corpus, cerr := rag.Open(corpusPath); cerr == nil {
 		defer corpus.Close()
@@ -152,7 +152,7 @@ func main() {
 		// UNSAFE (demo) raw-concats them, so a poisoned doc's injection reaches the
 		// model as if trusted — a live ADD demo (ChatRAGInjection). Same reader NHI
 		// grant as search, so Halt / residency gate it too.
-		chat = func(question string, unsafe bool) (string, []string, error) {
+		chat = func(question string, unsafe bool, appData string) (string, []string, error) {
 			if _, err := authz.Verify(readerGrant, controlplane.Capability{Action: controlplane.ActionList, Resource: "corpus", Tenant: "public"}); err != nil {
 				return "", nil, fmt.Errorf("rag-reader capability refused: %w", err)
 			}
@@ -180,7 +180,7 @@ func main() {
 				context = rag.Assemble(chunks) // encapsulated + injection-neutralized (M8)
 			}
 			// chat_system is a GOVERNED prompt (C2): resolved live, versioned, rollback-able.
-			return gatewayChatAnswer(prompts.Text("chat_system"), dateBlock, context, question, unsafe), sources, nil
+			return gatewayChatAnswer(prompts.Text("chat_system"), dateBlock, appData, context, question, unsafe), sources, nil
 		}
 	}
 
@@ -578,21 +578,24 @@ func agentIdentity(path string) (*provenance.Signer, *provenance.Verifier) {
 // splice that an injection can hijack). With no gateway it returns the grounded
 // passage — in unsafe mode that includes the raw/poisoned text, so the demo works
 // even offline (the real control is at the retrieval layer: rag.Assemble).
-func gatewayChatAnswer(systemPrompt, dateBlock, context, question string, unsafe bool) string {
-	sys := systemPrompt + "\n" + dateBlock + "\n" + context
+func gatewayChatAnswer(systemPrompt, dateBlock, appData, context, question string, unsafe bool) string {
+	sys := systemPrompt + "\n" + dateBlock + "\n" + appData + "\n" + context
 	if unsafe {
 		// CONTROLS OFF: naive splice with no "treat as data" framing — an injection
 		// in the retrieved context can hijack the model (the ChatRAGInjection demo).
-		sys = "Answer the question using this context:\n" + dateBlock + "\n" + context
+		sys = "Answer the question using this context:\n" + dateBlock + "\n" + appData + "\n" + context
 	}
 	if !gatewayUp() {
 		// No live model to synthesize. Still answer from the TRUSTED date block (so
-		// "what's today?" works offline) plus the most relevant passage.
-		today := stripTags(dateBlock)
-		if strings.TrimSpace(context) == "" {
-			return today + "\nNo matching emails yet — drop more in."
+		// "what's today?" works offline), this week's schedule, and the best passage.
+		out := stripTags(dateBlock)
+		if strings.TrimSpace(appData) != "" {
+			out += "\nThis week:\n" + stripTags(appData)
 		}
-		return today + "\nFrom your emails:\n" + shortText(context, 600)
+		if strings.TrimSpace(context) == "" {
+			return out + "\nNo matching emails yet — drop more in."
+		}
+		return out + "\nFrom your emails:\n" + shortText(context, 600)
 	}
 	body, _ := json.Marshal(map[string]any{
 		"model": "planner", "temperature": 0.2, "max_tokens": 400,
@@ -637,7 +640,7 @@ func chatInjectionASR(candidate string) (blocked, live bool) {
 	c := redteam.ChatRAGInjection()
 	seed := c.Seeds[0]
 	rawPoison, _ := c.Undefended.Send(context.Background(), seed.Prompt) // retrieval control OFF
-	ans := gatewayChatAnswer(candidate, trustedDateBlock(time.Now()), rawPoison, seed.Prompt, false)
+	ans := gatewayChatAnswer(candidate, trustedDateBlock(time.Now()), "", rawPoison, seed.Prompt, false)
 	return !strings.Contains(ans, seed.Marker), true
 }
 
@@ -652,11 +655,16 @@ func trustedDateBlock(now time.Time) string {
 		mon.Format("2006-01-02"), mon.AddDate(0, 0, 6).Format("2006-01-02"))
 }
 
-// stripTags renders a trusted context block as a plain human line for the offline
-// (no-model) fallback.
+// stripTags renders a context block as plain text for the offline (no-model)
+// fallback, removing the known wrapper tags.
 func stripTags(block string) string {
-	block = strings.ReplaceAll(block, "<current_date trust=\"host\">", "")
-	return strings.TrimSpace(strings.ReplaceAll(block, "</current_date>", ""))
+	r := strings.NewReplacer(
+		"<current_date trust=\"host\">", "",
+		"</current_date>", "",
+		"<schedule source=\"extracted-calendar\">", "",
+		"</schedule>", "",
+	)
+	return strings.TrimSpace(r.Replace(block))
 }
 
 // gatewayUp reports whether the gouncer gateway is reachable, so a live eval run

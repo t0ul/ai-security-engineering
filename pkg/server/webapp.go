@@ -57,7 +57,7 @@ type Server struct {
 	// Chat, when set, answers a question grounded in the corpus. unsafe=true runs
 	// the UNDEFENDED path (raw-concat retrieval, no encapsulation/scrub) — the live
 	// attack demo showing a poisoned doc's injection land; default is defended.
-	Chat func(question string, unsafe bool) (answer string, sources []string, err error)
+	Chat func(question string, unsafe bool, appData string) (answer string, sources []string, err error)
 
 	// Authz, when set, turns the console into an authZ'd API: every mutating or
 	// data-listing endpoint requires a capability Grant (C4b). The operator
