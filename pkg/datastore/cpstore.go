@@ -24,6 +24,7 @@ type Store struct{ db *sql.DB }
 const schema = `
 CREATE TABLE IF NOT EXISTS prompts(name TEXT, version TEXT, hash TEXT, text TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS grammars(name TEXT, version TEXT, hash TEXT, text TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS models(name TEXT, version TEXT, hash TEXT, model TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS approvals(id TEXT, proposer TEXT, approver TEXT, perm TEXT, note TEXT, version INTEGER, at DATETIME DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS mcp_pins(server TEXT, hash TEXT, approved_by TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS eval_scores(label TEXT, f1 REAL, at DATETIME DEFAULT CURRENT_TIMESTAMP);
@@ -231,6 +232,26 @@ func (s *Store) LatestGrammarText(name string) (text string, ok bool, err error)
 	switch e := row.Scan(&text); e {
 	case nil:
 		return text, true, nil
+	case sql.ErrNoRows:
+		return "", false, nil
+	default:
+		return "", false, e
+	}
+}
+
+// RecordModel persists a governed model-binding activation.
+func (s *Store) RecordModel(name, version, hash, model string) error {
+	_, err := s.db.Exec(`INSERT INTO models(name,version,hash,model) VALUES(?,?,?,?)`, name, version, hash, model)
+	return err
+}
+
+// LatestModel returns the most recent persisted model name for a role, so the
+// resolver can rehydrate the active binding on boot.
+func (s *Store) LatestModel(name string) (model string, ok bool, err error) {
+	row := s.db.QueryRow(`SELECT model FROM models WHERE name=? ORDER BY at DESC, rowid DESC LIMIT 1`, name)
+	switch e := row.Scan(&model); e {
+	case nil:
+		return model, true, nil
 	case sql.ErrNoRows:
 		return "", false, nil
 	default:

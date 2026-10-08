@@ -190,6 +190,7 @@ type bundleStore struct {
 	budgets   *controlplane.Budgets
 	retrieval *controlplane.Retrieval
 	grammars  *controlplane.Grammars
+	models    *controlplane.Models
 }
 
 func (b bundleStore) List() []server.BundleInfo {
@@ -202,7 +203,7 @@ func (b bundleStore) List() []server.BundleInfo {
 }
 
 func (b bundleStore) Save(label string) error {
-	bundle := controlplane.Snapshot(label, b.prompts, b.sampling, b.policies, b.budgets, b.retrieval, b.grammars)
+	bundle := controlplane.Snapshot(label, b.prompts, b.sampling, b.policies, b.budgets, b.retrieval, b.grammars, b.models)
 	raw, _ := json.Marshal(bundle)
 	b.audit.Emit(gledger.NewTraceID(), "bundle", "saved", gledger.F{"label": label})
 	return b.inv.SaveBundle(label, string(raw))
@@ -217,7 +218,7 @@ func (b bundleStore) Apply(label string) error {
 	if err := json.Unmarshal([]byte(cfg), &bundle); err != nil {
 		return err
 	}
-	bundle.Apply(b.prompts, b.sampling, b.policies, b.budgets, b.retrieval, b.grammars)
+	bundle.Apply(b.prompts, b.sampling, b.policies, b.budgets, b.retrieval, b.grammars, b.models)
 	b.audit.Emit(gledger.NewTraceID(), "bundle", "rolled_back", gledger.F{"label": label})
 	return nil
 }
@@ -234,7 +235,7 @@ type chatService struct {
 	gw        *gateway.Client
 	prompts   *controlplane.Prompts
 	sampling  *controlplane.Sampling
-	inv       *datastore.Store
+	models    *controlplane.Models
 	retrieval *controlplane.Retrieval
 }
 
@@ -274,7 +275,7 @@ func (c *chatService) Answer(question string, unsafe bool, appData string) (stri
 	}
 	// chat_system is a GOVERNED prompt (C2), decoding is GOVERNED sampling (C5), model
 	// binding is DB config — all resolved live, none hardcoded.
-	return c.gw.ChatAnswer(chatParams(c.sampling, c.inv), c.prompts.Text("chat_system"), dateBlock, appData, context, question, unsafe), sources, nil
+	return c.gw.ChatAnswer(chatParams(c.sampling, c.models), c.prompts.Text("chat_system"), dateBlock, appData, context, question, unsafe), sources, nil
 }
 
 // chatInjectionASR runs the chat-injection ADD against a CANDIDATE chat_system

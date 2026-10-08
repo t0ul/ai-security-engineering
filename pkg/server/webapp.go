@@ -115,6 +115,11 @@ type Config struct {
 	// artifacts. Nil = no Grammar tab.
 	Grammars *controlplane.Grammars
 
+	// Models, when set, is the governed model-binding resolver (the logical model
+	// each role routes to) as versioned, hashed, rollback-able artifacts. Nil = no
+	// Models tab.
+	Models *controlplane.Models
+
 	// Policies, when set, is the governed policy-allowlist resolver (C8): egress /
 	// exec / guardrail allowlists as versioned, hashed, rollback-able artifacts.
 	// The action egress check resolves its allowlist from here at request time, so
@@ -284,6 +289,11 @@ func (s *Server) Handler() http.Handler {
 		mux.HandleFunc("/api/grammar", s.grammarList)
 		mux.HandleFunc("POST /api/grammar/activate", csrf(s.authz(controlplane.ActionWrite, "grammar", s.grammarActivate)))
 		mux.HandleFunc("POST /api/grammar/reset", csrf(s.authz(controlplane.ActionWrite, "grammar", s.grammarReset)))
+	}
+	if s.Models != nil {
+		mux.HandleFunc("/api/models", s.modelsList)
+		mux.HandleFunc("POST /api/models/activate", csrf(s.authz(controlplane.ActionWrite, "model", s.modelsActivate)))
+		mux.HandleFunc("POST /api/models/reset", csrf(s.authz(controlplane.ActionWrite, "model", s.modelsReset)))
 	}
 	if s.Policies != nil {
 		mux.HandleFunc("/api/policies", s.policiesList)

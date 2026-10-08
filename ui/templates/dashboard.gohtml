@@ -20,6 +20,7 @@
     <button data-tab="security">Security</button>
     <button data-tab="prompts">Prompts</button>
     <button data-tab="sampling">Sampling</button>
+    <button data-tab="models">Models</button>
     <button data-tab="retrieval">Retrieval</button>
     <button data-tab="grammar">Grammar</button>
     <button data-tab="policies">Policies</button>
@@ -166,6 +167,12 @@
     <div class="card">
       <strong>Sampling</strong> <span class="mut">— governed decoding params (M19): temperature / max tokens / seed. A seed makes generations reproducible for eval &amp; forensics. Versioned, hashed, rollback.</span>
       <div id="samplingList"><span class="mut">loading…</span></div>
+    </div>
+  </section>
+  <section id="models" class="hide">
+    <div class="card">
+      <strong>Models</strong> <span class="mut">— governed model bindings: the logical model each role (extractor, chat) routes to. Versioned, hashed, rollback; bundle-referenced. A local→frontier swap is where data-residency bites.</span>
+      <div id="modelsList"><span class="mut">loading…</span></div>
     </div>
   </section>
   <section id="retrieval" class="hide">

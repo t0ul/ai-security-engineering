@@ -286,10 +286,18 @@ func main() {
 	grammarDefaults := map[string]string{
 		"extractor": extractor.EventArrayGBNF,
 	}
+	// Governed model bindings: the logical model each role routes to. Was two config
+	// keys (extractor_model / chat_model); now a governed, versioned, bundle-referenced
+	// artifact. A local→frontier swap is where the residency rule bites.
+	modelDefaults := map[string]string{
+		"extractor": "planner",
+		"chat":      "planner",
+	}
 	var policies *controlplane.Policies
 	var budgets *controlplane.Budgets
 	var retrieval *controlplane.Retrieval
 	var grammars *controlplane.Grammars
+	var models *controlplane.Models
 	if db, ierr := datastore.Open(filepath.Join(*drop, "inventory.db")); ierr == nil {
 		inv = db
 		defer inv.Close()
@@ -299,6 +307,7 @@ func main() {
 		budgets = controlplane.GovernedBudgets(budgetDefaults, inv, audit)
 		retrieval = controlplane.GovernedRetrieval(retrievalDefaults, inv, audit)
 		grammars = controlplane.GovernedGrammars(grammarDefaults, inv, audit)
+		models = controlplane.GovernedModels(modelDefaults, inv, audit)
 	} else {
 		prompts = controlplane.NewPrompts(promptDefaults)
 		policies = controlplane.NewPolicies(policyDefaults)
@@ -306,6 +315,7 @@ func main() {
 		budgets = controlplane.NewBudgets(budgetDefaults)
 		retrieval = controlplane.NewRetrieval(retrievalDefaults)
 		grammars = controlplane.NewGrammars(grammarDefaults)
+		models = controlplane.NewModels(modelDefaults)
 	}
 	// Activating the "extractor" sampling drives the live LLM decoding params.
 	baseSampOnActivate := sampling.OnActivate
@@ -325,6 +335,16 @@ func main() {
 		}
 		if gv.Name == "extractor" {
 			extractor.SetGrammar(gv.Text)
+		}
+	}
+	// Activating the "extractor" model binding drives the live extraction model.
+	baseModOnActivate := models.OnActivate
+	models.OnActivate = func(mv controlplane.ModelVersion) {
+		if baseModOnActivate != nil {
+			baseModOnActivate(mv)
+		}
+		if mv.Name == "extractor" {
+			extractor.SetModel(mv.Model)
 		}
 	}
 	// Activating the "extractor" prompt actually drives the LLM extractor (C5 down
@@ -370,6 +390,11 @@ func main() {
 		if text, ok, _ := inv.LatestGrammarText("extractor"); ok {
 			grammars.Rehydrate("extractor", text)
 		}
+		for _, n := range []string{"extractor", "chat"} {
+			if m, ok, _ := inv.LatestModel(n); ok && m != "" {
+				models.Rehydrate(n, m)
+			}
+		}
 		for _, n := range []string{"api", "gateway"} {
 			if cfgJSON, ok, _ := inv.LatestBudget(n); ok {
 				var cfg controlplane.BudgetConfig
@@ -380,13 +405,10 @@ func main() {
 		}
 		extractor.SetExtractionPrompt(prompts.Text("extractor"))
 		extractor.SetGrammar(grammars.Text("extractor"))
+		extractor.SetModel(models.Bound("extractor")) // governed model binding (was extractor_model config key)
 		sc := sampling.Config("extractor")
 		extractor.SetSampling(sc.Temperature, sc.MaxTokens, sc.Seed)
-		// Logical extractor model binding + grammar JSON (C5), from governed config
-		// (DB is the source of truth). Defaults: model "planner", grammar off.
-		if m, ok, _ := inv.GetConfig("extractor_model"); ok && m != "" {
-			extractor.SetModel(m)
-		}
+		// grammar JSON mode (C5) from governed config (DB is the source of truth).
 		if j, ok, _ := inv.GetConfig("extractor_json"); ok && j == "true" {
 			extractor.SetJSONMode(true)
 		}
@@ -403,7 +425,7 @@ func main() {
 	// roll it all back in one step. Needs the DB.
 	var bundleSvc server.BundleStore
 	if inv != nil {
-		bundleSvc = bundleStore{inv: inv, audit: audit, prompts: prompts, sampling: sampling, policies: policies, budgets: budgets, retrieval: retrieval, grammars: grammars}
+		bundleSvc = bundleStore{inv: inv, audit: audit, prompts: prompts, sampling: sampling, policies: policies, budgets: budgets, retrieval: retrieval, grammars: grammars, models: models}
 	}
 
 	// Eval surfaces (C7): the Eval card + a "Test" button that shadow-evals a
@@ -420,7 +442,7 @@ func main() {
 	// corpus opened — reader nil = no Chat tab. Same reader NHI grant as search.
 	var chatSvc server.ChatService
 	if reader != nil {
-		chatSvc = &chatService{reader: reader, grant: readerGrant, authz: authz, gw: gw, prompts: prompts, sampling: sampling, inv: inv, retrieval: retrieval}
+		chatSvc = &chatService{reader: reader, grant: readerGrant, authz: authz, gw: gw, prompts: prompts, sampling: sampling, models: models, retrieval: retrieval}
 	}
 
 	srv := &http.Server{
@@ -430,7 +452,7 @@ func main() {
 			Egress: egress, Fetch: fetch, Verifier: verifier, Safety: safety, Search: search, Index: enrichIndex,
 			Flywheel: flywheelSvc, Chat: chatSvc,
 			Authz: authz, OperatorToken: opToken, AppToken: appToken, Audit: audit,
-			MCP: mcpReg, Prompts: prompts, Policies: policies, Sampling: sampling, Budgets: budgets, Retrieval: retrieval, Grammars: grammars,
+			MCP: mcpReg, Prompts: prompts, Policies: policies, Sampling: sampling, Budgets: budgets, Retrieval: retrieval, Grammars: grammars, Models: models,
 			Eval:    evalSvc,
 			Bundles: bundleSvc,
 			Profile: profileSvc,
@@ -523,16 +545,16 @@ func defaultDrop() string {
 // chatParams resolves the chat model + decoding from governed config at call time
 // (C5 sampling "chat" + the chat_model DB key), with the shipped consts as the
 // fail-closed default — nothing hardcoded in the gateway (DB-first config).
-func chatParams(sampling *controlplane.Sampling, inv *datastore.Store) gateway.ChatParams {
+func chatParams(sampling *controlplane.Sampling, models *controlplane.Models) gateway.ChatParams {
 	p := gateway.ChatParams{Model: "planner", Temperature: 0.2, MaxTokens: 400}
 	if sampling != nil {
 		if sc := sampling.Config("chat"); sc.MaxTokens > 0 {
 			p.Temperature, p.MaxTokens = sc.Temperature, sc.MaxTokens
 		}
 	}
-	if inv != nil {
-		if m, ok, _ := inv.GetConfig("chat_model"); ok && m != "" {
-			p.Model = m
+	if models != nil {
+		if m := models.Bound("chat"); m != "" {
+			p.Model = m // governed model binding (was the chat_model config key)
 		}
 	}
 	return p

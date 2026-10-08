@@ -12,8 +12,9 @@ func TestBundleSnapshotApply(t *testing.T) {
 	bud := NewBudgets(map[string]BudgetConfig{"api": {RatePerMin: 60}})
 	ret := NewRetrieval(map[string]RetrievalConfig{"public": {K: 5}})
 	gram := NewGrammars(map[string]string{"extractor": "GOOD-GRAMMAR"})
+	mod := NewModels(map[string]string{"extractor": "planner"})
 
-	good := Snapshot("good", p, s, pol, bud, ret, gram) // capture the known-good defaults
+	good := Snapshot("good", p, s, pol, bud, ret, gram, mod) // capture the known-good defaults
 
 	// Drift every knob.
 	p.Activate("extractor", "BROKEN")
@@ -22,8 +23,9 @@ func TestBundleSnapshotApply(t *testing.T) {
 	bud.Activate("api", BudgetConfig{RatePerMin: 100000})
 	ret.Activate("public", RetrievalConfig{K: 999})
 	gram.Activate("extractor", "TAMPERED-GRAMMAR")
+	mod.Activate("extractor", "evil-model")
 
-	good.Apply(p, s, pol, bud, ret, gram) // one-step rollback
+	good.Apply(p, s, pol, bud, ret, gram, mod) // one-step rollback
 
 	if p.Text("extractor") != "DEFAULT" {
 		t.Errorf("prompt not rolled back: %q", p.Text("extractor"))
@@ -42,5 +44,8 @@ func TestBundleSnapshotApply(t *testing.T) {
 	}
 	if g := gram.Text("extractor"); g != "GOOD-GRAMMAR" {
 		t.Errorf("grammar not rolled back: %q", g)
+	}
+	if m := mod.Bound("extractor"); m != "planner" {
+		t.Errorf("model not rolled back: %q", m)
 	}
 }

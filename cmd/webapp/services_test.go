@@ -150,3 +150,15 @@ func TestChatServiceUsesGovernedK(t *testing.T) {
 		t.Fatalf("governed k=2 should return 2 sources, got %d: %v", len(sources2), sources2)
 	}
 }
+
+// Governed model binding must drive the chat model (not a hardcoded literal / config key).
+func TestChatParamsUsesGovernedModel(t *testing.T) {
+	m := controlplane.NewModels(map[string]string{"chat": "planner"})
+	if p := chatParams(nil, m); p.Model != "planner" {
+		t.Fatalf("default binding: got %q", p.Model)
+	}
+	m.Activate("chat", "qwen-7b")
+	if p := chatParams(nil, m); p.Model != "qwen-7b" {
+		t.Fatalf("governed model binding not used: got %q", p.Model)
+	}
+}

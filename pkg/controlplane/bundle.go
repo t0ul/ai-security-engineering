@@ -16,12 +16,13 @@ type Bundle struct {
 	Budgets   map[string]BudgetConfig    `json:"budgets,omitempty"`
 	Retrieval map[string]RetrievalConfig `json:"retrieval,omitempty"`
 	Grammars  map[string]string          `json:"grammars,omitempty"`
+	Models    map[string]string          `json:"models,omitempty"`
 }
 
 // Snapshot captures the current active (or shipped-default) value of every knob
 // across the resolvers into a labeled bundle. Nil resolvers are skipped.
-func Snapshot(label string, p *Prompts, s *Sampling, pol *Policies, bud *Budgets, ret *Retrieval, gram *Grammars) Bundle {
-	b := Bundle{Label: label, Prompts: map[string]string{}, Sampling: map[string]SamplingConfig{}, Policies: map[string][]string{}, Budgets: map[string]BudgetConfig{}, Retrieval: map[string]RetrievalConfig{}, Grammars: map[string]string{}}
+func Snapshot(label string, p *Prompts, s *Sampling, pol *Policies, bud *Budgets, ret *Retrieval, gram *Grammars, mod *Models) Bundle {
+	b := Bundle{Label: label, Prompts: map[string]string{}, Sampling: map[string]SamplingConfig{}, Policies: map[string][]string{}, Budgets: map[string]BudgetConfig{}, Retrieval: map[string]RetrievalConfig{}, Grammars: map[string]string{}, Models: map[string]string{}}
 	if p != nil {
 		for _, v := range p.List() {
 			b.Prompts[v.Name] = v.Text
@@ -52,6 +53,11 @@ func Snapshot(label string, p *Prompts, s *Sampling, pol *Policies, bud *Budgets
 			b.Grammars[v.Name] = v.Text
 		}
 	}
+	if mod != nil {
+		for _, v := range mod.List() {
+			b.Models[v.Name] = v.Model
+		}
+	}
 	return b
 }
 
@@ -59,7 +65,7 @@ func Snapshot(label string, p *Prompts, s *Sampling, pol *Policies, bud *Budgets
 // itself a governed, audited, persisted set of activations (each resolver's
 // OnActivate fires, driving the extractor prompt/sampling hooks too). Nil
 // resolvers are skipped.
-func (b Bundle) Apply(p *Prompts, s *Sampling, pol *Policies, bud *Budgets, ret *Retrieval, gram *Grammars) {
+func (b Bundle) Apply(p *Prompts, s *Sampling, pol *Policies, bud *Budgets, ret *Retrieval, gram *Grammars, mod *Models) {
 	if p != nil {
 		for name, text := range b.Prompts {
 			p.Activate(name, text)
@@ -88,6 +94,11 @@ func (b Bundle) Apply(p *Prompts, s *Sampling, pol *Policies, bud *Budgets, ret 
 	if gram != nil {
 		for name, text := range b.Grammars {
 			gram.Activate(name, text)
+		}
+	}
+	if mod != nil {
+		for name, model := range b.Models {
+			mod.Activate(name, model)
 		}
 	}
 }

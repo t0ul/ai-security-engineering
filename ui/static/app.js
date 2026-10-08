@@ -3,7 +3,7 @@
 // request. Empty (household mode) = no header, unchanged behavior.
 (function(){const f=window.fetch.bind(window);window.fetch=(u,o)=>{o=o||{};const s=typeof u==='string'?u:(u&&u.url)||'';if(__CAP__&&(s.indexOf('/api/')===0||s.indexOf('/ics/')===0)){o.headers=Object.assign({},o.headers||{},{'Authorization':'Bearer '+__CAP__});}return f(u,o);};})();
 const $=s=>document.querySelector(s);
-const TABS=['chat','calendar','week','tasks','review','activity','ask','security','prompts','sampling','retrieval','grammar','policies','budgets','eval','incidents'];
+const TABS=['chat','calendar','week','tasks','review','activity','ask','security','prompts','sampling','models','retrieval','grammar','policies','budgets','eval','incidents'];
 const esc=s=>{const d=document.createElement('div');d.textContent=s||'';return d.innerHTML;};
 const when=e=>e.all_day?((e.due||e.start)+' · all day'):((e.start||e.due)+(e.end?(' – '+e.end.slice(11)):''));
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
@@ -21,6 +21,7 @@ document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
   if(t==='security'){loadKill();loadMCP();loadBundles();}
   if(t==='prompts') loadPrompts();
   if(t==='sampling') loadSampling();
+  if(t==='models') loadModels();
   if(t==='retrieval') loadRetrieval();
   if(t==='grammar') loadGrammar();
   if(t==='budgets') loadBudgets();
@@ -31,7 +32,7 @@ document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
 // App = consumer (zero control knobs); Studio = operator (the tuning/governance plane).
 const SURFACES={
   app:['chat','calendar','week','tasks','review','ask'],
-  studio:['security','prompts','sampling','retrieval','grammar','policies','budgets','eval','incidents','activity']
+  studio:['security','prompts','sampling','models','retrieval','grammar','policies','budgets','eval','incidents','activity']
 };
 (function(){
   const vis=(SURFACES[SURFACE]||TABS);
@@ -152,6 +153,18 @@ async function activateSampling(name){
   await postJSON('/api/sampling/activate',{name:name,config:cfg});loadSampling();
 }
 async function resetSampling(name){await postJSON('/api/sampling/reset',{name:name});loadSampling();}
+async function loadModels(){
+  const c=$('#modelsList');if(!c)return;const d=await getJSON('/api/models');const ms=d.models||[];
+  if(!ms.length){c.innerHTML='<p class="mut">no roles registered</p>';return;}
+  c.innerHTML=ms.map(m=>{const governed=m.version>0;
+    return '<div class="ev"><div><b>'+esc(m.name)+'</b> <span class="pill '+(governed?'pass':'')+'">v'+m.version+'</span> <span class="mut">'+esc(m.hash)+'</span>'+
+      '<div style="margin-top:6px">model <input id="md_'+esc(m.name)+'" value="'+esc(m.model)+'" style="width:180px"></div>'+
+      '<div style="margin-top:6px"><button class="go" onclick="activateModel(\''+esc(m.name)+'\')">Activate</button>'+
+      (governed?(' <button class="ghost" onclick="resetModel(\''+esc(m.name)+'\')">Reset to default</button>'):'')+'</div></div></div>';
+  }).join('');
+}
+async function activateModel(name){await postJSON('/api/models/activate',{name:name,model:$('#md_'+name).value});loadModels();}
+async function resetModel(name){await postJSON('/api/models/reset',{name:name});loadModels();}
 async function loadRetrieval(){
   const c=$('#retrievalList');if(!c)return;const d=await getJSON('/api/retrieval');const rs=d.retrieval||[];
   if(!rs.length){c.innerHTML='<p class="mut">no corpora registered</p>';return;}
