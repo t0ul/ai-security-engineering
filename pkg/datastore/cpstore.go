@@ -12,6 +12,7 @@ package datastore
 
 import (
 	"database/sql"
+	_ "embed"
 	"strings"
 	"time"
 
@@ -22,23 +23,11 @@ import (
 // Store is the SQLite-backed inventory.
 type Store struct{ db *sql.DB }
 
-const schema = `
-CREATE TABLE IF NOT EXISTS prompts(name TEXT, version TEXT, hash TEXT, text TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);
-CREATE TABLE IF NOT EXISTS grammars(name TEXT, version TEXT, hash TEXT, text TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);
-CREATE TABLE IF NOT EXISTS models(name TEXT, version TEXT, hash TEXT, model TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);
-CREATE TABLE IF NOT EXISTS approvals(id TEXT, proposer TEXT, approver TEXT, perm TEXT, note TEXT, version INTEGER, at DATETIME DEFAULT CURRENT_TIMESTAMP);
-CREATE TABLE IF NOT EXISTS mcp_pins(server TEXT, hash TEXT, approved_by TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);
-CREATE TABLE IF NOT EXISTS eval_scores(label TEXT, f1 REAL, at DATETIME DEFAULT CURRENT_TIMESTAMP);
-CREATE TABLE IF NOT EXISTS admin_audit(actor TEXT, action TEXT, detail TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);
-CREATE TABLE IF NOT EXISTS policies(name TEXT, version TEXT, hash TEXT, items TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);
-CREATE TABLE IF NOT EXISTS config(key TEXT PRIMARY KEY, value TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);
-CREATE TABLE IF NOT EXISTS sampling(name TEXT, version TEXT, hash TEXT, config TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);
-CREATE TABLE IF NOT EXISTS retrieval(name TEXT, version TEXT, hash TEXT, config TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);
-CREATE TABLE IF NOT EXISTS bundles(label TEXT, config TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);
-CREATE TABLE IF NOT EXISTS budgets(name TEXT, version TEXT, hash TEXT, config TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);
-CREATE TABLE IF NOT EXISTS feedback(source TEXT, title TEXT, decision TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);
-CREATE TABLE IF NOT EXISTS skill_pins(name TEXT, version TEXT, hash TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);
-CREATE TABLE IF NOT EXISTS models_catalog(name TEXT PRIMARY KEY, url TEXT, sha256 TEXT, file TEXT, port INTEGER, ctx INTEGER, host TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);`
+// schema is the full SQLite schema, kept as one auditable plain-SQL file
+// (schema.sql) and embedded at build time — nothing creates a table elsewhere.
+//
+//go:embed schema.sql
+var schema string
 
 // Open creates/opens the inventory at path (":memory:" for ephemeral).
 func Open(path string) (*Store, error) {
@@ -346,6 +335,80 @@ func (s *Store) SeedModelCatalogIfEmpty(seed []modelcatalog.Entry) ([]modelcatal
 		}
 	}
 	return s.ListModelCatalog()
+}
+
+// EventRow is one row of the calendar/events projection: a derived, deduped event
+// parsed from the signed .ics outbox. The .ics stays the source of truth (it carries
+// the M20 content credential); this table is what the calendar view serves and
+// queries, rebuilt whenever the outbox changes.
+type EventRow struct {
+	Title       string
+	Start       string
+	End         string
+	Location    string
+	AllDay      bool
+	HasReminder bool
+	Signed      bool
+	File        string
+	Kind        string
+	Due         string
+	URL         string
+}
+
+// ReplaceEvents rebuilds the events projection in one transaction: it clears the
+// table, inserts the deduped rows in order, and records the outbox fingerprint the
+// projection was built from (so a reader can tell whether it is still fresh).
+func (s *Store) ReplaceEvents(fingerprint string, rows []EventRow) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec(`DELETE FROM events`); err != nil {
+		return err
+	}
+	stmt, err := tx.Prepare(`INSERT INTO events(title,start_at,end_at,location,all_day,has_reminder,signed,file,kind,due_at,url) VALUES(?,?,?,?,?,?,?,?,?,?,?)`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+	for _, r := range rows {
+		if _, err := stmt.Exec(r.Title, r.Start, r.End, r.Location, b2i(r.AllDay), b2i(r.HasReminder), b2i(r.Signed), r.File, r.Kind, r.Due, r.URL); err != nil {
+			return err
+		}
+	}
+	if _, err := tx.Exec(`INSERT OR REPLACE INTO config(key,value) VALUES('events_fingerprint',?)`, fingerprint); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// LoadEvents returns the events projection (in insertion order) and the outbox
+// fingerprint it was built from.
+func (s *Store) LoadEvents() (fingerprint string, rows []EventRow, err error) {
+	fingerprint, _, _ = s.GetConfig("events_fingerprint")
+	r, err := s.db.Query(`SELECT title,start_at,end_at,location,all_day,has_reminder,signed,file,kind,due_at,url FROM events ORDER BY rowid`)
+	if err != nil {
+		return "", nil, err
+	}
+	defer r.Close()
+	for r.Next() {
+		var e EventRow
+		var allDay, reminder, signed int
+		if err := r.Scan(&e.Title, &e.Start, &e.End, &e.Location, &allDay, &reminder, &signed, &e.File, &e.Kind, &e.Due, &e.URL); err != nil {
+			return "", nil, err
+		}
+		e.AllDay, e.HasReminder, e.Signed = allDay != 0, reminder != 0, signed != 0
+		rows = append(rows, e)
+	}
+	return fingerprint, rows, r.Err()
+}
+
+func b2i(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }
 
 // LatestPolicyItems returns the most recent persisted allowlist for name (stored

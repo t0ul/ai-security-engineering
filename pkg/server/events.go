@@ -3,6 +3,7 @@ package server
 import (
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -79,14 +80,25 @@ type Event struct {
 // time. accept/reject and new drops add or remove files, which bumps the dir
 // mtime and invalidates the cache. The returned slice is read-only — callers
 // render it, they must not mutate it in place.
+// EventStore is the DB-backed events projection the calendar view serves from. The
+// signed .ics outbox stays the source of truth (it carries the M20 content
+// credential); this projection is rebuilt from it whenever the outbox changes, and
+// serves the deduped calendar without a per-request .ics scan.
+type EventStore interface {
+	ReplaceEvents(fingerprint string, events []Event) error
+	LoadEvents() (fingerprint string, events []Event, err error)
+}
+
+// allEvents returns the deduped calendar events, served in three tiers: an in-memory
+// cache, then the DB projection (persists across restarts), then a rebuild from the
+// signed .ics (which re-verifies signatures and re-persists the projection). The
+// outbox fingerprint keys all three — any .ics add/remove/edit invalidates them, so a
+// tampered .ics re-verifies rather than serving a stale signed=true (a security
+// invariant), and the DB is never served stale.
 func (s *Server) allEvents() []Event {
 	if s.OutboxDir == "" {
 		return nil
 	}
-	// Fingerprint the .ics/.sig entries (name+size+mtime), not just the dir mtime:
-	// an in-place content edit (e.g. a tampered .ics) changes a file's size/mtime
-	// but not necessarily the parent dir's, and must invalidate so the signature
-	// re-verifies — serving a stale signed=true would be a security regression.
 	fp := s.outboxFingerprint()
 	s.evMu.Lock()
 	if s.evCache != nil && fp == s.evFP {
@@ -95,7 +107,21 @@ func (s *Server) allEvents() []Event {
 		return cached
 	}
 	s.evMu.Unlock()
+	// DB projection: serve from it when it was built from the current outbox.
+	if s.Events != nil && fp != "" {
+		if dbFP, evs, err := s.Events.LoadEvents(); err == nil && dbFP == fp {
+			s.evMu.Lock()
+			s.evCache, s.evFP = evs, fp
+			s.evMu.Unlock()
+			return evs
+		}
+	}
+	// Rebuild from the signed .ics (re-verifies), then persist the projection.
 	out := s.readAllEvents()
+	if s.Events != nil {
+		_ = s.Events.ReplaceEvents(fp, out)
+		log.Printf("events: rebuilt DB projection from signed .ics (%d events)", len(out))
+	}
 	s.evMu.Lock()
 	s.evCache, s.evFP = out, fp
 	s.evMu.Unlock()

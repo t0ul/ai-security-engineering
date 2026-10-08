@@ -379,6 +379,7 @@ func main() {
 	// no row for a knob.
 	var profileSvc server.ProfileStore
 	var modelCatalogSvc server.ModelCatalogStore
+	var eventsSvc server.EventStore
 	if inv != nil {
 		for _, n := range []string{"planner", "coder", "extractor", "chat_system"} {
 			if text, ok, _ := inv.LatestPromptText(n); ok {
@@ -422,6 +423,7 @@ func main() {
 			log.Printf("webapp: seed model catalog: %v", err)
 		}
 		modelCatalogSvc = inv // *datastore.Store satisfies server.ModelCatalogLister
+		eventsSvc = eventProjection{inv: inv} // DB-backed calendar projection
 		// Bring the local models up automatically on startup (planner/coder + gateway),
 		// so chat & extraction work out of the box — then seed the example emails so they
 		// are extracted via the LLM (clean) rather than the regex fallback (noisy). The
@@ -516,7 +518,7 @@ func main() {
 			Flywheel: flywheelSvc, Chat: chatSvc,
 			Authz: authz, OperatorToken: opToken, AppToken: appToken, Audit: audit,
 			MCP: mcpReg, Prompts: prompts, Policies: policies, Sampling: sampling, Budgets: budgets, Retrieval: retrieval, Grammars: grammars, Models: models,
-			Skills: skillsPlane, SkillCatalog: skillSupply, ModelCatalog: modelCatalogSvc,
+			Skills: skillsPlane, SkillCatalog: skillSupply, ModelCatalog: modelCatalogSvc, Events: eventsSvc,
 			AssetsDir: *assetsDir, GatewayURL: *gwFlag, GatewayUp: func() bool { return gw != nil && gw.Up() },
 			Eval:    evalSvc,
 			Bundles: bundleSvc,

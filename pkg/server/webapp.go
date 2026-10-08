@@ -125,6 +125,11 @@ type Config struct {
 	// Shown in the Models tab with add/edit/delete. Nil = no catalog card.
 	ModelCatalog ModelCatalogStore
 
+	// Events, when set, is the DB-backed calendar/events projection: the calendar
+	// view serves deduped events from here (not a per-request .ics scan), rebuilt
+	// from the signed .ics outbox whenever it changes. Nil = read straight from .ics.
+	Events EventStore
+
 	// Runtime health inputs (the Runtime tab / cmd/preflight-in-console): the asset
 	// dir holding GGUFs, the gateway URL (display), and a gateway health probe.
 	AssetsDir  string

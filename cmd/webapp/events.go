@@ -1,0 +1,40 @@
+package main
+
+import (
+	"github.com/t0ul/ai-security-engineering/pkg/datastore"
+	"github.com/t0ul/ai-security-engineering/pkg/server"
+)
+
+// eventProjection adapts the datastore events table to server.EventStore: it is the
+// DB-backed calendar projection the view serves from, converting between the server's
+// Event and the datastore's EventRow. The signed .ics outbox stays the source of
+// truth; this is rebuilt from it whenever the outbox changes.
+type eventProjection struct{ inv *datastore.Store }
+
+func (e eventProjection) ReplaceEvents(fp string, evs []server.Event) error {
+	rows := make([]datastore.EventRow, len(evs))
+	for i, ev := range evs {
+		rows[i] = datastore.EventRow{
+			Title: ev.Title, Start: ev.Start, End: ev.End, Location: ev.Location,
+			AllDay: ev.AllDay, HasReminder: ev.HasReminder, Signed: ev.Signed,
+			File: ev.File, Kind: ev.Kind, Due: ev.Due, URL: ev.URL,
+		}
+	}
+	return e.inv.ReplaceEvents(fp, rows)
+}
+
+func (e eventProjection) LoadEvents() (string, []server.Event, error) {
+	fp, rows, err := e.inv.LoadEvents()
+	if err != nil {
+		return "", nil, err
+	}
+	evs := make([]server.Event, len(rows))
+	for i, r := range rows {
+		evs[i] = server.Event{
+			Title: r.Title, Start: r.Start, End: r.End, Location: r.Location,
+			AllDay: r.AllDay, HasReminder: r.HasReminder, Signed: r.Signed,
+			File: r.File, Kind: r.Kind, Due: r.Due, URL: r.URL,
+		}
+	}
+	return fp, evs, nil
+}
