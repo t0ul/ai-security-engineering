@@ -13,6 +13,7 @@ package rag
 import (
 	"database/sql"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/t0ul/ai-security-engineering/pkg/agent/guard"
@@ -46,8 +47,9 @@ type Chunk struct {
 // ":memory:" for an ephemeral index. Set Embed to also index vectors for
 // semantic retrieval (SemanticQuery).
 type Store struct {
-	db    *sql.DB
-	Embed Embedder // optional; when set, Add also stores an embedding
+	db      *sql.DB
+	Embed   Embedder // optional; when set, Add also stores an embedding per chunk
+	Chunker Chunker  // optional; nil = whole-document. Splits a doc into indexed chunks
 }
 
 // Open creates/opens the index at path (":memory:" for ephemeral).
@@ -88,16 +90,47 @@ func OpenReadOnly(path string) (*Store, error) {
 // Close releases the database.
 func (s *Store) Close() error { return s.db.Close() }
 
-// Add indexes (or replaces) a document by id.
+// Add indexes (or replaces) a document by id. The text is cleaned (whitespace
+// normalized) and split by the store's Chunker (nil = whole-document); each chunk
+// becomes its own retrievable row under the same document id, so a hit returns the
+// relevant passage rather than the whole email. When Embed is set, every chunk also
+// gets a vector (keyed per chunk) for SemanticQuery.
 func (s *Store) Add(d Doc) error {
+	// Remove the doc's existing chunks and their vectors (vectors are keyed by the
+	// per-chunk FTS rowid, so SemanticQuery can join one vector per chunk).
+	if rows, err := s.db.Query(`SELECT rowid FROM docs WHERE id = ?`, d.ID); err == nil {
+		var rids []int64
+		for rows.Next() {
+			var r int64
+			_ = rows.Scan(&r)
+			rids = append(rids, r)
+		}
+		rows.Close()
+		for _, r := range rids {
+			_, _ = s.db.Exec(`DELETE FROM vectors WHERE id = ?`, strconv.FormatInt(r, 10))
+		}
+	}
 	if _, err := s.db.Exec(`DELETE FROM docs WHERE id = ?`, d.ID); err != nil {
 		return err
 	}
-	if _, err := s.db.Exec(`INSERT INTO docs(id, tenant, prov, text) VALUES(?,?,?,?)`,
-		d.ID, d.Tenant, string(d.Prov), d.Text); err != nil {
-		return err
+	chunker := s.Chunker
+	if chunker == nil {
+		chunker = WholeChunker{}
 	}
-	return s.addVector(d.ID, d.Text)
+	for _, c := range chunker.Chunk(Clean(d.Text)) {
+		res, err := s.db.Exec(`INSERT INTO docs(id, tenant, prov, text) VALUES(?,?,?,?)`,
+			d.ID, d.Tenant, string(d.Prov), c)
+		if err != nil {
+			return err
+		}
+		if s.Embed != nil {
+			rid, _ := res.LastInsertId()
+			if err := s.addVector(strconv.FormatInt(rid, 10), c); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 var reWord = regexp.MustCompile(`[a-zA-Z0-9]+`)

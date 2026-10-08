@@ -41,8 +41,10 @@ func (s *Store) SemanticQuery(ctx context.Context, tenant, query string, k int) 
 	if err != nil {
 		return nil, err
 	}
+	// Vectors are keyed by the per-chunk FTS rowid (a doc has one row per chunk), so
+	// join on rowid and report the base document id as the chunk's DocID.
 	rows, err := s.db.Query(
-		`SELECT d.id, d.prov, d.text, v.vec FROM docs d JOIN vectors v ON d.id = v.id WHERE d.tenant = ? OR d.tenant = ''`,
+		`SELECT d.id, d.prov, d.text, v.vec FROM docs d JOIN vectors v ON CAST(d.rowid AS TEXT) = v.id WHERE d.tenant = ? OR d.tenant = ''`,
 		tenant)
 	if err != nil {
 		return nil, err
