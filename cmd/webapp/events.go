@@ -38,3 +38,28 @@ func (e eventProjection) LoadEvents() (string, []server.Event, error) {
 	}
 	return fp, evs, nil
 }
+
+// summaryProjection adapts the datastore summaries table to server.SummaryStore (the
+// DB-backed projection of the per-email sidecars the Tasks/digest/Directory/Review
+// views serve from). The .summary.json files stay the source of truth.
+type summaryProjection struct{ inv *datastore.Store }
+
+func (p summaryProjection) ReplaceSummaries(fp string, rows []server.SummaryRow) error {
+	dr := make([]datastore.SummaryRow, len(rows))
+	for i, r := range rows {
+		dr[i] = datastore.SummaryRow{File: r.File, JSON: r.JSON}
+	}
+	return p.inv.ReplaceSummaries(fp, dr)
+}
+
+func (p summaryProjection) LoadSummaries() (string, []server.SummaryRow, error) {
+	fp, rows, err := p.inv.LoadSummaries()
+	if err != nil {
+		return "", nil, err
+	}
+	sr := make([]server.SummaryRow, len(rows))
+	for i, r := range rows {
+		sr[i] = server.SummaryRow{File: r.File, JSON: r.JSON}
+	}
+	return fp, sr, nil
+}

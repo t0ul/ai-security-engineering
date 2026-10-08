@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -22,12 +23,69 @@ type namedSummary struct {
 	S    pipeline.EmailSummary
 }
 
-// loadSummaries reads every <stem>.summary.json sidecar the pipeline wrote.
+// SummaryStore is the DB-backed projection of the per-email summary sidecars. The
+// .summary.json files stay the source of truth; this projection is rebuilt from them
+// whenever they change and serves the Tasks/digest/Directory/Review views without a
+// per-request file scan. Each row carries the EmailSummary as JSON.
+type SummaryStore interface {
+	ReplaceSummaries(fingerprint string, rows []SummaryRow) error
+	LoadSummaries() (fingerprint string, rows []SummaryRow, err error)
+}
+
+// SummaryRow is one projected sidecar: its file name and the EmailSummary JSON.
+type SummaryRow struct {
+	File string
+	JSON string
+}
+
+// loadSummaries returns the parsed summary sidecars, served in three tiers: an
+// in-memory cache, then the DB projection (persists across restarts), then a rebuild
+// by scanning the .summary.json files. The summaries fingerprint keys all three, so
+// any sidecar add/remove/edit invalidates them and nothing is served stale.
 func (s *Server) loadSummaries() []namedSummary {
-	var out []namedSummary
 	if s.OutboxDir == "" {
-		return out
+		return nil
 	}
+	fp := s.summariesFingerprint()
+	s.smMu.Lock()
+	if s.smCache != nil && fp == s.smFP {
+		cached := s.smCache
+		s.smMu.Unlock()
+		return cached
+	}
+	s.smMu.Unlock()
+	// DB projection: serve from it when it was built from the current sidecars.
+	if s.Summaries != nil && fp != "" {
+		if dbFP, rows, err := s.Summaries.LoadSummaries(); err == nil && dbFP == fp {
+			out := decodeSummaries(rows)
+			s.smMu.Lock()
+			s.smCache, s.smFP = out, fp
+			s.smMu.Unlock()
+			return out
+		}
+	}
+	// Rebuild from the JSON sidecars, then persist the projection.
+	out := s.readAllSummaries()
+	if s.Summaries != nil {
+		rows := make([]SummaryRow, 0, len(out))
+		for _, ns := range out {
+			if b, err := json.Marshal(ns.S); err == nil {
+				rows = append(rows, SummaryRow{File: ns.Name, JSON: string(b)})
+			}
+		}
+		if err := s.Summaries.ReplaceSummaries(fp, rows); err == nil {
+			log.Printf("summaries: rebuilt DB projection from .summary.json (%d sidecars)", len(rows))
+		}
+	}
+	s.smMu.Lock()
+	s.smCache, s.smFP = out, fp
+	s.smMu.Unlock()
+	return out
+}
+
+// readAllSummaries scans and parses every <stem>.summary.json sidecar in the outbox.
+func (s *Server) readAllSummaries() []namedSummary {
+	var out []namedSummary
 	entries, _ := os.ReadDir(s.OutboxDir)
 	for _, e := range entries {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".summary.json") {
@@ -43,6 +101,38 @@ func (s *Server) loadSummaries() []namedSummary {
 		}
 	}
 	return out
+}
+
+// decodeSummaries turns persisted projection rows back into parsed sidecars.
+func decodeSummaries(rows []SummaryRow) []namedSummary {
+	out := make([]namedSummary, 0, len(rows))
+	for _, r := range rows {
+		var es pipeline.EmailSummary
+		if json.Unmarshal([]byte(r.JSON), &es) == nil {
+			out = append(out, namedSummary{Name: r.File, S: es})
+		}
+	}
+	return out
+}
+
+// summariesFingerprint is a cheap key over the .summary.json sidecars (name+size+
+// mtime) — any add/remove/edit changes it, invalidating the caches and the DB
+// projection so a reader never serves stale.
+func (s *Server) summariesFingerprint() string {
+	entries, err := os.ReadDir(s.OutboxDir)
+	if err != nil {
+		return ""
+	}
+	var b strings.Builder
+	for _, e := range entries {
+		if !strings.HasSuffix(e.Name(), ".summary.json") {
+			continue
+		}
+		if info, ierr := e.Info(); ierr == nil {
+			fmt.Fprintf(&b, "%s:%d:%d;", e.Name(), info.Size(), info.ModTime().UnixNano())
+		}
+	}
+	return b.String()
 }
 
 // itemRow is an item plus where it came from, so the UI can accept it.

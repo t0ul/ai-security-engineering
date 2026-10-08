@@ -411,6 +411,59 @@ func b2i(b bool) int {
 	return 0
 }
 
+// SummaryRow is one row of the summaries projection: a per-email sidecar (the parsed
+// EmailSummary, carried as its JSON) keyed by file name.
+type SummaryRow struct {
+	File string
+	JSON string
+}
+
+// ReplaceSummaries rebuilds the summaries projection in one transaction and records
+// the outbox fingerprint it was built from.
+func (s *Store) ReplaceSummaries(fingerprint string, rows []SummaryRow) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec(`DELETE FROM summaries`); err != nil {
+		return err
+	}
+	stmt, err := tx.Prepare(`INSERT OR REPLACE INTO summaries(file,json) VALUES(?,?)`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+	for _, r := range rows {
+		if _, err := stmt.Exec(r.File, r.JSON); err != nil {
+			return err
+		}
+	}
+	if _, err := tx.Exec(`INSERT OR REPLACE INTO config(key,value) VALUES('summaries_fingerprint',?)`, fingerprint); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// LoadSummaries returns the summaries projection (ordered by file) and the outbox
+// fingerprint it was built from.
+func (s *Store) LoadSummaries() (fingerprint string, rows []SummaryRow, err error) {
+	fingerprint, _, _ = s.GetConfig("summaries_fingerprint")
+	r, err := s.db.Query(`SELECT file,json FROM summaries ORDER BY file`)
+	if err != nil {
+		return "", nil, err
+	}
+	defer r.Close()
+	for r.Next() {
+		var row SummaryRow
+		if err := r.Scan(&row.File, &row.JSON); err != nil {
+			return "", nil, err
+		}
+		rows = append(rows, row)
+	}
+	return fingerprint, rows, r.Err()
+}
+
 // LatestPolicyItems returns the most recent persisted allowlist for name (stored
 // newline-joined), so the resolver can rehydrate an active policy on boot.
 func (s *Store) LatestPolicyItems(name string) (items []string, ok bool, err error) {

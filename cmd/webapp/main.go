@@ -22,6 +22,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -380,6 +381,7 @@ func main() {
 	var profileSvc server.ProfileStore
 	var modelCatalogSvc server.ModelCatalogStore
 	var eventsSvc server.EventStore
+	var summariesSvc server.SummaryStore
 	if inv != nil {
 		for _, n := range []string{"planner", "coder", "extractor", "chat_system"} {
 			if text, ok, _ := inv.LatestPromptText(n); ok {
@@ -422,8 +424,17 @@ func main() {
 		if _, err := inv.SeedModelCatalogIfEmpty(modelcatalog.DefaultSeed()); err != nil {
 			log.Printf("webapp: seed model catalog: %v", err)
 		}
-		modelCatalogSvc = inv // *datastore.Store satisfies server.ModelCatalogLister
-		eventsSvc = eventProjection{inv: inv} // DB-backed calendar projection
+		modelCatalogSvc = inv                      // *datastore.Store satisfies server.ModelCatalogLister
+		eventsSvc = eventProjection{inv: inv}      // DB-backed calendar projection
+		summariesSvc = summaryProjection{inv: inv} // DB-backed tasks/digest/directory projection
+		// Kill switch must survive a restart: rehydrate the persisted level on boot and
+		// persist every change. An engaged halt that resets on restart is not a halt.
+		if v, ok, _ := inv.GetConfig("kill_level"); ok {
+			if n, err := strconv.Atoi(v); err == nil {
+				safety.Rehydrate(controlplane.KillLevel(n))
+			}
+		}
+		safety.OnSet = func(l controlplane.KillLevel) { _ = inv.SetConfig("kill_level", strconv.Itoa(int(l))) }
 		// Bring the local models up automatically on startup (planner/coder + gateway),
 		// so chat & extraction work out of the box — then seed the example emails so they
 		// are extracted via the LLM (clean) rather than the regex fallback (noisy). The
@@ -518,7 +529,7 @@ func main() {
 			Flywheel: flywheelSvc, Chat: chatSvc,
 			Authz: authz, OperatorToken: opToken, AppToken: appToken, Audit: audit,
 			MCP: mcpReg, Prompts: prompts, Policies: policies, Sampling: sampling, Budgets: budgets, Retrieval: retrieval, Grammars: grammars, Models: models,
-			Skills: skillsPlane, SkillCatalog: skillSupply, ModelCatalog: modelCatalogSvc, Events: eventsSvc,
+			Skills: skillsPlane, SkillCatalog: skillSupply, ModelCatalog: modelCatalogSvc, Events: eventsSvc, Summaries: summariesSvc,
 			AssetsDir: *assetsDir, GatewayURL: *gwFlag, GatewayUp: func() bool { return gw != nil && gw.Up() },
 			Eval:    evalSvc,
 			Bundles: bundleSvc,

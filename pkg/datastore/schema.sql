@@ -46,3 +46,11 @@ CREATE TABLE IF NOT EXISTS models_catalog(name TEXT PRIMARY KEY, url TEXT, sha25
 -- table is rebuilt (deduped) from it whenever the outbox changes, keyed by the outbox
 -- fingerprint stored in config('events_fingerprint').
 CREATE TABLE IF NOT EXISTS events(title TEXT, start_at TEXT, end_at TEXT, location TEXT, all_day INTEGER, has_reminder INTEGER, signed INTEGER, file TEXT, kind TEXT, due_at TEXT, url TEXT);
+
+-- summaries is the projection of the per-email <stem>.summary.json sidecars the
+-- pipeline wrote (items/tasks, contacts, digest, needs-review). The Tasks, By-email,
+-- Directory, and Review views serve from here instead of re-scanning + re-parsing the
+-- JSON files on every request. Rebuilt whenever the outbox summaries change, keyed by
+-- the fingerprint stored in config('summaries_fingerprint'). The .summary.json stays
+-- the source of truth; this is the queryable projection.
+CREATE TABLE IF NOT EXISTS summaries(file TEXT PRIMARY KEY, json TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);

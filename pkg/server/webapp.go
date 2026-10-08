@@ -130,6 +130,11 @@ type Config struct {
 	// from the signed .ics outbox whenever it changes. Nil = read straight from .ics.
 	Events EventStore
 
+	// Summaries, when set, is the DB-backed projection of the per-email summary
+	// sidecars: the Tasks/digest/Directory/Review views serve from here instead of
+	// re-scanning + re-parsing every .summary.json per request. Nil = read from JSON.
+	Summaries SummaryStore
+
 	// Runtime health inputs (the Runtime tab / cmd/preflight-in-console): the asset
 	// dir holding GGUFs, the gateway URL (display), and a gateway health probe.
 	AssetsDir  string
@@ -234,6 +239,13 @@ type Server struct {
 	evMu    sync.Mutex
 	evCache []Event
 	evFP    string
+
+	// summary cache (items.go): the parsed .summary.json sidecars, keyed by a
+	// fingerprint of those files, so the Tasks/digest/Directory/Review views don't
+	// re-read+re-parse every sidecar per request.
+	smMu    sync.Mutex
+	smCache []namedSummary
+	smFP    string
 }
 
 // New builds a ready Server from its dependencies. It initializes internal state

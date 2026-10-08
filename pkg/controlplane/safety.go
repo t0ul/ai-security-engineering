@@ -37,12 +37,16 @@ type Safety struct {
 	mu    sync.Mutex
 	level KillLevel
 	audit *gledger.AuditLog
+	// OnSet, when set, is called after every level change (outside the lock) so the
+	// level can be persisted. A kill switch that resets on restart is not a kill
+	// switch — an engaged halt MUST survive a process restart.
+	OnSet func(KillLevel)
 }
 
 // NewSafety returns a Safety at LevelNone.
 func NewSafety(audit *gledger.AuditLog) *Safety { return &Safety{audit: audit} }
 
-// Set changes the kill level, recording who and what.
+// Set changes the kill level, recording who and what, and persists it via OnSet.
 func (s *Safety) Set(by string, level KillLevel) {
 	s.mu.Lock()
 	s.level = level
@@ -50,6 +54,18 @@ func (s *Safety) Set(by string, level KillLevel) {
 	if s.audit != nil {
 		s.audit.Emit(gledger.NewTraceID(), "safety", "set_level", gledger.F{"by": by, "level": level.String()})
 	}
+	if s.OnSet != nil {
+		s.OnSet(level)
+	}
+}
+
+// Rehydrate restores a persisted kill level on boot. It does NOT audit or fire
+// OnSet — it is a restore of prior state, not a new operator action. Fail-safe: a
+// halt engaged before the restart is re-applied before the agent serves anything.
+func (s *Safety) Rehydrate(level KillLevel) {
+	s.mu.Lock()
+	s.level = level
+	s.mu.Unlock()
 }
 
 // Level reports the current kill level.
