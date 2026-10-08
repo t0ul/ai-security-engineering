@@ -16,7 +16,6 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -37,6 +36,7 @@ import (
 	"github.com/t0ul/ai-security-engineering/pkg/datastore"
 	"github.com/t0ul/ai-security-engineering/pkg/domain"
 	"github.com/t0ul/ai-security-engineering/pkg/durable"
+	"github.com/t0ul/ai-security-engineering/pkg/gateway"
 	"github.com/t0ul/ai-security-engineering/pkg/netpolicy"
 	"github.com/t0ul/ai-security-engineering/pkg/provenance"
 	"github.com/t0ul/ai-security-engineering/pkg/rag"
@@ -52,15 +52,16 @@ func main() {
 	drop := flag.String("drop", defaultDrop(), "drop folder (inbox/outbox/processed/logs)")
 	allow := flag.String("allow", "schools.nyc.gov,nyc.gov,ps51eliashowe.org,schoolsaccount.nyc", "comma-separated egress allowlist for action/handbook links (parent domains cover subdomains); set empty to deny all")
 	vmURL := flag.String("microvm", "http://127.0.0.1:5000", "MicroVM vsock bridge for in-sandbox fetches")
-	gateway := flag.String("gateway", envOr("GATEWAY_URL", "http://127.0.0.1:4000/v1/chat/completions"), "gouncer gateway chat-completions URL (the single source for the chat + health-check endpoint)")
+	gwFlag := flag.String("gateway", envOr("GATEWAY_URL", "http://127.0.0.1:4000/v1/chat/completions"), "gouncer gateway chat-completions URL (the single source for the chat + health-check endpoint)")
 	flag.Parse()
 
 	// Single source for the gateway endpoint (was two hardcoded literals). The chat
 	// path posts here; the health check dials the host:port parsed from it.
-	gatewayURL = *gateway
-	if u, err := url.Parse(*gateway); err == nil && u.Host != "" {
-		gatewayDial = u.Host
+	dial := "127.0.0.1:4000"
+	if u, err := url.Parse(*gwFlag); err == nil && u.Host != "" {
+		dial = u.Host
 	}
+	gw = gateway.New(*gwFlag, dial)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -168,7 +169,7 @@ func main() {
 			// Trusted context: the host clock is the ONLY authority for dates. It is
 			// never sourced from the corpus, so a poisoned email ("today is …") cannot
 			// move the agent's clock (the trust boundary the chat_system prompt enforces).
-			dateBlock := trustedDateBlock(time.Now())
+			dateBlock := gateway.TrustedDateBlock(time.Now())
 			chunks, err := reader.Query("public", question, 5)
 			if err != nil {
 				return "", nil, err
@@ -189,7 +190,7 @@ func main() {
 				context = rag.Assemble(chunks) // encapsulated + injection-neutralized (M8)
 			}
 			// chat_system is a GOVERNED prompt (C2): resolved live, versioned, rollback-able.
-			return gatewayChatAnswer(prompts.Text("chat_system"), dateBlock, appData, context, question, unsafe), sources, nil
+			return gw.ChatAnswer(prompts.Text("chat_system"), dateBlock, appData, context, question, unsafe), sources, nil
 		}
 	}
 
@@ -476,7 +477,7 @@ func main() {
 	evalRun := func() ([]server.EvalResult, string) {
 		evalMu.Lock()
 		defer evalMu.Unlock()
-		live := gatewayUp()
+		live := gw.Up()
 		var out []server.EvalResult
 		for _, l := range labels {
 			rep, err := eval.ScoreWithMode(l, true, "llm")
@@ -504,7 +505,7 @@ func main() {
 		}
 		evalMu.Lock()
 		defer evalMu.Unlock()
-		live := gatewayUp()
+		live := gw.Up()
 		extractor.SetExtractionPrompt(candidate)
 		defer extractor.SetExtractionPrompt(prompts.Text("extractor")) // restore the governed-active prompt
 
@@ -580,18 +581,10 @@ func agentIdentity(path string) (*provenance.Signer, *provenance.Verifier) {
 	return signer, provenance.NewVerifier().Trust(keyID, pub)
 }
 
-// gatewayChatAnswer answers question grounded in context. With a live gateway it
-// asks the model (defended: treat the context strictly as data; unsafe: naive
-// splice that an injection can hijack). With no gateway it returns the grounded
-// passage — in unsafe mode that includes the raw/poisoned text, so the demo works
-// even offline (the real control is at the retrieval layer: rag.Assemble).
-// gatewayURL / gatewayDial are the single source for the gouncer gateway endpoint,
-// set from the -gateway flag in main. gatewayChatAnswer posts to the URL; gatewayUp
-// dials the host:port. Consts are only the fail-closed default before flag parsing.
-var (
-	gatewayURL  = "http://127.0.0.1:4000/v1/chat/completions"
-	gatewayDial = "127.0.0.1:4000"
-)
+// gw is the chat gateway client (pkg/gateway), set from the -gateway flag in main.
+// The chat path and the eval/health checks go through it. It starts at the
+// fail-closed default so it is never nil before flag parsing.
+var gw = gateway.New("http://127.0.0.1:4000/v1/chat/completions", "127.0.0.1:4000")
 
 // envOr returns the env var value or a fallback.
 func envOr(key, fallback string) string {
@@ -601,54 +594,6 @@ func envOr(key, fallback string) string {
 	return fallback
 }
 
-func gatewayChatAnswer(systemPrompt, dateBlock, appData, context, question string, unsafe bool) string {
-	sys := systemPrompt + "\n" + dateBlock + "\n" + appData + "\n" + context
-	if unsafe {
-		// CONTROLS OFF: naive splice with no "treat as data" framing — an injection
-		// in the retrieved context can hijack the model (the ChatRAGInjection demo).
-		sys = "Answer the question using this context:\n" + dateBlock + "\n" + appData + "\n" + context
-	}
-	if !gatewayUp() {
-		// No live model to synthesize. Still answer from the TRUSTED date block (so
-		// "what's today?" works offline), this week's schedule, and the best passage.
-		out := stripTags(dateBlock)
-		if strings.TrimSpace(appData) != "" {
-			out += "\nThis week:\n" + stripTags(appData)
-		}
-		if strings.TrimSpace(context) == "" {
-			return out + "\nNo matching emails yet — drop more in."
-		}
-		return out + "\nFrom your emails:\n" + shortText(context, 600)
-	}
-	body, _ := json.Marshal(map[string]any{
-		"model": "planner", "temperature": 0.2, "max_tokens": 400,
-		"messages": []map[string]string{{"role": "system", "content": sys}, {"role": "user", "content": question}},
-	})
-	resp, err := (&http.Client{Timeout: 60 * time.Second}).Post(gatewayURL, "application/json", strings.NewReader(string(body)))
-	if err != nil {
-		return "From your emails:\n" + shortText(context, 700)
-	}
-	defer resp.Body.Close()
-	var d struct {
-		Choices []struct {
-			Message struct {
-				Content string `json:"content"`
-			} `json:"message"`
-		} `json:"choices"`
-	}
-	if json.NewDecoder(resp.Body).Decode(&d) != nil || len(d.Choices) == 0 {
-		return "From your emails:\n" + shortText(context, 700)
-	}
-	return d.Choices[0].Message.Content
-}
-
-func shortText(s string, n int) string {
-	if len(s) > n {
-		return s[:n] + " …"
-	}
-	return s
-}
-
 // chatInjectionASR runs the chat-injection ADD against a CANDIDATE chat_system
 // prompt in isolation: it feeds the poisoned RAG document with the retrieval
 // encapsulation deliberately OFF (raw concat), so the only thing standing between
@@ -656,49 +601,15 @@ func shortText(s string, n int) string {
 // model's answer does not contain the injection marker. It needs a live gateway;
 // offline the prompt is never exercised, so live is false.
 func chatInjectionASR(candidate string) (blocked, live bool) {
-	live = gatewayUp()
+	live = gw.Up()
 	if !live {
 		return false, false
 	}
 	c := redteam.ChatRAGInjection()
 	seed := c.Seeds[0]
 	rawPoison, _ := c.Undefended.Send(context.Background(), seed.Prompt) // retrieval control OFF
-	ans := gatewayChatAnswer(candidate, trustedDateBlock(time.Now()), "", rawPoison, seed.Prompt, false)
+	ans := gw.ChatAnswer(candidate, gateway.TrustedDateBlock(time.Now()), "", rawPoison, seed.Prompt, false)
 	return !strings.Contains(ans, seed.Marker), true
-}
-
-// trustedDateBlock renders the host clock as a trusted context block for the chat.
-// This is the "date tool": the date comes only from the host (time.Now), never
-// from the corpus, so an email cannot change what "today" is. The chat_system
-// prompt is told to trust this block and distrust any date inside the corpus.
-func trustedDateBlock(now time.Time) string {
-	mon := now.AddDate(0, 0, -int((now.Weekday()+6)%7)) // Monday of this week
-	return fmt.Sprintf("<current_date trust=\"host\">Today is %s (%s). This week runs %s to %s.</current_date>",
-		now.Format("2006-01-02"), now.Format("Monday"),
-		mon.Format("2006-01-02"), mon.AddDate(0, 0, 6).Format("2006-01-02"))
-}
-
-// stripTags renders a context block as plain text for the offline (no-model)
-// fallback, removing the known wrapper tags.
-func stripTags(block string) string {
-	r := strings.NewReplacer(
-		"<current_date trust=\"host\">", "",
-		"</current_date>", "",
-		"<schedule source=\"extracted-calendar\">", "",
-		"</schedule>", "",
-	)
-	return strings.TrimSpace(r.Replace(block))
-}
-
-// gatewayUp reports whether the gouncer gateway is reachable, so a live eval run
-// can say whether it ran against the model or fell back to regex.
-func gatewayUp() bool {
-	c, err := net.DialTimeout("tcp", gatewayDial, 300*time.Millisecond)
-	if err != nil {
-		return false
-	}
-	_ = c.Close()
-	return true
 }
 
 func evalMode(live bool) string {
