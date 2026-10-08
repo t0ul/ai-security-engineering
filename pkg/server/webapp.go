@@ -21,6 +21,7 @@ import (
 	"github.com/t0ul/ai-security-engineering/pkg/netpolicy"
 	"github.com/t0ul/ai-security-engineering/pkg/provenance"
 	"github.com/t0ul/ai-security-engineering/pkg/redteam"
+	"github.com/t0ul/ai-security-engineering/ui"
 	"github.com/t0ul/gledger"
 	"github.com/t0ul/gorauder"
 )
@@ -391,7 +392,7 @@ func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	// Inject the operator capability token so the page's fetch wrapper presents
 	// it. base64url has no quote/backslash, so it is safe inside the JS string.
-	w.Write([]byte(strings.Replace(dashboardHTML, "__CAP_TOKEN__", s.OperatorToken, 1)))
+	w.Write([]byte(strings.Replace(ui.Dashboard(), "__CAP_TOKEN__", s.OperatorToken, 1)))
 }
 
 // safetyState reports the current kill-switch level.

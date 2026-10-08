@@ -1,6 +1,4 @@
-package server
-
-const dashboardHTML = `<!doctype html>
+<!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Agent Console</title>
@@ -642,4 +640,4 @@ async function replay(id){
   $('#replayCard').classList.remove('hide');
   $('#replay').textContent=(d.timeline||[]).map(e=>e.ts+'  '+e.service+'  '+e.span+'/'+e.event).join('\n');
 }
-</script></body></html>`
+</script></body></html>
