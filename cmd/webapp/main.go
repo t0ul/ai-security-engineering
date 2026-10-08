@@ -454,11 +454,12 @@ func main() {
 	}
 
 	// Eval surfaces (C7): the Eval card + a "Test" button that shadow-evals a
-	// candidate extractor prompt before activation. Live eval and shadow eval
-	// mutate process-global state (EXTRACT_MODE, the extractor prompt override), so
-	// serialize them. Live runs need the gouncer gateway at :4000 (cmd/livecheck /
-	// a running modeld+gouncer); without it the extractor falls back to regex and
-	// we say so.
+	// candidate extractor prompt before activation. The extraction mode is now
+	// passed explicitly (eval.ScoreWithMode "llm"), not via the process-global
+	// EXTRACT_MODE env; the remaining shared state is the extractor's prompt
+	// override, so these still serialize on evalMu. Live runs need the gouncer
+	// gateway (cmd/livecheck / a running modeld+gouncer); without it the extractor
+	// falls back to regex and we say so.
 	var evalMu sync.Mutex
 	labels := []string{"testdata/emaildrop/labels/3.json", "testdata/emaildrop/labels/1.json"}
 	evalHistory := func() []server.EvalResult {
@@ -476,12 +477,9 @@ func main() {
 		evalMu.Lock()
 		defer evalMu.Unlock()
 		live := gatewayUp()
-		prev := os.Getenv("EXTRACT_MODE")
-		os.Setenv("EXTRACT_MODE", "llm")
-		defer os.Setenv("EXTRACT_MODE", prev)
 		var out []server.EvalResult
 		for _, l := range labels {
-			rep, err := eval.Score(l, true)
+			rep, err := eval.ScoreWithMode(l, true, "llm")
 			if err != nil {
 				continue
 			}
@@ -507,13 +505,10 @@ func main() {
 		evalMu.Lock()
 		defer evalMu.Unlock()
 		live := gatewayUp()
-		prevMode := os.Getenv("EXTRACT_MODE")
-		os.Setenv("EXTRACT_MODE", "llm")
-		defer os.Setenv("EXTRACT_MODE", prevMode)
 		extractor.SetExtractionPrompt(candidate)
 		defer extractor.SetExtractionPrompt(prompts.Text("extractor")) // restore the governed-active prompt
 
-		rep, err := eval.Score("testdata/emaildrop/labels/1.json", true)
+		rep, err := eval.ScoreWithMode("testdata/emaildrop/labels/1.json", true, "llm")
 		f1 := 0.0
 		if err == nil {
 			f1 = rep.F1

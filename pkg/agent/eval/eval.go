@@ -176,6 +176,14 @@ func ScoreEvents(source string, gold []GoldEvent, pred []schema.Event) Report {
 // returns the Report. useTool runs the registered tool (honoring EXTRACT_MODE);
 // otherwise it calls ExtractEvents directly (the Python default path).
 func Score(labelPath string, useTool bool) (Report, error) {
+	return ScoreWithMode(labelPath, useTool, "")
+}
+
+// ScoreWithMode is Score with an explicit extraction mode ("llm"/"regex"/"auto")
+// passed through tool.Ctx.Mode, instead of the process-global EXTRACT_MODE env.
+// mode "" keeps the env fallback (what Score does). This lets a caller run an LLM
+// eval without mutating global state that a concurrent extractor shares.
+func ScoreWithMode(labelPath string, useTool bool, mode string) (Report, error) {
 	raw, err := os.ReadFile(labelPath)
 	if err != nil {
 		return Report{}, err
@@ -206,7 +214,7 @@ func Score(labelPath string, useTool bool) (Report, error) {
 	}
 	var pred []schema.Event
 	if useTool {
-		res := extractor.New().Run(string(text), tool.Ctx{Source: label.SourceEmail, DefaultYear: year})
+		res := extractor.New().Run(string(text), tool.Ctx{Source: label.SourceEmail, DefaultYear: year, Mode: mode})
 		pred = res.Events
 	} else {
 		pred = extractor.ExtractEvents(string(text), label.SourceEmail, year)
