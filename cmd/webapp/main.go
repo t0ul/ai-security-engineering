@@ -26,6 +26,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/t0ul/ai-security-engineering/internal/modelcatalog"
 	"github.com/t0ul/ai-security-engineering/pkg/agent/extractor"
 	"github.com/t0ul/ai-security-engineering/pkg/agent/pipeline"
 	"github.com/t0ul/ai-security-engineering/pkg/agent/roster"
@@ -408,6 +409,12 @@ func main() {
 			if h, ok, _ := inv.LatestSkillPin(n); ok && h != "" {
 				skillsPlane.Rehydrate(n, h)
 			}
+		}
+		// Model catalog: the DB is the single source of truth for which models exist
+		// (URL/SHA/file/port/ctx). Seed the fail-closed bootstrap on first boot; never
+		// clobber operator edits. modeld/prepareassets read this same catalog via -db.
+		if _, err := inv.SeedModelCatalogIfEmpty(modelcatalog.DefaultSeed()); err != nil {
+			log.Printf("webapp: seed model catalog: %v", err)
 		}
 		for _, n := range []string{"api", "gateway"} {
 			if cfgJSON, ok, _ := inv.LatestBudget(n); ok {

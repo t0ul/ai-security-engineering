@@ -23,7 +23,9 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/t0ul/ai-security-engineering/internal/modelcatalog"
 	"github.com/t0ul/ai-security-engineering/internal/modelserve"
+	"github.com/t0ul/ai-security-engineering/pkg/datastore"
 )
 
 func main() {
@@ -31,22 +33,20 @@ func main() {
 
 	bin := flag.String("bin", defaultBin, "llama.cpp server binary")
 	dir := flag.String("dir", "set-up/vm-assets", "directory holding the .gguf models")
-	host := flag.String("host", "127.0.0.1", "bind host for the model servers")
-	plannerModel := flag.String("planner-model", "llama-3.2-3b.gguf", "planner GGUF filename")
-	plannerPort := flag.Int("planner-port", 11435, "planner port")
-	plannerCtx := flag.Int("planner-ctx", 8192, "planner context size")
-	coderModel := flag.String("coder-model", "qwen1.5b.gguf", "coder GGUF filename")
-	coderPort := flag.Int("coder-port", 11436, "coder port")
-	coderCtx := flag.Int("coder-ctx", 4096, "coder context size")
+	host := flag.String("host", "127.0.0.1", "bind host for the model servers (infra override)")
+	db := flag.String("db", "", "inventory.db holding the model catalog (empty = built-in bootstrap seed)")
 	ready := flag.Duration("ready", 120*time.Second, "per-server readiness timeout")
 	flag.Parse()
 
-	sup := &modelserve.Supervisor{
-		Servers: []modelserve.Server{
-			modelserve.LlamaServer("planner", *bin, *host, filepath.Join(*dir, *plannerModel), *plannerPort, *plannerCtx),
-			modelserve.LlamaServer("coder", *bin, *host, filepath.Join(*dir, *coderModel), *coderPort, *coderCtx),
-		},
+	// The served models (name/file/port/ctx) come from the catalog — the single
+	// source of truth — not per-model flags. -db reads the operator-editable catalog;
+	// empty uses the fail-closed bootstrap seed.
+	catalog := resolveCatalog(*db)
+	var servers []modelserve.Server
+	for _, m := range catalog {
+		servers = append(servers, modelserve.LlamaServer(m.Name, *bin, *host, filepath.Join(*dir, m.File), m.Port, m.Ctx))
 	}
+	sup := &modelserve.Supervisor{Servers: servers}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -56,6 +56,25 @@ func main() {
 		log.Fatalf("modeld: %v", err)
 	}
 	fmt.Println("modeld: stopped.")
+}
+
+// resolveCatalog returns the model catalog from the inventory DB (seeded on first
+// use) when a -db is given, else the built-in fail-closed bootstrap seed. The model
+// list is never hardcoded in this command.
+func resolveCatalog(dbPath string) []modelcatalog.Entry {
+	if dbPath == "" {
+		return modelcatalog.DefaultSeed()
+	}
+	inv, err := datastore.Open(dbPath)
+	if err != nil {
+		log.Fatalf("modeld: open catalog db: %v", err)
+	}
+	defer inv.Close()
+	cat, err := inv.SeedModelCatalogIfEmpty(modelcatalog.DefaultSeed())
+	if err != nil {
+		log.Fatalf("modeld: load catalog: %v", err)
+	}
+	return cat
 }
 
 func homeDir() string {

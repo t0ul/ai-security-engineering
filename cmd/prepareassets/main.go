@@ -16,17 +16,21 @@ import (
 	"runtime"
 
 	"github.com/t0ul/ai-security-engineering/internal/assets"
+	"github.com/t0ul/ai-security-engineering/internal/modelcatalog"
+	"github.com/t0ul/ai-security-engineering/pkg/datastore"
 )
 
+// The MicroVM kernel/rootfs stay consts here — they are VM provisioning assets, not
+// models. The MODELS are no longer hardcoded: they come from the model catalog
+// (datastore, falling back to modelcatalog.DefaultSeed), the single source of truth.
 const (
 	kernelURL = "https://github.com/Code-Hex/puipui-linux/releases/download/v1.0.3/puipui_linux_v1.0.3_aarch64.tar.gz"
 	rootfsURL = "https://dl-cdn.alpinelinux.org/alpine/v3.20/releases/aarch64/alpine-minirootfs-3.20.3-aarch64.tar.gz"
-	qwenURL   = "https://huggingface.co/Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF/resolve/main/qwen2.5-coder-1.5b-instruct-q4_k_m.gguf"
-	llamaURL  = "https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF/resolve/main/Llama-3.2-3B-Instruct-Q4_K_M.gguf"
 )
 
 func main() {
 	dir := flag.String("dir", "set-up/vm-assets", "asset output directory")
+	db := flag.String("db", "", "inventory.db holding the model catalog (empty = use the built-in bootstrap seed)")
 	flag.Parse()
 
 	if runtime.GOARCH != "arm64" {
@@ -36,7 +40,13 @@ func main() {
 		log.Fatalf("prepareassets: %v", err)
 	}
 
-	steps := []func(string) error{prepareKernel, prepareRootFS, prepareModels, buildGuestBinaries}
+	catalog := resolveCatalog(*db)
+	steps := []func(string) error{
+		prepareKernel,
+		prepareRootFS,
+		func(dir string) error { return prepareModels(dir, catalog) },
+		buildGuestBinaries,
+	}
 	for _, step := range steps {
 		if err := step(*dir); err != nil {
 			log.Fatalf("prepareassets: %v", err)
@@ -110,21 +120,35 @@ func buildGuestBinaries(dir string) error {
 	return nil
 }
 
-func prepareModels(dir string) error {
-	models := []struct {
-		name, url, file string
-	}{
-		{"Qwen-1.5B coder", qwenURL, "qwen1.5b.gguf"},
-		{"Llama-3.2-3B planner", llamaURL, "llama-3.2-3b.gguf"},
+// resolveCatalog returns the model catalog: from the inventory DB (seeded on first
+// use) when a -db is given, else the built-in fail-closed bootstrap seed. Either way
+// the model list is NOT hardcoded in this command.
+func resolveCatalog(dbPath string) []modelcatalog.Entry {
+	if dbPath == "" {
+		return modelcatalog.DefaultSeed()
 	}
-	for _, m := range models {
-		dest := filepath.Join(dir, m.file)
+	inv, err := datastore.Open(dbPath)
+	if err != nil {
+		log.Fatalf("prepareassets: open catalog db: %v", err)
+	}
+	defer inv.Close()
+	cat, err := inv.SeedModelCatalogIfEmpty(modelcatalog.DefaultSeed())
+	if err != nil {
+		log.Fatalf("prepareassets: load catalog: %v", err)
+	}
+	return cat
+}
+
+func prepareModels(dir string, catalog []modelcatalog.Entry) error {
+	for _, m := range catalog {
+		dest := filepath.Join(dir, m.File)
 		if fi, err := os.Stat(dest); err == nil && fi.Size() > 0 {
-			fmt.Printf("model: %s already present\n", m.name)
+			fmt.Printf("model: %s already present\n", m.Name)
 			continue
 		}
-		fmt.Printf("model: downloading %s (verified)...\n", m.name)
-		if err := assets.DownloadAndVerify(m.url, dest, ""); err != nil {
+		fmt.Printf("model: downloading %s (verified)...\n", m.Name)
+		// SHA256 from the catalog pins the content (M10); empty = GGUF-magic verify only.
+		if err := assets.DownloadAndVerify(m.URL, dest, m.SHA256); err != nil {
 			return err
 		}
 	}

@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/t0ul/ai-security-engineering/internal/modelcatalog"
 	_ "modernc.org/sqlite"
 )
 
@@ -36,7 +37,8 @@ CREATE TABLE IF NOT EXISTS retrieval(name TEXT, version TEXT, hash TEXT, config 
 CREATE TABLE IF NOT EXISTS bundles(label TEXT, config TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS budgets(name TEXT, version TEXT, hash TEXT, config TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS feedback(source TEXT, title TEXT, decision TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);
-CREATE TABLE IF NOT EXISTS skill_pins(name TEXT, version TEXT, hash TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);`
+CREATE TABLE IF NOT EXISTS skill_pins(name TEXT, version TEXT, hash TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS models_catalog(name TEXT PRIMARY KEY, url TEXT, sha256 TEXT, file TEXT, port INTEGER, ctx INTEGER, host TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);`
 
 // Open creates/opens the inventory at path (":memory:" for ephemeral).
 func Open(path string) (*Store, error) {
@@ -279,6 +281,71 @@ func (s *Store) LatestSkillPin(name string) (hash string, ok bool, err error) {
 	default:
 		return "", false, e
 	}
+}
+
+// UpsertModelCatalog inserts or replaces a catalog entry (the model registry is a
+// current-state table keyed by logical name, not append-only history).
+func (s *Store) UpsertModelCatalog(e modelcatalog.Entry) error {
+	_, err := s.db.Exec(
+		`INSERT OR REPLACE INTO models_catalog(name,url,sha256,file,port,ctx,host) VALUES(?,?,?,?,?,?,?)`,
+		e.Name, e.URL, e.SHA256, e.File, e.Port, e.Ctx, e.Host)
+	return err
+}
+
+// ListModelCatalog returns the full model catalog, sorted by name.
+func (s *Store) ListModelCatalog() ([]modelcatalog.Entry, error) {
+	rows, err := s.db.Query(`SELECT name,url,sha256,file,port,ctx,host FROM models_catalog ORDER BY name`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []modelcatalog.Entry
+	for rows.Next() {
+		var e modelcatalog.Entry
+		if err := rows.Scan(&e.Name, &e.URL, &e.SHA256, &e.File, &e.Port, &e.Ctx, &e.Host); err != nil {
+			return nil, err
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}
+
+// GetModelCatalog returns one catalog entry by logical name.
+func (s *Store) GetModelCatalog(name string) (e modelcatalog.Entry, ok bool, err error) {
+	row := s.db.QueryRow(`SELECT name,url,sha256,file,port,ctx,host FROM models_catalog WHERE name=?`, name)
+	switch e2 := row.Scan(&e.Name, &e.URL, &e.SHA256, &e.File, &e.Port, &e.Ctx, &e.Host); e2 {
+	case nil:
+		return e, true, nil
+	case sql.ErrNoRows:
+		return modelcatalog.Entry{}, false, nil
+	default:
+		return modelcatalog.Entry{}, false, e2
+	}
+}
+
+// DeleteModelCatalog removes a catalog entry by logical name.
+func (s *Store) DeleteModelCatalog(name string) error {
+	_, err := s.db.Exec(`DELETE FROM models_catalog WHERE name=?`, name)
+	return err
+}
+
+// SeedModelCatalogIfEmpty inserts the fail-closed bootstrap catalog only when the
+// table is empty, so operator edits are never clobbered on a later boot. Returns the
+// resolved catalog (seeded or existing).
+func (s *Store) SeedModelCatalogIfEmpty(seed []modelcatalog.Entry) ([]modelcatalog.Entry, error) {
+	existing, err := s.ListModelCatalog()
+	if err != nil {
+		return nil, err
+	}
+	if len(existing) > 0 {
+		return existing, nil
+	}
+	for _, e := range seed {
+		if err := s.UpsertModelCatalog(e); err != nil {
+			return nil, err
+		}
+	}
+	return s.ListModelCatalog()
 }
 
 // LatestPolicyItems returns the most recent persisted allowlist for name (stored
