@@ -11,6 +11,40 @@ import (
 	"github.com/t0ul/ai-security-engineering/internal/assets"
 )
 
+// RuntimeControl is the in-console start/stop of the local model stack (C3). Models
+// auto-start on boot and stop on shutdown; this adds an operator button for the rest of
+// the time. Nil = health panel only (no start/stop). The same controller owns the stack,
+// so start/stop never orphans a process or double-starts.
+type RuntimeControl interface {
+	StartModels() error
+	StopModels() error
+	ModelsRunning() bool
+}
+
+func (s *Server) runtimeStart(w http.ResponseWriter, _ *http.Request) {
+	if s.Runtime == nil {
+		http.Error(w, "runtime control not available", http.StatusNotImplemented)
+		return
+	}
+	if err := s.Runtime.StartModels(); err != nil {
+		writeJSON(w, map[string]any{"ok": false, "error": err.Error()})
+		return
+	}
+	writeJSON(w, map[string]any{"ok": true, "running": true})
+}
+
+func (s *Server) runtimeStop(w http.ResponseWriter, _ *http.Request) {
+	if s.Runtime == nil {
+		http.Error(w, "runtime control not available", http.StatusNotImplemented)
+		return
+	}
+	if err := s.Runtime.StopModels(); err != nil {
+		writeJSON(w, map[string]any{"ok": false, "error": err.Error()})
+		return
+	}
+	writeJSON(w, map[string]any{"ok": true, "running": false})
+}
+
 // ModelRuntimeRow is the live readiness of one catalog model: is its GGUF file
 // present and valid on disk, and is its serve port answering. This is the in-console
 // equivalent of `cmd/preflight`, so "why is chat dead" has an answer in the UI.
@@ -53,6 +87,9 @@ func (s *Server) runtimeStatus(w http.ResponseWriter, _ *http.Request) {
 	}
 	if s.VMURL != "" {
 		out["sandbox"] = map[string]any{"url": s.VMURL, "up": s.VMUp != nil && s.VMUp()}
+	}
+	if s.Runtime != nil {
+		out["control"] = map[string]any{"available": true, "running": s.Runtime.ModelsRunning()}
 	}
 	writeJSON(w, out)
 }

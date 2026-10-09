@@ -475,6 +475,8 @@ func main() {
 	var itemsSvc server.ItemStore
 	var itemStatusSvc server.ItemStatusStore
 	var frontierSvc server.FrontierStore
+	var modelCtl *modelController
+	var runtimeCtl server.RuntimeControl // nil unless modelCtl is created (avoids a typed-nil interface)
 	var ragLabSvc server.RAGLab
 	if inv != nil {
 		for _, n := range []string{"planner", "coder", "extractor", "chat_system"} {
@@ -556,6 +558,11 @@ func main() {
 			addCleanup(embedMgr.stop)
 			ragLabSvc = newRAGLab(inv, corpusWritable, cfg.Processed, embedders, ragApplyEmbed(corpusWritable, reader, embedMgr, &ragSemantic))
 		}
+		// One owner of the stack lifecycle (C3): boot auto-start and the console
+		// Start/Stop buttons both go through this controller, and shutdown stops it.
+		modelCtl = newModelController(ctx, *assetsDir, dial, modelCatalog)
+		runtimeCtl = modelCtl
+		addCleanup(func() { _ = modelCtl.StopModels() })
 		startModelsAndSeed := func() {
 			if gatewayReachable(dial) {
 				os.Setenv("EXTRACT_MODE", "llm")
@@ -563,22 +570,12 @@ func main() {
 				seedEmails(inv, cfg.Inbox, cfg.Outbox, *seedDir)
 				return
 			}
-			if ok, reason := modelstack.Available(*assetsDir, modelCatalog); !ok {
-				log.Printf("webapp: models not auto-started (%s) — using offline extraction", reason)
-				seedEmails(inv, cfg.Inbox, cfg.Outbox, *seedDir)
-				return
-			}
 			log.Printf("webapp: bringing up local models in the background (first load is slow)…")
-			stack, err := modelstack.Start(ctx, *assetsDir, dial, modelCatalog, 180*time.Second)
-			if err == nil {
-				addCleanup(stack.Close)
-			}
-			if err != nil {
-				log.Printf("webapp: model auto-start failed (%v) — using offline extraction", err)
+			if err := modelCtl.StartModels(); err != nil {
+				log.Printf("webapp: models not auto-started (%v) — using offline extraction", err)
 				seedEmails(inv, cfg.Inbox, cfg.Outbox, *seedDir)
 				return
 			}
-			os.Setenv("EXTRACT_MODE", "llm") // LLM-only extraction (no noisy regex fallback)
 			log.Printf("webapp: models up on %s — seeding + extracting emails via the LLM", dial)
 			seedEmails(inv, cfg.Inbox, cfg.Outbox, *seedDir)
 		}
@@ -690,7 +687,7 @@ func main() {
 			MCP: mcpReg, Prompts: prompts, Policies: policies, Sampling: sampling, Budgets: budgets, Retrieval: retrieval, Grammars: grammars, Models: models,
 			Skills: skillsPlane, SkillCatalog: skillSupply, ModelCatalog: modelCatalogSvc, Events: eventsSvc, Summaries: summariesSvc, Items: itemsSvc, ItemStatus: itemStatusSvc, Frontier: frontierSvc, RAG: ragLabSvc,
 			AssetsDir: *assetsDir, GatewayURL: *gwFlag, GatewayUp: func() bool { return gw != nil && gw.Up() }, IdentityEphemeral: !persistentID,
-			VMURL: *vmURL, VMUp: func() bool { return vmReachable(*vmURL) },
+			VMURL: *vmURL, VMUp: func() bool { return vmReachable(*vmURL) }, Runtime: runtimeCtl,
 			Eval:    evalSvc,
 			Bundles: bundleSvc,
 			Profile: profileSvc,

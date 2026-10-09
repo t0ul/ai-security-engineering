@@ -181,6 +181,9 @@ type Config struct {
 	// band with `launchvm`), so enrich degrades with a clear message when it is absent.
 	VMURL string
 	VMUp  func() bool
+	// Runtime, when set, is the in-console model-stack start/stop control (C3). Nil =
+	// the Runtime panel is health-only.
+	Runtime RuntimeControl
 	// IdentityEphemeral is true when the agent is running on a throwaway in-memory
 	// signing key (the persistent seed could not be loaded/persisted). Surfaced red in
 	// the Runtime panel: previously signed .ics will not verify and the key dies on
@@ -444,13 +447,19 @@ func (s *Server) Handler() http.Handler {
 		mux.HandleFunc("POST /api/modelcatalog/upsert", csrf(s.authz(controlplane.ActionWrite, "model", s.modelCatalogUpsert)))
 		mux.HandleFunc("POST /api/modelcatalog/delete", csrf(s.authz(controlplane.ActionWrite, "model", s.modelCatalogDelete)))
 		mux.HandleFunc("POST /api/modelcatalog/download", csrf(s.authz(controlplane.ActionWrite, "model", s.modelCatalogDownload)))
-		if s.Frontier != nil {
-			mux.HandleFunc("/api/frontier", op(s.frontierList))
-			mux.HandleFunc("POST /api/frontier/upsert", csrf(s.authz(controlplane.ActionWrite, "model", s.frontierUpsert)))
-			mux.HandleFunc("POST /api/frontier/delete", csrf(s.authz(controlplane.ActionWrite, "model", s.frontierDelete)))
-		}
-		mux.HandleFunc("/api/runtime", op(s.runtimeStatus))
 	}
+	if s.Runtime != nil {
+		mux.HandleFunc("POST /api/runtime/start", csrf(s.authz(controlplane.ActionWrite, "model", s.runtimeStart)))
+		mux.HandleFunc("POST /api/runtime/stop", csrf(s.authz(controlplane.ActionWrite, "model", s.runtimeStop)))
+	}
+	if s.Frontier != nil {
+		mux.HandleFunc("/api/frontier", op(s.frontierList))
+		mux.HandleFunc("POST /api/frontier/upsert", csrf(s.authz(controlplane.ActionWrite, "model", s.frontierUpsert)))
+		mux.HandleFunc("POST /api/frontier/delete", csrf(s.authz(controlplane.ActionWrite, "model", s.frontierDelete)))
+	}
+	// Runtime health/status is always available (it shows gateway + identity + sandbox
+	// even with no catalog); the start/stop controls above gate on Runtime.
+	mux.HandleFunc("/api/runtime", op(s.runtimeStatus))
 	if s.RAG != nil {
 		mux.HandleFunc("/api/rag", op(s.ragGet))
 		mux.HandleFunc("POST /api/rag/save", csrf(s.authz(controlplane.ActionWrite, "rag", s.ragSave)))

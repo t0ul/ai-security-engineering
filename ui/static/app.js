@@ -320,6 +320,9 @@ async function loadRuntime(){
   if(id.ephemeral) html+='<div class="ev"><div><b>agent identity</b> <span class="pill fail">ephemeral</span> <span class="mut">throwaway key — signed .ics will not verify across restarts</span></div></div>';
   html+='<div class="ev"><div><b>gateway</b> '+gwPill+' <span class="mut">'+esc(gw.url||'')+'</span></div></div>';
   if(d.sandbox){const sb=d.sandbox;const sbPill=sb.up?'<span class="pill pass">up</span>':'<span class="pill fail">down</span>';html+='<div class="ev"><div><b>sandbox (MicroVM)</b> '+sbPill+' <span class="mut">'+esc(sb.url||'')+(sb.up?'':' — enrich needs launchvm')+'</span></div></div>';}
+  if(d.control&&d.control.available){const run=d.control.running;
+    html+='<div class="ev"><div><b>model stack</b> <span class="pill '+(run?'pass':'')+'">'+(run?'running':'stopped')+'</span></div>'+
+      '<div>'+(run?'<button class="ghost" onclick="stopModels(this)">Stop</button>':'<button class="go" onclick="startModels(this)">Start</button>')+' <span class="ctlOut mut"></span></div></div>';}
   html+='<div class="mut" style="margin:10px 0 4px">model servers <span style="opacity:.7">(assets: '+esc(d.assets_dir||'')+')</span></div>';
   (d.models||[]).forEach(m=>{
     const file=m.present?(m.valid_gguf?'<span class="pill pass">file ok</span>':'<span class="pill fail">file invalid</span>'):'<span class="pill fail">file missing</span>';
@@ -329,6 +332,12 @@ async function loadRuntime(){
   if(!d.models||!d.models.length) html+='<p class="mut">no models in catalog</p>';
   c.innerHTML=html;
 }
+async function startModels(btn){const o=btn.closest('.ev').querySelector('.ctlOut');btn.disabled=true;o.textContent='starting…';
+  const r=await (await postJSON('/api/runtime/start',{})).json();
+  if(r.ok)loadRuntime();else{btn.disabled=false;o.innerHTML='<span class="pill fail">'+esc(r.error||'failed')+'</span>';}}
+async function stopModels(btn){const o=btn.closest('.ev').querySelector('.ctlOut');btn.disabled=true;o.textContent='stopping…';
+  const r=await (await postJSON('/api/runtime/stop',{})).json();
+  if(r.ok)loadRuntime();else{btn.disabled=false;o.innerHTML='<span class="pill fail">'+esc(r.error||'failed')+'</span>';}}
 async function loadSkills(){
   const c=$('#skillList');if(!c)return;const d=await getJSON('/api/skills');const cat=d.catalog||[];
   if(!cat.length){c.innerHTML='<p class="mut">no skills in the catalog</p>';}
