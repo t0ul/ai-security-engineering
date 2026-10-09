@@ -562,7 +562,7 @@ func main() {
 	// roll it all back in one step. Needs the DB.
 	var bundleSvc server.BundleStore
 	if inv != nil {
-		bundleSvc = bundleStore{inv: inv, audit: audit, prompts: prompts, sampling: sampling, policies: policies, budgets: budgets, retrieval: retrieval, grammars: grammars, models: models}
+		bundleSvc = bundleStore{inv: inv, audit: audit, prompts: prompts, sampling: sampling, policies: policies, budgets: budgets, retrieval: retrieval, grammars: grammars, models: models, rag: ragLabSvc}
 	}
 
 	// Eval surfaces (C7): the Eval card + a "Test" button that shadow-evals a

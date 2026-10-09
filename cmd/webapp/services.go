@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/t0ul/ai-security-engineering/internal/modelcatalog"
 	"github.com/t0ul/ai-security-engineering/pkg/agent/eval"
 	"github.com/t0ul/ai-security-engineering/pkg/agent/extractor"
 	"github.com/t0ul/ai-security-engineering/pkg/agent/guard"
@@ -195,6 +196,18 @@ type bundleStore struct {
 	retrieval *controlplane.Retrieval
 	grammars  *controlplane.Grammars
 	models    *controlplane.Models
+	rag       server.RAGLab // RAG lab ingestion config (nil = not available)
+}
+
+// fullBundle is what is actually persisted: the governed-plane snapshot PLUS the two
+// DB-backed knobs the plane bundle alone misses (B6) — the RAG lab ingestion config
+// (mode/chunker/size/overlap/embedder) and the model catalog. The embedded
+// controlplane.Bundle flattens into the JSON, so bundles saved before this (plane-only)
+// still unmarshal, leaving the extra fields nil (treated as "nothing to restore").
+type fullBundle struct {
+	controlplane.Bundle
+	RAG     *server.RAGConfig    `json:"rag_lab,omitempty"`
+	Catalog []modelcatalog.Entry `json:"model_catalog,omitempty"`
 }
 
 func (b bundleStore) List() []server.BundleInfo {
@@ -207,9 +220,16 @@ func (b bundleStore) List() []server.BundleInfo {
 }
 
 func (b bundleStore) Save(label string) error {
-	bundle := controlplane.Snapshot(label, b.prompts, b.sampling, b.policies, b.budgets, b.retrieval, b.grammars, b.models)
-	raw, _ := json.Marshal(bundle)
-	b.audit.Emit(gledger.NewTraceID(), "bundle", "saved", gledger.F{"label": label})
+	full := fullBundle{Bundle: controlplane.Snapshot(label, b.prompts, b.sampling, b.policies, b.budgets, b.retrieval, b.grammars, b.models)}
+	if b.rag != nil {
+		c := b.rag.Config()
+		full.RAG = &c
+	}
+	if cat, err := b.inv.ListModelCatalog(); err == nil {
+		full.Catalog = cat
+	}
+	raw, _ := json.Marshal(full)
+	b.audit.Emit(gledger.NewTraceID(), "bundle", "saved", gledger.F{"label": label, "catalog": len(full.Catalog)})
 	return b.inv.SaveBundle(label, string(raw))
 }
 
@@ -218,12 +238,34 @@ func (b bundleStore) Apply(label string) error {
 	if err != nil || !ok {
 		return fmt.Errorf("no such snapshot %q", label)
 	}
-	var bundle controlplane.Bundle
-	if err := json.Unmarshal([]byte(cfg), &bundle); err != nil {
+	var full fullBundle
+	if err := json.Unmarshal([]byte(cfg), &full); err != nil {
 		return err
 	}
-	bundle.Apply(b.prompts, b.sampling, b.policies, b.budgets, b.retrieval, b.grammars, b.models)
-	b.audit.Emit(gledger.NewTraceID(), "bundle", "rolled_back", gledger.F{"label": label})
+	full.Bundle.Apply(b.prompts, b.sampling, b.policies, b.budgets, b.retrieval, b.grammars, b.models)
+	// Model catalog (DB): restore the snapshot set — upsert everything captured, then
+	// delete any current entry the snapshot did not have, so the catalog matches the
+	// safe point exactly (not merely a superset).
+	if full.Catalog != nil {
+		keep := map[string]bool{}
+		for _, e := range full.Catalog {
+			keep[e.Name] = true
+			_ = b.inv.UpsertModelCatalog(e)
+		}
+		if cur, err := b.inv.ListModelCatalog(); err == nil {
+			for _, e := range cur {
+				if !keep[e.Name] {
+					_ = b.inv.DeleteModelCatalog(e.Name)
+				}
+			}
+		}
+	}
+	// RAG lab config: re-apply only when it differs (Save reindexes the corpus, which
+	// is the whole point when the chunker/embedder changed, but needless otherwise).
+	if full.RAG != nil && b.rag != nil && *full.RAG != b.rag.Config() {
+		_, _ = b.rag.Save(*full.RAG)
+	}
+	b.audit.Emit(gledger.NewTraceID(), "bundle", "rolled_back", gledger.F{"label": label, "catalog": len(full.Catalog)})
 	return nil
 }
 
