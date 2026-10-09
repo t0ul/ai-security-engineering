@@ -13,6 +13,7 @@ type SkillCatalogRow struct {
 	SignerTrusted bool   `json:"signer_trusted"`
 	Approved      bool   `json:"approved"`
 	Hash          string `json:"hash"`
+	Authored      bool   `json:"authored"` // operator-authored (deletable) vs a shipped fixture
 }
 
 // SkillLoadResult is the outcome of loading a skill through (or around) the gate.
@@ -30,6 +31,12 @@ type SkillLoader interface {
 	Catalog() []SkillCatalogRow
 	FullHash(name string) (string, bool)
 	Load(name string, unsafe bool) SkillLoadResult
+	// Author signs + persists an operator-authored skill and adds it to the catalog
+	// (trusted-but-unapproved); AllowedTools offers the choices; Delete removes an
+	// authored skill (never a fixture).
+	Author(name, instructions string, tools []string) (SkillCatalogRow, error)
+	Delete(name string) error
+	AllowedTools() []string
 }
 
 // skillsList returns the governed approvals (plane) alongside the catalog supply.
@@ -44,10 +51,59 @@ func (s *Server) skillsList(w http.ResponseWriter, _ *http.Request) {
 		approvals = append(approvals, approvalRow{Name: a.Name, Version: a.Version, Hash: short12(a.Hash)})
 	}
 	var catalog []SkillCatalogRow
+	var allowed []string
 	if s.SkillCatalog != nil {
 		catalog = s.SkillCatalog.Catalog()
+		allowed = s.SkillCatalog.AllowedTools()
 	}
-	writeJSON(w, map[string]any{"approvals": approvals, "catalog": catalog})
+	writeJSON(w, map[string]any{"approvals": approvals, "catalog": catalog, "allowed_tools": allowed})
+}
+
+// skillsAuthor signs + persists an operator-authored skill and adds it to the catalog as a
+// trusted-but-unapproved entry (the operator still Approves it before it reaches the agent).
+// CSRF + authz(write/skill). Authoring under the trusted anchor is the operator vouching for
+// their own instructions; approval remains the activation step.
+func (s *Server) skillsAuthor(w http.ResponseWriter, r *http.Request) {
+	if s.SkillCatalog == nil {
+		http.Error(w, "no skill catalog", http.StatusBadRequest)
+		return
+	}
+	var req struct {
+		Name         string   `json:"name"`
+		Instructions string   `json:"instructions"`
+		Tools        []string `json:"tools"`
+	}
+	if json.NewDecoder(r.Body).Decode(&req) != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	row, err := s.SkillCatalog.Author(req.Name, req.Instructions, req.Tools)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnprocessableEntity)
+		return
+	}
+	writeJSON(w, map[string]any{"ok": true, "skill": row})
+}
+
+// skillsDelete removes an operator-authored skill (never a shipped fixture).
+// CSRF + authz(write/skill).
+func (s *Server) skillsDelete(w http.ResponseWriter, r *http.Request) {
+	if s.SkillCatalog == nil {
+		http.Error(w, "no skill catalog", http.StatusBadRequest)
+		return
+	}
+	var req struct {
+		Name string `json:"name"`
+	}
+	if json.NewDecoder(r.Body).Decode(&req) != nil || req.Name == "" {
+		http.Error(w, "name required", http.StatusBadRequest)
+		return
+	}
+	if err := s.SkillCatalog.Delete(req.Name); err != nil {
+		http.Error(w, err.Error(), http.StatusUnprocessableEntity)
+		return
+	}
+	writeJSON(w, map[string]any{"ok": true, "name": req.Name})
 }
 
 // skillsApprove pins the catalog skill's CURRENT content hash as operator-approved.

@@ -158,3 +158,94 @@ func TestSkillCatalogTrustFlags(t *testing.T) {
 		}
 	}
 }
+
+// TestAuthorSkillLifecycle is the operator-authoring feature end to end on real objects:
+// author → trusted+unapproved+in-catalog, validation refuses bad input, fails closed until
+// approved, then loads and is injected into the prompt. No mocks.
+func TestAuthorSkillLifecycle(t *testing.T) {
+	loader, plane, inv := liveSkills(t)
+	defer inv.Close()
+	loader.loadPersisted(skillStore{inv}) // attach the store (no authored skills yet)
+
+	row, err := loader.Author("allergy-watch", "Flag anything about allergies at the top of the answer.", []string{"calendar.read"})
+	if err != nil {
+		t.Fatalf("author: %v", err)
+	}
+	if !row.SignerTrusted || row.Approved || !row.Authored {
+		t.Fatalf("authored skill should be trusted, unapproved, authored: %+v", row)
+	}
+	if _, ok := loader.FullHash("allergy-watch"); !ok {
+		t.Fatal("authored skill not in the catalog")
+	}
+
+	// Validation: a tool outside the allow-set, and a reserved fixture name, are refused.
+	if _, err := loader.Author("bad-skill", "do stuff", []string{"email.send"}); err == nil {
+		t.Error("a tool outside the allow-set must be refused")
+	}
+	if _, err := loader.Author("calendar-helper", "override the fixture", nil); err == nil {
+		t.Error("a reserved fixture name must be refused")
+	}
+
+	// Fails closed until approved, then loads and is injected.
+	if r := loader.Load("allergy-watch", false); r.Loaded {
+		t.Fatalf("authored skill must be unapproved until pinned: %+v", r)
+	}
+	hash, _ := loader.FullHash("allergy-watch")
+	plane.Approve("allergy-watch", hash)
+	if r := loader.Load("allergy-watch", false); !r.Loaded || r.Instructions == "" {
+		t.Fatalf("approved authored skill should load: %+v", r)
+	}
+	found := false
+	for _, ins := range loader.ActiveInstructions() {
+		if strings.Contains(ins, "allergies") {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("an approved authored skill should be injected into the prompt (shape Chat)")
+	}
+
+	// Delete removes it from the catalog and revokes the approval.
+	if err := loader.Delete("allergy-watch"); err != nil {
+		t.Fatalf("delete: %v", err)
+	}
+	if _, ok := loader.FullHash("allergy-watch"); ok {
+		t.Error("deleted skill must be gone from the catalog")
+	}
+	if err := loader.Delete("calendar-helper"); err == nil {
+		t.Error("a shipped fixture must not be deletable")
+	}
+}
+
+// TestAuthoredSkillPersistsAcrossRestart: an authored skill survives a "restart" (new loader
+// over the same author key + DB) and re-signs deterministically to the SAME hash, so a prior
+// approval still matches. Real key seed, real SQLite.
+func TestAuthoredSkillPersistsAcrossRestart(t *testing.T) {
+	dir := t.TempDir()
+	key := filepath.Join(dir, "skill-author.key")
+	inv, err := datastore.Open(filepath.Join(dir, "inv.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer inv.Close()
+
+	l1, names, _, _ := newSkillLoader(key)
+	l1.attach(controlplane.GovernedSkills(names, inv, nil))
+	l1.loadPersisted(skillStore{inv})
+	if _, err := l1.Author("allergy-watch", "Flag allergies.", []string{"calendar.read"}); err != nil {
+		t.Fatalf("author: %v", err)
+	}
+	h1, _ := l1.FullHash("allergy-watch")
+
+	// "restart": a fresh loader over the same key + DB.
+	l2, names2, _, _ := newSkillLoader(key)
+	l2.attach(controlplane.GovernedSkills(names2, inv, nil))
+	l2.loadPersisted(skillStore{inv})
+	h2, ok := l2.FullHash("allergy-watch")
+	if !ok {
+		t.Fatal("authored skill did not persist across restart")
+	}
+	if h1 != h2 {
+		t.Fatalf("re-signed hash differs across restart (%s vs %s) — approvals would break", h1, h2)
+	}
+}

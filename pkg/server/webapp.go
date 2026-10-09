@@ -489,6 +489,8 @@ func (s *Server) Handler() http.Handler {
 		mux.HandleFunc("POST /api/skills/approve", csrf(s.authz(controlplane.ActionWrite, "skill", s.skillsApprove)))
 		mux.HandleFunc("POST /api/skills/reset", csrf(s.authz(controlplane.ActionWrite, "skill", s.skillsReset)))
 		mux.HandleFunc("POST /api/skills/load", csrf(s.authz(controlplane.ActionWrite, "skill", s.skillsLoad)))
+		mux.HandleFunc("POST /api/skills/author", csrf(s.authz(controlplane.ActionWrite, "skill", s.skillsAuthor)))
+		mux.HandleFunc("POST /api/skills/delete", csrf(s.authz(controlplane.ActionWrite, "skill", s.skillsDelete)))
 	}
 	if s.Policies != nil {
 		mux.HandleFunc("/api/policies", op(s.policiesList))

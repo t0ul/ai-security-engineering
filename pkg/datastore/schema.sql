@@ -91,3 +91,12 @@ CREATE TABLE IF NOT EXISTS item_status(key TEXT PRIMARY KEY, status TEXT, snooze
 -- no M8 encapsulation), so the persisted history shows which answers were the unsafe
 -- demonstration and not the defended agent. Added via migration in Open() for older DBs.
 CREATE TABLE IF NOT EXISTS chat_turns(id INTEGER PRIMARY KEY AUTOINCREMENT, role TEXT, content TEXT, sources TEXT, model TEXT, prompt_tokens INTEGER, completion_tokens INTEGER, rating TEXT, unsafe INTEGER DEFAULT 0, at DATETIME DEFAULT CURRENT_TIMESTAMP);
+
+-- authored_skills is the operator-authored skill supply: instructions the operator writes
+-- for the agent. They are signed at load with the trusted author key (the same persistent
+-- anchor as the agent identity, so "trusted" means the operator vouched), then approved
+-- like any catalog skill before they reach the agent. tools is a comma-separated list of
+-- required tool scopes (validated against the agent's allow-set on author). Only the
+-- content is persisted; the signature is re-derived deterministically from the author key,
+-- so authored skills survive a restart and re-sign under the current anchor.
+CREATE TABLE IF NOT EXISTS authored_skills(name TEXT PRIMARY KEY, instructions TEXT NOT NULL, tools TEXT NOT NULL DEFAULT '', at DATETIME DEFAULT CURRENT_TIMESTAMP);

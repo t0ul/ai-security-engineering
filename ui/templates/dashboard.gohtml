@@ -228,8 +228,15 @@
   </section>
   <section id="skills" class="hide">
     <div class="card">
-      <strong>Skills</strong> <span class="mut">— on-demand capabilities the agent loads. A skill is runtime-loaded instructions, so it is a supply-chain surface (LLM03): loading is fail-closed under sign + pin + scope. Approve pins the exact content you reviewed; a changed or untrusted skill is refused until re-approved.</span>
+      <strong>Skills</strong> <span class="mut">— on-demand instructions the agent loads. A skill is a supply-chain surface (LLM03): loading is fail-closed under sign + pin + scope. Approve pins the exact content you reviewed; an approved + trusted skill shapes Chat answers. A changed or untrusted skill is refused until re-approved.</span>
       <div id="skillList" style="margin-top:8px"><span class="mut">loading…</span></div>
+    </div>
+    <div class="card">
+      <strong>Author a skill</strong> <span class="mut">— write instructions for your agent. Signed with your trusted author key, then Approve it above to make it shape Chat. Required tools must be within the agent's allow-set.</span>
+      <div style="margin-top:8px"><input id="skNewName" placeholder="name — lowercase-dashes, e.g. allergy-watch" style="width:60%"></div>
+      <textarea id="skNewInstr" rows="4" style="width:100%;margin-top:6px" placeholder="e.g. Always flag anything mentioning allergies or medical forms at the top of the answer."></textarea>
+      <div id="skNewTools" class="mut" style="margin-top:6px"></div>
+      <div style="margin-top:8px"><button class="go" onclick="authorSkill()">Create skill</button> <span id="skNewMsg" class="mut"></span></div>
     </div>
     <div class="card">
       <strong>Load (demo)</strong> <span class="mut">— run a catalog skill through the governed gate. Controls off bypasses sign/pin/scope so a poisoned skill's instructions leak (the attack); controls on refuse it.</span>

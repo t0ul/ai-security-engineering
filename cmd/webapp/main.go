@@ -432,6 +432,9 @@ func main() {
 		skillsPlane = controlplane.NewSkills(skillNames)
 	}
 	skillSupply.attach(skillsPlane)
+	if inv != nil {
+		skillSupply.loadPersisted(skillStore{inv}) // pull operator-authored skills into the catalog
+	}
 	// Activating the "extractor" sampling drives the live LLM decoding params.
 	baseSampOnActivate := sampling.OnActivate
 	sampling.OnActivate = func(sv controlplane.SamplingVersion) {

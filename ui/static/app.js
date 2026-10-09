@@ -365,20 +365,37 @@ async function stopModels(btn){const o=btn.closest('.ev').querySelector('.ctlOut
   if(r.ok)loadRuntime();else{btn.disabled=false;o.innerHTML='<span class="pill fail">'+esc(r.error||'failed')+'</span>';}}
 async function loadSkills(){
   const c=$('#skillList');if(!c)return;const d=await getJSON('/api/skills');const cat=d.catalog||[];
+  // Author form: offer the agent's allow-set as the tool choices.
+  const tw=$('#skNewTools');
+  if(tw){const tools=d.allowed_tools||[];tw.innerHTML='required tools: '+(tools.length?tools.map(t=>'<label style="margin-right:12px"><input type="checkbox" class="skTool" value="'+esc(t)+'"> '+esc(t)+'</label>').join(''):'<span class="mut">none available</span>');}
   if(!cat.length){c.innerHTML='<p class="mut">no skills in the catalog</p>';}
   else c.innerHTML=cat.map(s=>{
     const trust=s.signer_trusted?'<span class="pill pass">signed · trusted</span>':'<span class="pill fail">untrusted signer</span>';
     const appr=s.approved?'<span class="pill pass">approved</span>':'<span class="pill">unapproved</span>';
-    return '<div class="ev"><div><b>'+esc(s.name)+'</b> <span class="mut">v'+s.version+' · '+esc(s.hash)+'</span><div style="margin-top:4px">'+trust+' '+appr+'</div>'+
-      '<div style="margin-top:6px">'+
-      (s.approved?('<button class="ghost" onclick="revokeSkill(\''+esc(s.name)+'\')">Revoke approval</button>')
-                 :('<button class="go" onclick="approveSkill(\''+esc(s.name)+'\')">Approve this version</button>'))+
-      '</div></div></div>';
+    const active=(s.approved&&s.signer_trusted)?' <span class="pill pass">shaping Chat</span>':'';
+    const tag=s.authored?' <span class="kind">authored</span>':'';
+    let act;
+    if(s.approved) act='<button class="ghost" onclick="revokeSkill(\''+esc(s.name)+'\')">Revoke approval</button>';
+    else if(s.signer_trusted) act='<button class="go" onclick="approveSkill(\''+esc(s.name)+'\')">Approve this version</button>';
+    else act='<span class="mut">cannot approve — untrusted signer</span>';
+    if(s.authored) act+=' <button class="ghost" onclick="deleteSkill(\''+esc(s.name)+'\')">Delete</button>';
+    return '<div class="ev"><div><b>'+esc(s.name)+'</b> <span class="mut">v'+s.version+' · '+esc(s.hash)+'</span>'+tag+
+      '<div style="margin-top:4px">'+trust+' '+appr+active+'</div>'+
+      '<div style="margin-top:6px">'+act+'</div></div></div>';
   }).join('');
   const sel=$('#skillLoadName');if(sel){sel.innerHTML=cat.map(s=>'<option value="'+esc(s.name)+'">'+esc(s.name)+'</option>').join('');}
 }
 async function approveSkill(name){await postJSON('/api/skills/approve',{name:name});loadSkills();}
 async function revokeSkill(name){await postJSON('/api/skills/reset',{name:name});loadSkills();}
+async function authorSkill(){
+  const name=$('#skNewName').value.trim(),instr=$('#skNewInstr').value.trim(),msg=$('#skNewMsg');
+  const tools=[...document.querySelectorAll('.skTool:checked')].map(x=>x.value);
+  if(!name||!instr){if(msg)msg.textContent='name and instructions required';return;}
+  const resp=await postJSON('/api/skills/author',{name:name,instructions:instr,tools:tools});
+  if(resp.ok){if(msg)msg.textContent='created — Approve it above to activate';$('#skNewName').value='';$('#skNewInstr').value='';document.querySelectorAll('.skTool:checked').forEach(x=>x.checked=false);loadSkills();}
+  else{if(msg)msg.textContent=(await resp.text())||'failed';}
+}
+async function deleteSkill(name){if(!confirm('Delete skill "'+name+'"? It will stop shaping the agent.'))return;await postJSON('/api/skills/delete',{name:name});loadSkills();}
 async function loadSkill(){
   const name=$('#skillLoadName').value;const unsafe=$('#skillUnsafe').checked;
   const r=await postJSON('/api/skills/load',{name:name,unsafe:unsafe});

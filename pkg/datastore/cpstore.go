@@ -181,6 +181,50 @@ func (s *Store) DeleteEvalCase(id int64) error {
 	return err
 }
 
+// AuthoredSkill is one operator-authored skill (content only; it is signed at load).
+type AuthoredSkill struct {
+	Name         string
+	Instructions string
+	Tools        []string
+}
+
+// AddAuthoredSkill upserts an operator-authored skill's content (name is the key).
+func (s *Store) AddAuthoredSkill(name, instructions string, tools []string) error {
+	_, err := s.db.Exec(`INSERT OR REPLACE INTO authored_skills(name,instructions,tools) VALUES(?,?,?)`,
+		name, instructions, strings.Join(tools, ","))
+	return err
+}
+
+// ListAuthoredSkills returns every operator-authored skill, sorted by name.
+func (s *Store) ListAuthoredSkills() ([]AuthoredSkill, error) {
+	rows, err := s.db.Query(`SELECT name,instructions,tools FROM authored_skills ORDER BY name`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []AuthoredSkill
+	for rows.Next() {
+		var a AuthoredSkill
+		var tools string
+		if err := rows.Scan(&a.Name, &a.Instructions, &tools); err != nil {
+			return nil, err
+		}
+		for _, t := range strings.Split(tools, ",") {
+			if t = strings.TrimSpace(t); t != "" {
+				a.Tools = append(a.Tools, t)
+			}
+		}
+		out = append(out, a)
+	}
+	return out, rows.Err()
+}
+
+// DeleteAuthoredSkill removes an operator-authored skill by name.
+func (s *Store) DeleteAuthoredSkill(name string) error {
+	_, err := s.db.Exec(`DELETE FROM authored_skills WHERE name=?`, name)
+	return err
+}
+
 // RecordBudget stores a versioned, hashed budget config (JSON) for a name.
 func (s *Store) RecordBudget(name, version, hash, config string) error {
 	_, err := s.db.Exec(`INSERT INTO budgets(name,version,hash,config) VALUES(?,?,?,?)`, name, version, hash, config)

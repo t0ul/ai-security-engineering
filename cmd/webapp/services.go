@@ -184,6 +184,26 @@ func (f flywheel) Recent(limit int) []server.FeedbackEntry {
 	return out
 }
 
+// skillStore adapts *datastore.Store to the skillLoader's SkillStore (persisting
+// operator-authored skills), converting datastore.AuthoredSkill ↔ the loader's type.
+type skillStore struct{ inv *datastore.Store }
+
+func (s skillStore) AddAuthoredSkill(name, instructions string, tools []string) error {
+	return s.inv.AddAuthoredSkill(name, instructions, tools)
+}
+func (s skillStore) DeleteAuthoredSkill(name string) error { return s.inv.DeleteAuthoredSkill(name) }
+func (s skillStore) ListAuthoredSkills() ([]authoredSkill, error) {
+	rows, err := s.inv.ListAuthoredSkills()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]authoredSkill, 0, len(rows))
+	for _, a := range rows {
+		out = append(out, authoredSkill{Name: a.Name, Instructions: a.Instructions, Tools: a.Tools})
+	}
+	return out, nil
+}
+
 // mcpRegistry is the concrete server.MCPRegistry over the gustoms tool gateway.
 type mcpRegistry struct {
 	gw     *gustoms.Gateway
