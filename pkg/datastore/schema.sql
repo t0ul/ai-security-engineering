@@ -26,6 +26,10 @@ CREATE TABLE IF NOT EXISTS admin_audit(actor TEXT, action TEXT, detail TEXT, at 
 
 -- === Eval & data flywheel ===
 CREATE TABLE IF NOT EXISTS eval_scores(label TEXT, f1 REAL, at DATETIME DEFAULT CURRENT_TIMESTAMP);
+-- eval_cases is the promoted-regression watchlist: a thumbs-down example the operator
+-- promoted (with the expected behavior) so the failure is durable and reviewed on every
+-- prompt/model/retrieval change — the feedback→eval half of the data flywheel.
+CREATE TABLE IF NOT EXISTS eval_cases(id INTEGER PRIMARY KEY AUTOINCREMENT, source TEXT, label TEXT, note TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS feedback(source TEXT, title TEXT, decision TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);
 
 -- === Config & known-good bundles (current-state) ===

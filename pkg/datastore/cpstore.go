@@ -136,6 +136,51 @@ func (s *Store) RecentFeedback(limit int) ([]FeedbackRow, error) {
 	return out, rows.Err()
 }
 
+// EvalCase is one promoted regression case (a thumbs-down the operator promoted).
+type EvalCase struct {
+	ID     int64
+	Source string
+	Label  string
+	Note   string
+	At     string
+}
+
+// AddEvalCase promotes a feedback example into the regression watchlist.
+func (s *Store) AddEvalCase(source, label, note string) (int64, error) {
+	res, err := s.db.Exec(`INSERT INTO eval_cases(source,label,note) VALUES(?,?,?)`, source, label, note)
+	if err != nil {
+		return 0, err
+	}
+	return res.LastInsertId()
+}
+
+// ListEvalCases returns the promoted regression cases, newest first.
+func (s *Store) ListEvalCases(limit int) ([]EvalCase, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	rows, err := s.db.Query(`SELECT id,source,label,note,at FROM eval_cases ORDER BY id DESC LIMIT ?`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []EvalCase
+	for rows.Next() {
+		var c EvalCase
+		if err := rows.Scan(&c.ID, &c.Source, &c.Label, &c.Note, &c.At); err != nil {
+			return nil, err
+		}
+		out = append(out, c)
+	}
+	return out, rows.Err()
+}
+
+// DeleteEvalCase removes a promoted regression case (resolved / no longer relevant).
+func (s *Store) DeleteEvalCase(id int64) error {
+	_, err := s.db.Exec(`DELETE FROM eval_cases WHERE id=?`, id)
+	return err
+}
+
 // RecordBudget stores a versioned, hashed budget config (JSON) for a name.
 func (s *Store) RecordBudget(name, version, hash, config string) error {
 	_, err := s.db.Exec(`INSERT INTO budgets(name,version,hash,config) VALUES(?,?,?,?)`, name, version, hash, config)

@@ -472,13 +472,32 @@ async function loadFlywheel(){
   if(rec.length){
     h+='<div style="margin-top:8px">';
     rec.slice(0,12).forEach(f=>{const ic=f.decision==='accept'?'👍':(f.decision==='reject'?'👎':'😐');
-      h+='<div class="ev" style="padding:6px 0"><div><span class="kind">'+esc(f.source)+'</span> '+ic+' <span class="mut">'+esc((f.label||'').slice(0,90))+'</span></div><div class="mut" style="font-size:12px">'+esc(f.at||'')+'</div></div>';});
+      const lab=(f.label||'').slice(0,90);
+      const promote=f.decision==='reject'?' <button class="ghost" title="make this a durable regression case" onclick="promoteCase(\''+esc(f.source)+'\',\''+esc(lab)+'\')">Promote to eval case</button>':'';
+      h+='<div class="ev" style="padding:6px 0"><div><span class="kind">'+esc(f.source)+'</span> '+ic+' <span class="mut">'+esc(lab)+'</span></div><div>'+promote+'</div></div>';});
     h+='</div>';
   }
   c.innerHTML=h;
 }
+async function promoteCase(source,label){
+  const note=prompt('Expected behavior for this case (what SHOULD happen):','');
+  if(note===null)return;
+  const r=await (await postJSON('/api/eval/cases/promote',{source,label,note})).json();
+  if(r.ok)loadEvalCases();
+}
+async function loadEvalCases(){
+  const c=$('#evalCases');if(!c)return;const d=await getJSON('/api/eval/cases');const cs=d.cases||[];
+  if(!cs.length){c.innerHTML='<p class="mut">no promoted cases — 👎 something, then "Promote to eval case" to track the regression here</p>';return;}
+  c.innerHTML='<b>Promoted regression cases</b> <span class="mut">— failures to re-check on every prompt/model/retrieval change</span>'+
+    cs.map(x=>'<div class="ev" style="padding:6px 0"><div><span class="kind">'+esc(x.source)+'</span> <b>'+esc(x.label)+'</b>'+(x.note?('<br><span class="mut">expected: '+esc(x.note)+'</span>'):'')+'</div>'+
+      '<div><button class="ghost" onclick="delEvalCase('+x.id+')">Resolve</button></div></div>').join('');
+}
+async function delEvalCase(id){
+  const r=await (await postJSON('/api/eval/cases/delete',{id})).json();
+  if(r.ok)loadEvalCases();
+}
 async function loadEval(){
-  loadFlywheel();
+  loadFlywheel();loadEvalCases();
   const c=$('#evalHistory');if(!c)return;const d=await getJSON('/api/eval');const h=d.history||[];
   if(!h.length){c.innerHTML='<p class="mut">no eval scores yet — click Run eval now (needs the model path up), or run cmd/livecheck</p>';return;}
   c.innerHTML='<table><thead><tr><th>label</th><th>F1</th><th>when</th></tr></thead><tbody>'+

@@ -221,6 +221,10 @@ type Config struct {
 
 	// Eval backs the Eval tab + Test button (C7). Nil = no Eval tab / Test button.
 	Eval EvalService
+
+	// EvalCases, when set, is the promoted-regression watchlist (feedback→eval loop):
+	// the operator promotes a thumbs-down example into a durable case. Nil = no promote.
+	EvalCases EvalCaseStore
 }
 
 // EvalService is the Controller's view of the eval surface (C7): persisted F1
@@ -498,6 +502,11 @@ func (s *Server) Handler() http.Handler {
 		mux.HandleFunc("/api/eval", op(s.evalList))
 		mux.HandleFunc("POST /api/eval/run", csrf(s.authz(controlplane.ActionWrite, "eval", s.evalRunHandler)))
 		mux.HandleFunc("POST /api/prompts/test", csrf(s.authz(controlplane.ActionWrite, "prompts", s.promptsTest)))
+	}
+	if s.EvalCases != nil {
+		mux.HandleFunc("/api/eval/cases", op(s.evalCasesList))
+		mux.HandleFunc("POST /api/eval/cases/promote", csrf(s.authz(controlplane.ActionWrite, "eval", s.evalCasePromote)))
+		mux.HandleFunc("POST /api/eval/cases/delete", csrf(s.authz(controlplane.ActionWrite, "eval", s.evalCaseDelete)))
 	}
 	if s.Bundles != nil {
 		mux.HandleFunc("/api/bundles", op(s.bundlesList))

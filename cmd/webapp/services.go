@@ -156,6 +156,25 @@ func (f flywheel) Stats() (int, int) {
 	return a, r
 }
 
+// evalCaseStore adapts *datastore.Store to server.EvalCaseStore (type conversion).
+type evalCaseStore struct{ inv *datastore.Store }
+
+func (e evalCaseStore) AddEvalCase(source, label, note string) (int64, error) {
+	return e.inv.AddEvalCase(source, label, note)
+}
+func (e evalCaseStore) DeleteEvalCase(id int64) error { return e.inv.DeleteEvalCase(id) }
+func (e evalCaseStore) ListEvalCases(limit int) ([]server.EvalCase, error) {
+	rows, err := e.inv.ListEvalCases(limit)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]server.EvalCase, 0, len(rows))
+	for _, c := range rows {
+		out = append(out, server.EvalCase{ID: c.ID, Source: c.Source, Label: c.Label, Note: c.Note, At: c.At})
+	}
+	return out, nil
+}
+
 func (f flywheel) Recent(limit int) []server.FeedbackEntry {
 	rows, _ := f.inv.RecentFeedback(limit)
 	out := make([]server.FeedbackEntry, 0, len(rows))

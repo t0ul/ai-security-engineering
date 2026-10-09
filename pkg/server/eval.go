@@ -3,7 +3,68 @@ package server
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 )
+
+// EvalCaseStore is the promoted-regression watchlist: thumbs-down examples the operator
+// promoted (with expected behavior) so a failure becomes a durable, reviewed case. Nil =
+// promotion disabled.
+type EvalCaseStore interface {
+	AddEvalCase(source, label, note string) (int64, error)
+	ListEvalCases(limit int) ([]EvalCase, error)
+	DeleteEvalCase(id int64) error
+}
+
+// EvalCase is one promoted regression case surfaced in the Eval tab.
+type EvalCase struct {
+	ID     int64  `json:"id"`
+	Source string `json:"source"`
+	Label  string `json:"label"`
+	Note   string `json:"note"`
+	At     string `json:"at"`
+}
+
+func (s *Server) evalCasesList(w http.ResponseWriter, _ *http.Request) {
+	cases, err := s.EvalCases.ListEvalCases(100)
+	if err != nil {
+		http.Error(w, "read failed", http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, map[string]any{"cases": cases})
+}
+
+func (s *Server) evalCasePromote(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Source string `json:"source"`
+		Label  string `json:"label"`
+		Note   string `json:"note"`
+	}
+	if json.NewDecoder(r.Body).Decode(&req) != nil || strings.TrimSpace(req.Label) == "" {
+		http.Error(w, "label required", http.StatusBadRequest)
+		return
+	}
+	id, err := s.EvalCases.AddEvalCase(req.Source, req.Label, req.Note)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, map[string]any{"ok": true, "id": id})
+}
+
+func (s *Server) evalCaseDelete(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		ID int64 `json:"id"`
+	}
+	if json.NewDecoder(r.Body).Decode(&req) != nil || req.ID == 0 {
+		http.Error(w, "id required", http.StatusBadRequest)
+		return
+	}
+	if err := s.EvalCases.DeleteEvalCase(req.ID); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, map[string]any{"ok": true})
+}
 
 // EvalResult is one persisted eval score for the Eval card (C7).
 type EvalResult struct {
