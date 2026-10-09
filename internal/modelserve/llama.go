@@ -44,6 +44,12 @@ func EmbedServer(name, bin, host, modelPath string, port, ctxSize int) Server {
 			"--ctx-size", strconv.Itoa(ctxSize),
 			"--embeddings",
 			"--pooling", "mean",
+			// Embeddings are non-causal: the entire input is processed in ONE batch, so
+			// the (physical) batch must be at least as large as the biggest chunk we
+			// embed. The default is 512, which rejects any passage over ~512 tokens; size
+			// both batches to the context so a chunk up to the full window embeds.
+			"--batch-size", strconv.Itoa(ctxSize),
+			"--ubatch-size", strconv.Itoa(ctxSize),
 		},
 		HealthURL: fmt.Sprintf("http://%s:%d/health", host, port),
 		Ready:     EmbeddingReady(host, port),
