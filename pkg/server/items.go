@@ -418,10 +418,11 @@ func (s *Server) summary(w http.ResponseWriter, r *http.Request) {
 // ics.Write still apply; an action's click is egress-gated later (A6).
 func (s *Server) accept(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		File    string `json:"file"`
-		Index   int    `json:"index"`
-		Nonce   string `json:"nonce"`
-		Confirm bool   `json:"confirm"`
+		File    string     `json:"file"`
+		Index   int        `json:"index"`
+		Nonce   string     `json:"nonce"`
+		Confirm bool       `json:"confirm"`
+		Edit    *itemEdits `json:"edit"` // optional human touch: edit the event before accepting
 	}
 	if json.NewDecoder(r.Body).Decode(&req) != nil || !safeSidecar(req.File) {
 		http.Error(w, "bad request", http.StatusBadRequest)
@@ -436,12 +437,65 @@ func (s *Server) accept(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "no such item", http.StatusBadRequest)
 		return
 	}
+	// Human touch: apply the operator's edits BEFORE the confirm, so the HITL evidence
+	// and the written .ics both reflect what they actually chose. The edited item still
+	// passes through ics.Write's URL/field sanitizers.
+	edited := req.Edit.apply(&item)
+	summary := "Add to your calendar: " + item.Title
+	if edited {
+		summary = "Add your EDITED event: " + item.Title
+	}
 	// HITL (ASI09): evidence-first, single-use nonce confirm before any write.
 	if !s.hitlGate(w, "accept", req.File, req.Index, req.Nonce, req.Confirm,
-		"Add to your calendar: "+item.Title, "when: "+itemWhen(item), "kind: "+item.ResolvedKind()) {
+		summary, "when: "+itemWhen(item), "kind: "+item.ResolvedKind()) {
 		return
 	}
 	s.doAccept(w, req.File, item)
+}
+
+// itemEdits is the set of fields an operator may override before accepting an extracted
+// event (the edit-before-accept modal). Empty fields are left as extracted.
+type itemEdits struct {
+	Title    string `json:"title"`
+	Start    string `json:"start"`
+	End      string `json:"end"`
+	Location string `json:"location"`
+	AllDay   *bool  `json:"all_day"`
+	Kind     string `json:"kind"`
+	Notes    string `json:"notes"`
+}
+
+// apply overlays the edits onto the item and reports whether anything changed. Start/End
+// are accepted as the UI composes them (ISO date, optionally with a time); the .ics writer
+// validates/sanitizes on write.
+func (e *itemEdits) apply(item *schema.Event) bool {
+	if e == nil {
+		return false
+	}
+	changed := false
+	set := func(dst *string, v string) {
+		if v != "" && v != *dst {
+			*dst = v
+			changed = true
+		}
+	}
+	set(&item.Title, e.Title)
+	set(&item.Start, e.Start)
+	set(&item.End, e.End)
+	set(&item.Kind, e.Kind)
+	set(&item.Notes, e.Notes)
+	if e.Location != item.Location { // location may be intentionally cleared
+		item.Location = e.Location
+		changed = true
+	}
+	if e.AllDay != nil && *e.AllDay != item.AllDay {
+		item.AllDay = *e.AllDay
+		changed = true
+	}
+	if changed {
+		item.Warnings = append(item.Warnings, "edited by the operator before accept")
+	}
+	return changed
 }
 
 func (s *Server) doAccept(w http.ResponseWriter, file string, item schema.Event) {

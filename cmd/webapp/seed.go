@@ -5,7 +5,6 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -59,20 +58,19 @@ func gatewayReachable(addr string) bool {
 //
 // Idempotent two ways: a DB marker ("emails_seeded") set after a successful seed, and
 // a non-empty outbox (a drop already populated by prior manual drops is left alone).
+// seedEmails drops example emails into the inbox for the watcher to process. It is
+// INCREMENTAL and idempotent: on every boot it seeds only the example .txt files that are
+// not already processed (no matching .ics in the outbox) and not already queued in the
+// inbox — so adding new example files to the seed dir later (e.g. the NYC school calendar
+// emails) gets them picked up, without re-processing the ones already done. Handbooks are
+// reference docs, not emails, and are ingested into the corpus elsewhere (D1).
 func seedEmails(inv *datastore.Store, inboxDir, outboxDir, seedDir string) {
-	if inv == nil || seedDir == "" {
-		return
-	}
-	if _, ok, _ := inv.GetConfig("emails_seeded"); ok {
-		return // already seeded this drop
-	}
-	if hasICS(outboxDir) {
-		_ = inv.SetConfig("emails_seeded", "preexisting") // already populated by prior drops
+	if seedDir == "" {
 		return
 	}
 	files, _ := filepath.Glob(filepath.Join(seedDir, "*.txt"))
 	if len(files) == 0 {
-		return // no seed source; don't mark, so pointing -seed at a real dir later still works
+		return
 	}
 	if err := os.MkdirAll(inboxDir, 0o755); err != nil {
 		log.Printf("webapp: seed inbox: %v", err)
@@ -84,6 +82,10 @@ func seedEmails(inv *datastore.Store, inboxDir, outboxDir, seedDir string) {
 		if strings.Contains(strings.ToLower(base), "handbook") {
 			continue // a knowledge-base doc, not a calendar email
 		}
+		stem := strings.TrimSuffix(base, filepath.Ext(base))
+		if stemProcessed(outboxDir, stem) || fileExists(filepath.Join(inboxDir, base)) {
+			continue // already extracted, or already waiting in the inbox
+		}
 		data, err := os.ReadFile(f)
 		if err != nil {
 			continue
@@ -92,12 +94,19 @@ func seedEmails(inv *datastore.Store, inboxDir, outboxDir, seedDir string) {
 			n++
 		}
 	}
-	_ = inv.SetConfig("emails_seeded", strconv.Itoa(n))
-	log.Printf("webapp: seeded %d example emails into inbox (first run); the watcher will process them into %s", n, outboxDir)
+	if n > 0 {
+		log.Printf("webapp: seeded %d new example email(s) into the inbox; the watcher will process them into %s", n, outboxDir)
+	}
 }
 
-// hasICS reports whether a directory already holds processed .ics output.
-func hasICS(dir string) bool {
-	m, _ := filepath.Glob(filepath.Join(dir, "*.ics"))
-	return len(m) > 0
+// stemProcessed reports whether the outbox already holds an artifact for this email stem
+// (e.g. "<stem>.events.ics"), i.e. the email was already extracted.
+func stemProcessed(outboxDir, stem string) bool {
+	matches, _ := filepath.Glob(filepath.Join(outboxDir, stem+".*"))
+	return len(matches) > 0
+}
+
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }

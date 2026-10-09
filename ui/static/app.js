@@ -510,9 +510,49 @@ async function accept(file,index,btn){
   const r=await postJSON('/api/accept',{file,index,nonce:d.nonce,confirm:true}); // phase 2
   if(r.ok){btn.textContent='added ✓';loadDeadlines();}else{btn.textContent='refused';btn.disabled=false;}
 }
+// Edit-before-accept: a modal pre-filled from the extracted event; Save & add writes the
+// EDITED event through the same HITL-confirmed accept (the human touch on extraction).
+function openEditModal(file,index){
+  const it=__ITEMS__[file+'|'+index];if(!it)return;
+  const iso=(it.start||it.due||'');
+  const date=iso.slice(0,10);
+  const time=(iso.length>=16&&!it.all_day)?iso.slice(11,16):'';
+  const ov=document.createElement('div');
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:1000';
+  ov.innerHTML='<div style="background:var(--panel,#1a1a1a);border:1px solid var(--line,#333);border-radius:12px;padding:20px;width:min(440px,92vw);max-height:90vh;overflow:auto">'+
+    '<b>Edit event before adding</b>'+
+    '<div style="margin-top:12px"><label class="mut">Title</label><br><input id="ed_title" style="width:100%" value="'+esc(it.title||'')+'"></div>'+
+    '<div style="margin-top:10px;display:flex;gap:10px"><div style="flex:1"><label class="mut">Date</label><br><input id="ed_date" type="date" style="width:100%" value="'+esc(date)+'"></div>'+
+    '<div style="flex:1"><label class="mut">Time</label><br><input id="ed_time" type="time" style="width:100%" value="'+esc(time)+'"></div></div>'+
+    '<div style="margin-top:8px"><label class="mut"><input id="ed_allday" type="checkbox"'+(it.all_day?' checked':'')+'> all-day</label></div>'+
+    '<div style="margin-top:10px"><label class="mut">Location</label><br><input id="ed_loc" style="width:100%" value="'+esc(it.location||'')+'"></div>'+
+    '<div style="margin-top:16px;display:flex;gap:8px;justify-content:flex-end">'+
+    '<button class="ghost" id="ed_cancel">Cancel</button><button class="go" id="ed_save">Save &amp; add</button></div>'+
+    '<div id="ed_msg" class="mut" style="margin-top:8px"></div></div>';
+  document.body.appendChild(ov);
+  const close=()=>ov.remove();
+  ov.addEventListener('click',e=>{if(e.target===ov)close();});
+  $('#ed_cancel').onclick=close;
+  $('#ed_save').onclick=async()=>{
+    const allday=$('#ed_allday').checked;
+    const date=$('#ed_date').value,time=$('#ed_time').value;
+    let start=date;
+    if(date&&time&&!allday)start=date+'T'+time+':00';
+    const edit={title:$('#ed_title').value.trim(),start:start,location:$('#ed_loc').value.trim(),all_day:allday};
+    $('#ed_msg').textContent='confirming…';
+    const d=await (await postJSON('/api/accept',{file,index,edit})).json(); // phase 1 (evidence reflects edits)
+    if(!d.confirm_required){$('#ed_msg').textContent='error';return;}
+    if(!confirm(d.summary+'\n'+(d.evidence||[]).join('\n')+'\n\n(approval '+d.nonce.slice(0,6)+') — Confirm?')){$('#ed_msg').textContent='';return;}
+    const r=await postJSON('/api/accept',{file,index,edit,nonce:d.nonce,confirm:true}); // phase 2
+    if(r.ok){close();loadTasks();loadDeadlines&&loadDeadlines();}else{$('#ed_msg').textContent='refused';}
+  };
+}
+const __ITEMS__={}; // file|index -> item, for the edit modal
 function itemRow(i){
+  __ITEMS__[i.file+'|'+i.index]=i;
   const div=document.createElement('div');div.className='ev';
   let btn='<button class="ghost" onclick="accept(\''+esc(i.file)+'\','+i.index+',this)">Add this</button> '+
+    '<button class="ghost" title="edit before adding" onclick="openEditModal(\''+esc(i.file)+'\','+i.index+')">Edit &amp; add</button> '+
     '<button class="ghost" onclick="rejectItem(\''+esc(i.file)+'\','+i.index+',this)">Not real</button>';
   // Durable status (C2): complete / dismiss / snooze, keyed by the item's stable
   // fingerprint so it survives a projection rebuild.
