@@ -278,7 +278,7 @@ func Classify(email string, defaultYear int) []schema.Event {
 				}
 			}
 		}
-		title := bestTitle(ln, header, subject)
+		title := Tidy(bestTitle(ln, header, subject))
 		if title == "" {
 			continue // a bare date with no name is a date reference, not an event
 		}
@@ -309,7 +309,7 @@ func Classify(email string, defaultYear int) []schema.Event {
 			continue
 		}
 
-		ev := schema.Event{Title: s, Confidence: 0.9, Warnings: []string{}, AllDay: true}
+		ev := schema.Event{Title: TidyItem(s), Confidence: 0.9, Warnings: []string{}, AllDay: true}
 		switch {
 		case hasURL:
 			ev.Kind = schema.KindAction

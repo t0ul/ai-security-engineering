@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/t0ul/ai-security-engineering/pkg/agent/ics"
+	"github.com/t0ul/ai-security-engineering/pkg/agent/items"
 	"github.com/t0ul/ai-security-engineering/pkg/agent/pipeline"
 	"github.com/t0ul/ai-security-engineering/pkg/agent/schema"
 )
@@ -277,6 +278,10 @@ func (s *Server) allItems() []itemRow {
 	var raw []itemRow
 	for _, ns := range s.loadSummaries() {
 		for i, it := range ns.S.Items {
+			// Tidy legacy/raw titles at projection time (clause-cut + PII scrub) so
+			// existing items get short, PII-free names without re-processing; this
+			// also lets near-dup dedup collapse what only differed by sentence tail.
+			it.Title = items.TidyItem(it.Title)
 			raw = append(raw, itemRow{File: ns.Name, Index: i, Event: it})
 		}
 	}

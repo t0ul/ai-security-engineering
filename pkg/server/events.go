@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/t0ul/ai-security-engineering/pkg/agent/ics"
+	"github.com/t0ul/ai-security-engineering/pkg/agent/items"
 	"github.com/t0ul/ai-security-engineering/pkg/agent/schema"
 )
 
@@ -163,7 +164,7 @@ func (s *Server) outboxFingerprint() string {
 // projectionVersion keys the events/items/summaries DB projections to the derivation
 // logic (dedup, cleaning, filtering). Bump it when that logic changes so the stored
 // projections rebuild from source instead of serving a stale result.
-const projectionVersion = "v4"
+const projectionVersion = "v5"
 
 // readAllEvents reads every .ics in the outbox into a sorted, de-duplicated event
 // list. allEvents caches the result.
@@ -183,6 +184,10 @@ func (s *Server) readAllEvents() []Event {
 			evs := parseICS(string(raw), e.Name())
 			for i := range evs {
 				evs[i].Signed = signed
+				// Clean legacy/raw .ics titles at projection time so existing events
+				// get short names without re-processing; dropFragments then culls any
+				// that cleaned down to a lowercase mid-sentence fragment. Idempotent.
+				evs[i].Title = items.Tidy(evs[i].Title)
 			}
 			out = append(out, evs...)
 		}
