@@ -254,16 +254,25 @@ func (p *Pipeline) ProcessEmail(path string) (Summary, error) {
 				p.Audit.Emit(trace, name, "artifact_error", gledger.F{"file": fname, "error": err.Error()})
 				continue
 			}
+			// Provenance is fail-closed: when a signer is configured, an artifact that
+			// cannot be signed is NOT shipped. Quarantine (remove) it instead of leaving
+			// an unsigned .ics the UI would show with a false/absent signed badge — a
+			// silent integrity downgrade. Only a successfully signed artifact is recorded.
+			if p.Signer != nil {
+				mark, merr := json.Marshal(p.Signer.Sign([]byte(content)))
+				if merr == nil {
+					merr = os.WriteFile(outPath+".sig", mark, 0o644)
+				}
+				if merr != nil {
+					_ = os.Remove(outPath)
+					p.Audit.Emit(trace, name, "artifact_sign_error", gledger.F{"file": fname, "error": merr.Error()})
+					continue
+				}
+				p.Audit.Emit(trace, name, "artifact_signed", gledger.F{"file": filepath.Base(outPath) + ".sig"})
+			}
 			summary.Artifacts = append(summary.Artifacts, outPath)
 			p.Audit.Emit(trace, name, "artifact_written",
 				gledger.F{"file": filepath.Base(outPath), "bytes": len(content)})
-
-			if p.Signer != nil {
-				mark, _ := json.Marshal(p.Signer.Sign([]byte(content)))
-				if err := os.WriteFile(outPath+".sig", mark, 0o644); err == nil {
-					p.Audit.Emit(trace, name, "artifact_signed", gledger.F{"file": filepath.Base(outPath) + ".sig"})
-				}
-			}
 		}
 
 		// Collect items for the sidecar, deduped across tools: the event and the

@@ -194,6 +194,50 @@ func TestProcessEmailWritesICSAndAuditsChain(t *testing.T) {
 	}
 }
 
+// TestArtifactUnsignableIsQuarantined locks the fail-closed provenance fix: when a
+// signer is configured but the .sig cannot be written, the pipeline must NOT leave an
+// unsigned .ics on disk (a silent integrity downgrade). It removes the artifact and
+// audits the failure. The .sig write is forced to fail by pre-creating a DIRECTORY at
+// its path — a real filesystem failure, no mocks.
+func TestArtifactUnsignableIsQuarantined(t *testing.T) {
+	reg := tool.NewRegistry()
+	reg.Register(extractor.New())
+	p, dir, verify := newPipe(t, reg)
+	t.Setenv("EXTRACT_MODE", "regex")
+	signer, _, err := provenance.NewSigner("agent")
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.Signer = signer
+
+	// Block the .sig path with a directory so WriteFile("<ics>.sig") fails while the
+	// .ics write succeeds. The artifact for 3.txt is 3.events.ics.
+	icsPath := filepath.Join(p.OutboxDir, "3.events.ics")
+	if err := os.MkdirAll(icsPath+".sig", 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	src := writeEmail(t, dir, "3.txt", email)
+	sum, err := p.ProcessEmail(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sum.Artifacts) != 0 {
+		t.Fatalf("an unsignable artifact must NOT be shipped, got %v", sum.Artifacts)
+	}
+	if _, err := os.Stat(icsPath); !os.IsNotExist(err) {
+		t.Fatalf("unsigned .ics must be removed (quarantined), stat err=%v", err)
+	}
+	// The failure is audited (loud, not silent) and the chain still verifies.
+	log, _ := os.ReadFile(filepath.Join(dir, "audit.jsonl"))
+	if !strings.Contains(string(log), "artifact_sign_error") {
+		t.Error("sign failure must be audited as artifact_sign_error")
+	}
+	if ok, _ := verify(); !ok {
+		t.Error("audit chain must still verify after a quarantined artifact")
+	}
+}
+
 func TestIndexHookReceivesRawEmail(t *testing.T) {
 	reg := tool.NewRegistry()
 	reg.Register(extractor.New())
