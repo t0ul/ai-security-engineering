@@ -32,6 +32,7 @@ type ModelCatalogRow struct {
 	Port   int    `json:"port"`
 	Ctx    int    `json:"ctx"`
 	Host   string `json:"host"`
+	Kind   string `json:"kind,omitempty"` // "" = chat, "embedding" = trained embedding model
 }
 
 func (s *Server) modelCatalogList(w http.ResponseWriter, _ *http.Request) {
@@ -44,7 +45,7 @@ func (s *Server) modelCatalogList(w http.ResponseWriter, _ *http.Request) {
 	for _, e := range entries {
 		out = append(out, ModelCatalogRow{
 			Name: e.Name, URL: e.URL, SHA256: e.SHA256, Pinned: e.SHA256 != "",
-			File: e.File, Port: e.Port, Ctx: e.Ctx, Host: e.Host,
+			File: e.File, Port: e.Port, Ctx: e.Ctx, Host: e.Host, Kind: e.Kind,
 		})
 	}
 	writeJSON(w, map[string]any{"catalog": out})

@@ -232,7 +232,8 @@ async function loadModelCatalog(){
   if(!cat.length){c.innerHTML='<p class="mut">catalog empty</p>';return;}
   c.innerHTML=cat.map(m=>{
     const pin=m.pinned?'<span class="pill pass">SHA pinned</span>':'<span class="pill">magic-verify only</span>';
-    return '<div class="ev"><div><b>'+esc(m.name)+'</b> '+pin+' <span class="mut">:'+m.port+' · ctx '+m.ctx+' · '+esc(m.host)+'</span>'+
+    const kind=m.kind==='embedding'?' <span class="pill">embedding</span>':'';
+    return '<div class="ev"><div><b>'+esc(m.name)+'</b> '+pin+kind+' <span class="mut">:'+m.port+' · ctx '+m.ctx+' · '+esc(m.host)+'</span>'+
       '<div class="mut" style="margin-top:4px">'+esc(m.file)+'</div>'+
       '<div class="mut" style="margin-top:2px;word-break:break-all">'+esc(m.url)+'</div>'+
       '<div style="margin-top:6px"><button class="ghost" onclick="downloadModel(\''+esc(m.name)+'\',this)">Download</button> '+
@@ -251,14 +252,14 @@ async function downloadModel(name,btn){
 }
 function editModel(name){const m=__CAT__.find(e=>e.name===name);if(!m)return;
   $('#mc_name').value=m.name;$('#mc_file').value=m.file;$('#mc_url').value=m.url;
-  $('#mc_sha').value=m.sha256||'';$('#mc_port').value=m.port||'';$('#mc_ctx').value=m.ctx||'';
+  $('#mc_sha').value=m.sha256||'';$('#mc_port').value=m.port||'';$('#mc_ctx').value=m.ctx||'';$('#mc_kind').value=m.kind||'';
   $('#mcMsg').textContent='editing '+name;}
 async function saveModel(){
   const body={name:$('#mc_name').value.trim(),file:$('#mc_file').value.trim(),url:$('#mc_url').value.trim(),
-    sha256:$('#mc_sha').value.trim(),port:parseInt($('#mc_port').value)||0,ctx:parseInt($('#mc_ctx').value)||0};
+    sha256:$('#mc_sha').value.trim(),port:parseInt($('#mc_port').value)||0,ctx:parseInt($('#mc_ctx').value)||0,kind:$('#mc_kind').value};
   if(!body.name||!body.url||!body.file){$('#mcMsg').textContent='name, url and file are required';return;}
   const r=await postJSON('/api/modelcatalog/upsert',body);
-  if(r.ok){$('#mcMsg').textContent='saved ✓';['mc_name','mc_file','mc_url','mc_sha','mc_port','mc_ctx'].forEach(id=>$('#'+id).value='');loadModelCatalog();loadModels();}
+  if(r.ok){$('#mcMsg').textContent='saved ✓';['mc_name','mc_file','mc_url','mc_sha','mc_port','mc_ctx'].forEach(id=>$('#'+id).value='');$('#mc_kind').value='';loadModelCatalog();loadModels();}
   else{$('#mcMsg').textContent='error: '+(await r.text());}
 }
 async function delModel(name){

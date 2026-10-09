@@ -38,7 +38,10 @@ CREATE TABLE IF NOT EXISTS bundles(label TEXT, config TEXT, at DATETIME DEFAULT 
 -- The model catalog: single source of truth for which models exist, their verified
 -- download URL + SHA pin, local file, and serve port/ctx. prepareassets/modeld/webapp
 -- all read this.
-CREATE TABLE IF NOT EXISTS models_catalog(name TEXT PRIMARY KEY, url TEXT, sha256 TEXT, file TEXT, port INTEGER, ctx INTEGER, host TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);
+-- kind: '' = chat/completions model (booted into the chat stack); 'embedding' = a
+-- trained embedding model served by the dedicated embeddings server, kept OUT of the
+-- chat stack. Added via migration in Open() for DBs created before the column existed.
+CREATE TABLE IF NOT EXISTS models_catalog(name TEXT PRIMARY KEY, url TEXT, sha256 TEXT, file TEXT, port INTEGER, ctx INTEGER, host TEXT, kind TEXT DEFAULT '', at DATETIME DEFAULT CURRENT_TIMESTAMP);
 
 -- === Domain entities (derived projection) ===
 -- events is the calendar/events projection the view serves from. The signed .ics

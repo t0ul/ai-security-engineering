@@ -40,6 +40,14 @@ func Open(path string) (*Store, error) {
 		db.Close()
 		return nil, err
 	}
+	// Migration: add models_catalog.kind to DBs created before the column existed. The
+	// CREATE above is IF NOT EXISTS, so it never alters an existing table; this ALTER
+	// is idempotent (ignore the "duplicate column" error when the column is present).
+	if _, err := db.Exec(`ALTER TABLE models_catalog ADD COLUMN kind TEXT DEFAULT ''`); err != nil &&
+		!strings.Contains(err.Error(), "duplicate column") {
+		db.Close()
+		return nil, err
+	}
 	return &Store{db: db}, nil
 }
 
@@ -276,14 +284,14 @@ func (s *Store) LatestSkillPin(name string) (hash string, ok bool, err error) {
 // current-state table keyed by logical name, not append-only history).
 func (s *Store) UpsertModelCatalog(e modelcatalog.Entry) error {
 	_, err := s.db.Exec(
-		`INSERT OR REPLACE INTO models_catalog(name,url,sha256,file,port,ctx,host) VALUES(?,?,?,?,?,?,?)`,
-		e.Name, e.URL, e.SHA256, e.File, e.Port, e.Ctx, e.Host)
+		`INSERT OR REPLACE INTO models_catalog(name,url,sha256,file,port,ctx,host,kind) VALUES(?,?,?,?,?,?,?,?)`,
+		e.Name, e.URL, e.SHA256, e.File, e.Port, e.Ctx, e.Host, e.Kind)
 	return err
 }
 
 // ListModelCatalog returns the full model catalog, sorted by name.
 func (s *Store) ListModelCatalog() ([]modelcatalog.Entry, error) {
-	rows, err := s.db.Query(`SELECT name,url,sha256,file,port,ctx,host FROM models_catalog ORDER BY name`)
+	rows, err := s.db.Query(`SELECT name,url,sha256,file,port,ctx,host,COALESCE(kind,'') FROM models_catalog ORDER BY name`)
 	if err != nil {
 		return nil, err
 	}
@@ -291,7 +299,7 @@ func (s *Store) ListModelCatalog() ([]modelcatalog.Entry, error) {
 	var out []modelcatalog.Entry
 	for rows.Next() {
 		var e modelcatalog.Entry
-		if err := rows.Scan(&e.Name, &e.URL, &e.SHA256, &e.File, &e.Port, &e.Ctx, &e.Host); err != nil {
+		if err := rows.Scan(&e.Name, &e.URL, &e.SHA256, &e.File, &e.Port, &e.Ctx, &e.Host, &e.Kind); err != nil {
 			return nil, err
 		}
 		out = append(out, e)
@@ -301,8 +309,8 @@ func (s *Store) ListModelCatalog() ([]modelcatalog.Entry, error) {
 
 // GetModelCatalog returns one catalog entry by logical name.
 func (s *Store) GetModelCatalog(name string) (e modelcatalog.Entry, ok bool, err error) {
-	row := s.db.QueryRow(`SELECT name,url,sha256,file,port,ctx,host FROM models_catalog WHERE name=?`, name)
-	switch e2 := row.Scan(&e.Name, &e.URL, &e.SHA256, &e.File, &e.Port, &e.Ctx, &e.Host); e2 {
+	row := s.db.QueryRow(`SELECT name,url,sha256,file,port,ctx,host,COALESCE(kind,'') FROM models_catalog WHERE name=?`, name)
+	switch e2 := row.Scan(&e.Name, &e.URL, &e.SHA256, &e.File, &e.Port, &e.Ctx, &e.Host, &e.Kind); e2 {
 	case nil:
 		return e, true, nil
 	case sql.ErrNoRows:

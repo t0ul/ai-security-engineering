@@ -20,7 +20,17 @@ type Entry struct {
 	Port   int    `json:"port"`   // serve port (modeld)
 	Ctx    int    `json:"ctx"`    // context window size
 	Host   string `json:"host"`   // bind host (least exposure: loopback)
+	// Kind distinguishes how the model is served. "" (default) is a chat/completions
+	// model booted into the chat stack (modelstack) and routed by the gateway;
+	// "embedding" is a TRAINED embedding model served on demand by the dedicated
+	// embeddings server (--embeddings --pooling mean), NOT the chat stack — so semantic
+	// retrieval uses a real embedding model instead of a chat model in embeddings mode.
+	Kind string `json:"kind,omitempty"`
 }
+
+// IsEmbedding reports whether the entry is a trained embedding model (served by the
+// dedicated embeddings server, excluded from the chat model stack).
+func (e Entry) IsEmbedding() bool { return e.Kind == "embedding" }
 
 // DefaultSeed is the fail-closed bootstrap catalog: the dual-SLM runtime this lab
 // ships with. These values were previously hardcoded as consts in cmd/prepareassets
@@ -38,6 +48,17 @@ func DefaultSeed() []Entry {
 			URL:  "https://huggingface.co/Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF/resolve/main/qwen2.5-coder-1.5b-instruct-q4_k_m.gguf",
 			File: "qwen1.5b.gguf",
 			Port: 11436, Ctx: 4096, Host: "127.0.0.1",
+		},
+		{
+			// A TRAINED embedding model (not a chat model in embeddings mode): far better
+			// semantic-retrieval quality. Served by the dedicated embeddings server on
+			// demand, so Kind="embedding" keeps it OUT of the chat stack. Select it as the
+			// RAG embedder in the Studio; download it from the catalog (SHA pin optional).
+			Name: "nomic-embed-text",
+			URL:  "https://huggingface.co/nomic-ai/nomic-embed-text-v1.5-GGUF/resolve/main/nomic-embed-text-v1.5.Q4_K_M.gguf",
+			File: "nomic-embed-text-v1.5.gguf",
+			Port: 11500, Ctx: 2048, Host: "127.0.0.1",
+			Kind: "embedding",
 		},
 	}
 }
