@@ -625,6 +625,52 @@ func (s *Store) HideEvent(key string) error {
 	return err
 }
 
+// MarkExported records calendar events (by content fingerprint) as already downloaded in an
+// .ics export, so the next "download new" export skips them (no duplicate calendar entries).
+func (s *Store) MarkExported(keys []string) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	stmt, err := tx.Prepare(`INSERT OR IGNORE INTO exported_events(key) VALUES(?)`)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	defer stmt.Close()
+	for _, k := range keys {
+		if _, err := stmt.Exec(k); err != nil {
+			_ = tx.Rollback()
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+// LoadExported returns the set of already-exported event fingerprints.
+func (s *Store) LoadExported() (map[string]bool, error) {
+	rows, err := s.db.Query(`SELECT key FROM exported_events`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]bool{}
+	for rows.Next() {
+		var k string
+		if err := rows.Scan(&k); err != nil {
+			return nil, err
+		}
+		out[k] = true
+	}
+	return out, rows.Err()
+}
+
+// ResetExported clears the exported overlay so a subsequent export includes everything again.
+func (s *Store) ResetExported() error {
+	_, err := s.db.Exec(`DELETE FROM exported_events`)
+	return err
+}
+
 // LoadHiddenEvents returns the set of deleted-event fingerprints.
 func (s *Store) LoadHiddenEvents() (map[string]bool, error) {
 	rows, err := s.db.Query(`SELECT key FROM hidden_events`)

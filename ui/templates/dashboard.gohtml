@@ -56,9 +56,10 @@
   </section>
   <section id="calendar">
     <div class="card">
-      <strong>Calendar</strong> <span class="mut">— your month at a glance; add your own events, delete any, or accept an extracted one. Download everything as one .ics to import into your family calendar.</span>
+      <strong>Calendar</strong> <span class="mut">— your month at a glance; add your own events, delete any, or accept an extracted one. Download as .ics to import into your family calendar — "new" skips what you already exported, so no duplicates.</span>
       <div style="margin-top:6px"><button class="go" onclick="openCreateModal()">➕ Add event</button>
-        <button class="go" onclick="downloadICS(this)" style="margin-left:8px">⬇ Download calendar (.ics)</button>
+        <button class="go" onclick="downloadNewICS()" style="margin-left:8px">⬇ Download new events (.ics)</button>
+        <button class="ghost" onclick="exportAllICS()">Export all again</button>
         <span class="viewtoggle" style="margin-left:10px">
           <button class="ghost" id="vMonth" onclick="setView('month')">Month</button>
           <button class="ghost" id="vList" onclick="setView('list')">List</button>

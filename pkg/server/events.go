@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -235,16 +236,20 @@ func (s *Server) events(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, map[string]any{"events": out, "inbox": s.InboxPath})
 }
 
-// calendarExport serves ONE .ics with every extracted event and dated reminder (the deduped,
-// non-hidden set shown in Calendar + Tasks), so the household can import the whole thing into
-// their real family calendar in one click — the app's original payoff. Reminders (tasks /
+// buildExport assembles the calendar for an .ics download: every extracted event and dated
+// reminder (the deduped, non-hidden set shown in Calendar + Tasks). Reminders (tasks /
 // heads-ups / actions) are written as all-day EVENTS prefixed "Reminder:" rather than VTODOs,
 // because Google Calendar ignores VTODO on import — this way everything actually shows up.
-// Consumer-scoped (the user's own derived calendar), downloaded as an attachment.
-func (s *Server) calendarExport(w http.ResponseWriter, _ *http.Request) {
-	var hidden map[string]bool
+// When onlyNew is set, events already recorded as exported are skipped (incremental export,
+// so the household imports each event into their real calendar exactly once). It returns the
+// schema events to write and their content fingerprints (for marking them exported).
+func (s *Server) buildExport(onlyNew bool) ([]schema.Event, []string) {
+	var hidden, exported map[string]bool
 	if s.HiddenEvents != nil {
 		hidden, _ = s.HiddenEvents.LoadHiddenEvents()
+	}
+	if onlyNew && s.Exported != nil {
+		exported, _ = s.Exported.LoadExported()
 	}
 	// The server's display timestamps are "YYYY-MM-DD HH:MM" (space, no seconds); the .ics
 	// writer wants RFC3339 "YYYY-MM-DDTHH:MM:SS". Bridge the two so a timed event exports.
@@ -258,8 +263,10 @@ func (s *Server) calendarExport(w http.ResponseWriter, _ *http.Request) {
 		return s
 	}
 	var evs []schema.Event
+	var keys []string
 	for _, e := range s.allEvents() {
-		if hidden[eventKey(e)] {
+		k := eventKey(e)
+		if hidden[k] || exported[k] {
 			continue
 		}
 		se := schema.Event{Title: e.Title, Start: norm(e.Start), End: norm(e.End), AllDay: e.AllDay, Location: e.Location, Kind: schema.KindEvent}
@@ -277,7 +284,13 @@ func (s *Server) calendarExport(w http.ResponseWriter, _ *http.Request) {
 			se.AllDay, se.Start, se.End, se.Title = true, day, "", "Reminder: "+e.Title
 		}
 		evs = append(evs, se)
+		keys = append(keys, k)
 	}
+	return evs, keys
+}
+
+// writeICS writes the events as a downloadable .ics attachment.
+func (s *Server) writeICS(w http.ResponseWriter, evs []schema.Event) {
 	body, _, err := ics.Write(evs, "Family calendar")
 	if err != nil {
 		http.Error(w, "export failed: "+err.Error(), http.StatusInternalServerError)
@@ -288,11 +301,52 @@ func (s *Server) calendarExport(w http.ResponseWriter, _ *http.Request) {
 	_, _ = io.WriteString(w, body)
 }
 
+// calendarExport serves the WHOLE calendar as one .ics (every event + reminder), no marking —
+// the "export everything" path. Consumer-scoped (the user's own derived calendar).
+func (s *Server) calendarExport(w http.ResponseWriter, _ *http.Request) {
+	evs, _ := s.buildExport(false)
+	s.writeICS(w, evs)
+}
+
+// calendarExportNew serves only events NOT yet exported, and marks them exported so the next
+// download skips them (incremental export → no duplicates on the real calendar). The count of
+// new events is returned in X-New-Count so the UI can say "nothing new" without downloading an
+// empty file. CSRF + authz(write/calendar) — it mutates the exported overlay.
+func (s *Server) calendarExportNew(w http.ResponseWriter, _ *http.Request) {
+	evs, keys := s.buildExport(true)
+	w.Header().Set("X-New-Count", strconv.Itoa(len(evs)))
+	if len(keys) > 0 && s.Exported != nil {
+		_ = s.Exported.MarkExported(keys)
+	}
+	s.writeICS(w, evs)
+}
+
+// calendarResetExported clears the exported overlay so a subsequent export includes everything
+// again (e.g. switching to a new calendar). CSRF + authz(write/calendar).
+func (s *Server) calendarResetExported(w http.ResponseWriter, _ *http.Request) {
+	if s.Exported != nil {
+		if err := s.Exported.ResetExported(); err != nil {
+			http.Error(w, "reset failed: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+	writeJSON(w, map[string]any{"ok": true})
+}
+
 // HiddenEventStore is the delete overlay for calendar events (hide by fingerprint,
 // without mutating the source .ics). Nil = events cannot be deleted.
 type HiddenEventStore interface {
 	HideEvent(key string) error
 	LoadHiddenEvents() (map[string]bool, error)
+}
+
+// ExportedStore records which calendar events have already been downloaded, so an
+// incremental export skips them (the household imports each event once). Nil = every
+// export includes everything (no incremental tracking).
+type ExportedStore interface {
+	MarkExported(keys []string) error
+	LoadExported() (map[string]bool, error)
+	ResetExported() error
 }
 
 // eventCreate writes a manually-entered calendar event to its own .ics (the household

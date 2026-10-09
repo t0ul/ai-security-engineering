@@ -689,19 +689,30 @@ function openCreateModal(){
   };
 }
 async function postJSON(url,body){return fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});}
-// Download the whole calendar (events + dated reminders) as one .ics. Uses fetch (not a bare
-// link) so the capability header rides along, then triggers a client-side file download.
-async function downloadICS(btn){
+// Download the calendar (events + dated reminders) as .ics. Uses fetch (not a bare link) so
+// the capability header rides along, then triggers a client-side file download.
+function triggerICSDownload(blob){
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='family-calendar.ics';
+  document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+}
+// Download only events not exported before, and mark them so the next download skips them —
+// no duplicates when you import into your real calendar.
+async function downloadNewICS(){
   const msg=$('#icsMsg');if(msg)msg.textContent='preparing…';
   try{
-    const r=await fetch('/api/calendar.ics');
+    const r=await postJSON('/api/calendar/export',{});
     if(!r.ok){if(msg)msg.textContent='export failed';return;}
-    const blob=await r.blob();
-    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='family-calendar.ics';
-    document.body.appendChild(a);a.click();a.remove();
-    setTimeout(()=>URL.revokeObjectURL(a.href),2000);
-    if(msg)msg.textContent='downloaded — import it into Google/Apple Calendar';
+    const n=parseInt(r.headers.get('X-New-Count')||'0',10);
+    if(n===0){if(msg)msg.textContent='nothing new since your last export ✓';return;}
+    triggerICSDownload(await r.blob());
+    if(msg)msg.textContent='exported '+n+' new event'+(n===1?'':'s')+' — import into your calendar';
   }catch(e){if(msg)msg.textContent='export failed';}
+}
+// Re-export everything (clears the "already exported" memory) — for switching calendars.
+async function exportAllICS(){
+  if(!confirm('Re-export EVERYTHING, including items you already exported? Use this if you switched calendars.'))return;
+  await postJSON('/api/calendar/reset-exported',{});
+  downloadNewICS();
 }
 async function rejectItem(file,index,btn){btn.disabled=true;const r=await postJSON('/api/reject',{file,index});btn.textContent=r.ok?'rejected ✓':'err';}
 async function accept(file,index,btn){

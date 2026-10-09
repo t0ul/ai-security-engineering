@@ -170,6 +170,10 @@ type Config struct {
 	// by fingerprint without mutating the source .ics. Nil = events cannot be deleted.
 	HiddenEvents HiddenEventStore
 
+	// Exported, when set, records which events have been downloaded in an .ics export, so
+	// "download new" skips them (no duplicates on the real calendar). Nil = no incremental.
+	Exported ExportedStore
+
 	// RAG, when set, is the retrieval experimentation surface (RAG tab): tune the
 	// ingestion config (mode/chunker/size/overlap/embedder) and reindex. Nil = no tab.
 	RAG RAGLab
@@ -415,7 +419,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/commands", op(s.commands))
 	mux.HandleFunc("/api/safety", op(s.safetyState))
 	mux.HandleFunc("/api/events", consumer(s.events))
-	mux.HandleFunc("/api/calendar.ics", consumer(s.calendarExport)) // one-click: the whole calendar as .ics
+	mux.HandleFunc("/api/calendar.ics", consumer(s.calendarExport))                                                 // the whole calendar as .ics
+	mux.HandleFunc("POST /api/calendar/export", csrf(s.authz(controlplane.ActionWrite, "calendar", s.calendarExportNew)))       // only new, marks exported
+	mux.HandleFunc("POST /api/calendar/reset-exported", csrf(s.authz(controlplane.ActionWrite, "calendar", s.calendarResetExported)))
 	mux.HandleFunc("/api/items", consumer(s.items))
 	mux.HandleFunc("/api/summary", consumer(s.summary))
 	mux.HandleFunc("/api/review", consumer(s.review))

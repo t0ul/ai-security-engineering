@@ -108,3 +108,9 @@ CREATE TABLE IF NOT EXISTS authored_skills(name TEXT PRIMARY KEY, instructions T
 -- must be on the egress allow-list, so registering a server cannot by itself reach a new
 -- host. Persisted so registrations survive a restart.
 CREATE TABLE IF NOT EXISTS mcp_servers(name TEXT PRIMARY KEY, url TEXT NOT NULL, tools TEXT NOT NULL DEFAULT '', at DATETIME DEFAULT CURRENT_TIMESTAMP);
+
+-- exported_events records which calendar events have already been downloaded in an .ics
+-- export, keyed by the same content fingerprint as the hidden-events overlay (day|title),
+-- so a subsequent "download new" export skips them — the household imports each event into
+-- their real calendar exactly once, no duplicates. "Export all again" clears this.
+CREATE TABLE IF NOT EXISTS exported_events(key TEXT PRIMARY KEY, at DATETIME DEFAULT CURRENT_TIMESTAMP);
