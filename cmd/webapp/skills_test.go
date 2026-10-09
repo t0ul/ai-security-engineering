@@ -17,10 +17,37 @@ func liveSkills(t *testing.T) (*skillLoader, *controlplane.Skills, *datastore.St
 	if err != nil {
 		t.Fatalf("open datastore: %v", err)
 	}
-	loader, names := newSkillLoader()
+	loader, names, persistent, err := newSkillLoader(filepath.Join(t.TempDir(), "skill-author.key"))
+	if err != nil {
+		t.Fatalf("new skill loader: %v", err)
+	}
+	if !persistent {
+		t.Fatal("skill-author key on a fresh temp dir must be persistent")
+	}
 	plane := controlplane.GovernedSkills(names, inv, nil)
 	loader.attach(plane)
 	return loader, plane, inv
+}
+
+// TestSkillAuthorAnchorPersists locks B2: the skill-author trust anchor is loaded from a
+// persistent seed, so the SAME trusted key (and thus the operator's approval) survives a
+// restart — it is not re-minted per boot. Real seed file, real signed catalog.
+func TestSkillAuthorAnchorPersists(t *testing.T) {
+	key := filepath.Join(t.TempDir(), "skill-author.key")
+	l1, _, p1, err := newSkillLoader(key)
+	if err != nil || !p1 {
+		t.Fatalf("first load: persistent=%v err=%v", p1, err)
+	}
+	l2, _, p2, err := newSkillLoader(key)
+	if err != nil || !p2 {
+		t.Fatalf("second load: persistent=%v err=%v", p2, err)
+	}
+	// Same anchor across "restarts": the benign skill signed by run 2's author key must
+	// verify under run 1's verifier. A boot-minted key would fail this.
+	s := l2.catalog["calendar-helper"]
+	if l1.verifier.Verify(s.Skill.Canonical(), s.Mark) != nil {
+		t.Fatal("skill-author anchor changed across loads — approvals would not survive a restart")
+	}
 }
 
 // TestSkillLoaderFailsClosedThenLoadsOnApprove is the governed consumer end to end:

@@ -334,7 +334,19 @@ func main() {
 	// loader signs its catalog at boot; the plane records which versions the operator
 	// approved. Build the loader first for the catalog names, then the plane, then
 	// attach (plane needs names, loader needs plane).
-	skillSupply, skillNames := newSkillLoader()
+	skillKeyPath := filepath.Join(*drop, "skill-author.key")
+	skillSupply, skillNames, skillPersistent, serr := newSkillLoader(skillKeyPath)
+	if serr != nil {
+		log.Fatalf("webapp: skill-author identity: %v", serr)
+	}
+	if !skillPersistent {
+		// Fail closed: a boot-minted author key makes "trusted signer" meaningless —
+		// an operator approval (pin) would not survive a restart under a new anchor.
+		if !*allowEphemeralID {
+			log.Fatalf("webapp: SECURITY: could not load or persist the skill-author key at %s — refusing to start on an ephemeral trust anchor. Fix the seed path/permissions, or pass -allow-ephemeral-identity (env WEBAPP_ALLOW_EPHEMERAL_IDENTITY=true) for a throwaway dev run.", skillKeyPath)
+		}
+		log.Printf("webapp: WARNING: running on an EPHEMERAL skill-author trust anchor (seed at %s not persisted) — skill approvals do not survive a restart. Dev mode only.", skillKeyPath)
+	}
 	var policies *controlplane.Policies
 	var budgets *controlplane.Budgets
 	var retrieval *controlplane.Retrieval
@@ -641,18 +653,9 @@ func main() {
 // returned only when no signer can be constructed at all.
 func agentIdentity(path string) (signer *provenance.Signer, verifier *provenance.Verifier, persistent bool, err error) {
 	const keyID = "email-agent"
-	persistent = true
-	seed, rerr := os.ReadFile(path)
-	if rerr != nil || len(seed) != ed25519.SeedSize {
-		seed = make([]byte, ed25519.SeedSize)
-		if _, gerr := rand.Read(seed); gerr != nil {
-			return nil, nil, false, fmt.Errorf("generate agent seed: %w", gerr)
-		}
-		// First boot (or a replaced seed): persist it so the next boot reuses it. A
-		// write failure means the key is in-memory only — NOT persistent.
-		if werr := os.WriteFile(path, seed, 0o600); werr != nil {
-			persistent = false
-		}
+	seed, persistent, err := loadOrCreateSeed(path)
+	if err != nil {
+		return nil, nil, false, err
 	}
 	signer, pub, serr := provenance.SignerFromSeed(keyID, seed)
 	if serr != nil {
@@ -665,6 +668,27 @@ func agentIdentity(path string) (signer *provenance.Signer, verifier *provenance
 		persistent = false
 	}
 	return signer, provenance.NewVerifier().Trust(keyID, pub), persistent, nil
+}
+
+// loadOrCreateSeed reads a 32-byte ed25519 seed from path, or generates and persists one
+// on first boot. persistent is true only when the seed is backed on disk (loaded, or
+// freshly written) so it survives a restart; it is false when the seed could not be
+// written (so the key lives only in memory and the trust anchor changes on restart).
+// err is returned only when no seed can be produced at all. Shared by the agent identity
+// and the skill-author trust anchor, so neither can silently become ephemeral.
+func loadOrCreateSeed(path string) (seed []byte, persistent bool, err error) {
+	seed, rerr := os.ReadFile(path)
+	if rerr == nil && len(seed) == ed25519.SeedSize {
+		return seed, true, nil
+	}
+	seed = make([]byte, ed25519.SeedSize)
+	if _, gerr := rand.Read(seed); gerr != nil {
+		return nil, false, fmt.Errorf("generate seed: %w", gerr)
+	}
+	if werr := os.WriteFile(path, seed, 0o600); werr != nil {
+		return seed, false, nil // in-memory only — NOT persistent
+	}
+	return seed, true, nil
 }
 
 // gw is the chat gateway client (pkg/gateway), set from the -gateway flag in main.

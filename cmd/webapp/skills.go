@@ -23,13 +23,27 @@ type skillLoader struct {
 	order    []string // stable display order
 }
 
-// newSkillLoader mints an author key (trusted) and an attacker key (never trusted),
-// signs the catalog, and returns the loader plus the catalog skill NAMES (so the
-// plane can list them as known-but-unapproved until the operator approves one). The
-// caller builds the Skills plane from those names, then calls attach to wire it (the
-// plane needs the names, the loader needs the plane — attach breaks the cycle).
-func newSkillLoader() (*skillLoader, []string) {
-	author, authorPub, _ := provenance.NewSigner("skill-author")
+// newSkillLoader loads the PERSISTENT author trust anchor from keyPath (operator-managed
+// seed, the same mechanism as the agent identity — so "trusted signer" means a durable,
+// operator-controlled key, not whatever this process happened to mint at boot) and an
+// ephemeral attacker key (never trusted), signs the catalog, and returns the loader plus
+// the catalog skill NAMES (so the plane can list them as known-but-unapproved until the
+// operator approves one) and whether the anchor is persistent. The caller builds the
+// Skills plane from those names, then calls attach to wire it (the plane needs the names,
+// the loader needs the plane — attach breaks the cycle).
+func newSkillLoader(keyPath string) (*skillLoader, []string, bool, error) {
+	seed, persistent, err := loadOrCreateSeed(keyPath)
+	if err != nil {
+		return nil, nil, false, err
+	}
+	author, authorPub, serr := provenance.SignerFromSeed("skill-author", seed)
+	if serr != nil {
+		author, authorPub, serr = provenance.NewSigner("skill-author")
+		if serr != nil {
+			return nil, nil, false, serr
+		}
+		persistent = false
+	}
 	attacker, _, _ := provenance.NewSigner("attacker")
 
 	benign := skills.Skill{
@@ -53,7 +67,7 @@ func newSkillLoader() (*skillLoader, []string) {
 		},
 		order: []string{benign.Name, poison.Name},
 	}
-	return l, l.order
+	return l, l.order, persistent, nil
 }
 
 // attach wires the governed approval plane the loader reads pins from.
