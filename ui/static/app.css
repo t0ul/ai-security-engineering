@@ -1,8 +1,8 @@
   :root{color-scheme:light dark;--fg:#141414;--bg:#fafafa;--card:#fff;--mut:#667;--line:#e3e3e8;--ok:#0a7d33;--bad:#b00020;--accent:#2f6feb;--warn:#b26a00}
   @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--fg:#e8e8ea;--bg:#131316;--card:#1b1b1f;--mut:#9aa;--line:#2a2a30;--ok:#4ade80;--bad:#ff6b6b;--accent:#6ea8fe;--warn:#f0b357}}
   /* Manual theme override (toggle) wins over the OS preference. */
-  :root[data-theme="light"]{color-scheme:light;--fg:#141414;--bg:#fafafa;--card:#fff;--mut:#667;--line:#e3e3e8;--ok:#0a7d33;--bad:#b00020;--accent:#2f6feb;--warn:#b26a00}
-  :root[data-theme="dark"]{color-scheme:dark;--fg:#e8e8ea;--bg:#131316;--card:#1b1b1f;--mut:#9aa;--line:#2a2a30;--ok:#4ade80;--bad:#ff6b6b;--accent:#6ea8fe;--warn:#f0b357}
+  :root[data-theme="light"]{color-scheme:light;--fg:#141414;--bg:#fafafa;--card:#fff;--mut:#667;--line:#e3e3e8;--ok:#0a7d33;--bad:#b00020;--accent:#2f6feb;--warn:#b26a00;--side:#eef1f6;--sidefg:#3c4660}
+  :root[data-theme="dark"]{color-scheme:dark;--fg:#e8e8ea;--bg:#131316;--card:#1b1b1f;--mut:#9aa;--line:#2a2a30;--ok:#4ade80;--bad:#ff6b6b;--accent:#6ea8fe;--warn:#f0b357;--side:#0a0d14;--sidefg:#aeb8cc}
   *{box-sizing:border-box} body{font:15px/1.55 system-ui,-apple-system,Segoe UI,sans-serif;margin:0;color:var(--fg);background:var(--bg)}
   header{padding:18px 24px;border-bottom:1px solid var(--line);display:flex;gap:18px;align-items:baseline;flex-wrap:wrap}
   h1{font-size:18px;margin:0} nav{display:flex;gap:4px;flex-wrap:wrap} nav button{font:inherit;padding:6px 12px;border:0;background:none;color:var(--mut);cursor:pointer;border-radius:8px}
@@ -46,14 +46,14 @@
   @media (prefers-color-scheme:dark){:root{--side:#0a0d14;--sidefg:#aeb8cc}}
   .app{display:flex;min-height:100vh}
   .sidebar{width:208px;flex:0 0 208px;background:var(--side);color:var(--sidefg);padding:16px 12px;position:sticky;top:0;height:100vh;overflow-y:auto}
-  .switch{display:block;margin-top:18px;padding:9px 10px;border-radius:8px;color:var(--sidefg);opacity:.75;font-size:13px;text-decoration:none;border:1px solid rgba(255,255,255,.12)}
+  .switch{display:block;margin-top:18px;padding:9px 10px;border-radius:8px;color:var(--sidefg);opacity:.85;font-size:13px;text-decoration:none;border:1px solid rgba(127,127,127,.25);background:none;width:100%;text-align:left}
   .switch:hover{opacity:1;background:rgba(255,255,255,.06)}
-  .brand{font-size:16px;font-weight:700;color:#fff;padding:6px 10px 14px;display:flex;gap:8px;align-items:center}
+  .brand{font-size:16px;font-weight:700;color:var(--sidefg);padding:6px 10px 14px;display:flex;gap:8px;align-items:center}
   header{display:none}
   .sidebar nav{display:flex;flex-direction:column;gap:2px}
   .sidebar nav .grp{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--mut);padding:14px 10px 4px}
   .sidebar nav button{font:inherit;text-align:left;padding:8px 10px;border:0;background:none;color:var(--sidefg);cursor:pointer;border-radius:8px;width:100%;box-shadow:none}
-  .sidebar nav button:hover{background:rgba(255,255,255,.07);color:#fff}
+  .sidebar nav button:hover{background:rgba(127,127,127,.15);color:var(--fg)}
   .sidebar nav button.active{background:var(--accent);color:#fff;box-shadow:none}
   main{flex:1;padding:24px 30px;max-width:980px;margin:0}
   .card{border-radius:14px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
