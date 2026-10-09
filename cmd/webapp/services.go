@@ -12,6 +12,8 @@ import (
 
 	"github.com/t0ul/ai-security-engineering/pkg/agent/eval"
 	"github.com/t0ul/ai-security-engineering/pkg/agent/extractor"
+	"github.com/t0ul/ai-security-engineering/pkg/agent/guard"
+	"github.com/t0ul/ai-security-engineering/pkg/compaction"
 	"github.com/t0ul/ai-security-engineering/pkg/controlplane"
 	"github.com/t0ul/ai-security-engineering/pkg/datastore"
 	"github.com/t0ul/ai-security-engineering/pkg/domain"
@@ -239,9 +241,10 @@ type chatService struct {
 	sampling  *controlplane.Sampling
 	models    *controlplane.Models
 	retrieval *controlplane.Retrieval
-	semantic  *atomic.Bool          // when true, retrieve with vector SemanticQuery instead of FTS
-	hist      *datastore.Store      // persists the conversation (multi-turn + reload); nil = stateless
-	ctxLimit  func() int            // the chat model's context window size (for the usage bar)
+	semantic  *atomic.Bool             // when true, retrieve with vector SemanticQuery instead of FTS
+	hist      *datastore.Store         // persists the conversation (multi-turn + reload); nil = stateless
+	ctxLimit  func() int               // the chat model's context window size (for the usage bar)
+	summarize compaction.Summarizer    // LLM-backed running-summary for history compaction; nil = no-op
 }
 
 // retrieve runs the governed retrieval mode and returns the chunks plus the mode that
@@ -261,6 +264,46 @@ func retrieve(r *rag.Store, wantSemantic bool, tenant, q string, k int) ([]rag.C
 	log.Printf("chat: semantic retrieval unavailable (%v); degraded to keyword FTS", err)
 	c, err = r.Query(tenant, q, k)
 	return c, "keyword (semantic unavailable)", err
+}
+
+// compactHistory keeps the replayed chat history under the model's context budget using
+// the provenance-partitioned running-summary Compactor (B1). Dialog turns are trusted, so
+// evicted older turns collapse into a trusted running summary; the Compactor runs the
+// untrusted partition's summary through guard.Sanitize so a laundered instruction cannot
+// be promoted to standing context (summarization-injection defense). summarize is the
+// LLM-backed Summarizer — nil (e.g. no live model) makes compaction a no-op and the raw
+// turns pass through, so the chat still works offline.
+func compactHistory(turns []gateway.Turn, ctxLimit int, summarize compaction.Summarizer) []gateway.Turn {
+	if summarize == nil || len(turns) == 0 {
+		return turns
+	}
+	budget := ctxLimit
+	if budget <= 0 {
+		budget = 8192
+	}
+	c := &compaction.Compactor{
+		MaxTokens:  budget / 2, // headroom for the system prompt + RAG context + the answer
+		KeepRecent: 6,
+		Summarize:  summarize,
+		Sanitize:   guard.Sanitize,
+	}
+	in := make([]compaction.Turn, len(turns))
+	for i, t := range turns {
+		in[i] = compaction.Turn{Role: t.Role, Text: t.Content, Trusted: true}
+	}
+	out := c.Compact(in)
+	if len(out) == len(in) {
+		return turns // under budget — unchanged
+	}
+	res := make([]gateway.Turn, 0, len(out))
+	for _, t := range out {
+		role := t.Role
+		if role == "tool" {
+			role = "user" // chat API speaks user/assistant/system; keep the quarantined summary as data
+		}
+		res = append(res, gateway.Turn{Role: role, Content: t.Text})
+	}
+	return res
 }
 
 func (c *chatService) Answer(question string, unsafe bool, appData string) (server.ChatReply, error) {
@@ -305,11 +348,19 @@ func (c *chatService) Answer(question string, unsafe bool, appData string) (serv
 	// (loaded BEFORE storing this question, so it is not duplicated into its own input).
 	var history []gateway.Turn
 	if c.hist != nil {
-		if turns, e := c.hist.LoadChatTurns(10); e == nil {
+		if turns, e := c.hist.LoadChatTurns(50); e == nil {
 			for _, t := range turns {
 				history = append(history, gateway.Turn{Role: t.Role, Content: t.Content})
 			}
 		}
+		// Keep the replayed history under the model's context budget: older turns
+		// collapse into a running summary (B1) rather than silently overflowing the
+		// window. No-op when the model is down or history is short.
+		limit := 8192
+		if c.ctxLimit != nil {
+			limit = c.ctxLimit()
+		}
+		history = compactHistory(history, limit, c.summarize)
 	}
 	// chat_system is a GOVERNED prompt (C2), decoding is GOVERNED sampling (C5), model
 	// binding is DB config — all resolved live, none hardcoded.
