@@ -82,6 +82,7 @@ function chatMetaHTML(r){
   const bits=[];
   if(r.model)bits.push('model '+esc(r.model));
   if(r.prompt_tokens)bits.push(r.prompt_tokens+' ctx + '+(r.completion_tokens||0)+' out tok');
+  if(r.retrieval)bits.push(r.retrieval.indexOf('unavailable')>=0?'<span style="color:var(--bad)">'+esc(r.retrieval)+'</span>':esc(r.retrieval));
   return bits.length?'<div class="meta mut">'+bits.join(' · ')+'</div>':'';
 }
 function assistantHTML(r,unsafe){

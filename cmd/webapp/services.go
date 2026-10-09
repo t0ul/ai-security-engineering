@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -243,6 +244,25 @@ type chatService struct {
 	ctxLimit  func() int            // the chat model's context window size (for the usage bar)
 }
 
+// retrieve runs the governed retrieval mode and returns the chunks plus the mode that
+// ACTUALLY served them. Semantic degrades to lexical FTS when the embedder fails (so
+// chat never hard-fails on a knob change), but never silently: the returned mode becomes
+// "keyword (semantic unavailable)" and the fallback is logged, so the operator is never
+// shown "semantic" when the vector path is down. (G2.)
+func retrieve(r *rag.Store, wantSemantic bool, tenant, q string, k int) ([]rag.Chunk, string, error) {
+	if !wantSemantic {
+		c, err := r.Query(tenant, q, k)
+		return c, "keyword", err
+	}
+	c, err := r.SemanticQuery(context.Background(), tenant, q, k)
+	if err == nil {
+		return c, "semantic", nil
+	}
+	log.Printf("chat: semantic retrieval unavailable (%v); degraded to keyword FTS", err)
+	c, err = r.Query(tenant, q, k)
+	return c, "keyword (semantic unavailable)", err
+}
+
 func (c *chatService) Answer(question string, unsafe bool, appData string) (server.ChatReply, error) {
 	if _, err := c.authz.Verify(c.grant, controlplane.Capability{Action: controlplane.ActionList, Resource: "corpus", Tenant: "public"}); err != nil {
 		return server.ChatReply{}, fmt.Errorf("rag-reader capability refused: %w", err)
@@ -261,16 +281,8 @@ func (c *chatService) Answer(question string, unsafe bool, appData string) (serv
 	// Retrieval mode is operator-governed (RAG lab): semantic (vector) when an
 	// embedder is configured, else lexical FTS. Semantic falls back to FTS on error
 	// (e.g. embedder momentarily down) so chat never hard-fails on a knob change.
-	var chunks []rag.Chunk
-	var err error
-	if c.semantic != nil && c.semantic.Load() {
-		chunks, err = c.reader.SemanticQuery(context.Background(), "public", question, k)
-		if err != nil {
-			chunks, err = c.reader.Query("public", question, k)
-		}
-	} else {
-		chunks, err = c.reader.Query("public", question, k)
-	}
+	wantSemantic := c.semantic != nil && c.semantic.Load()
+	chunks, retrieval, err := retrieve(c.reader, wantSemantic, "public", question, k)
 	if err != nil {
 		return server.ChatReply{}, err
 	}
@@ -319,7 +331,7 @@ func (c *chatService) Answer(question string, unsafe bool, appData string) (serv
 	return server.ChatReply{
 		Answer: res.Answer, Sources: sources, Model: shortModel(res.Model),
 		PromptTokens: res.PromptTokens, CompletionTokens: res.CompletionTokens,
-		ContextLimit: limit, TurnID: turnID,
+		ContextLimit: limit, TurnID: turnID, Retrieval: retrieval,
 	}, nil
 }
 

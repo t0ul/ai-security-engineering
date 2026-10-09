@@ -210,6 +210,11 @@ type ChatReply struct {
 	CompletionTokens int      `json:"completion_tokens"`
 	ContextLimit     int      `json:"context_limit"`
 	TurnID           int64    `json:"turn_id"`
+	// Retrieval is the mode that actually served this answer: "semantic", "keyword",
+	// or "keyword (semantic unavailable)" when the vector path was requested but the
+	// embedder failed and it fell back to FTS. Surfaced so the operator is never told
+	// retrieval is semantic when it silently degraded to lexical.
+	Retrieval string `json:"retrieval,omitempty"`
 }
 
 // ChatService answers a natural-language question grounded in the corpus, carrying the
