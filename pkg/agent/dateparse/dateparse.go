@@ -83,7 +83,14 @@ func ParseTimes(text string) []HM {
 		if miStr != "" {
 			mi, _ = strconv.Atoi(miStr)
 		}
-		toks = append(toks, tok{h: h, mi: mi, ap: normAMPM(apStr)})
+		ap := normAMPM(apStr)
+		// Reject impossible clock values rather than letting time.Date silently roll
+		// them over (e.g. "25:99" would normalize to the next day +1h39m). Minute 0..59;
+		// with am/pm the hour is 1..12, otherwise 0..23.
+		if mi > 59 || h > 23 || (ap != "" && (h < 1 || h > 12)) {
+			continue
+		}
+		toks = append(toks, tok{h: h, mi: mi, ap: ap})
 	}
 	// Back-fill a missing am/pm from the next token that has one.
 	next := ""

@@ -23,6 +23,20 @@ func TestParseTimesRejectsBareIntegers(t *testing.T) {
 	}
 }
 
+// TestParseTimesRejectsOutOfRange: an impossible clock value is dropped, not silently
+// rolled over by time.Date (e.g. "25:99" would have normalized to the next day).
+func TestParseTimesRejectsOutOfRange(t *testing.T) {
+	for _, s := range []string{"drill at 25:99", "meet at 24:00", "at 9:75", "13:00 PM"} {
+		if got := ParseTimes(s); len(got) != 0 {
+			t.Errorf("ParseTimes(%q) = %v, want none (out of range)", s, got)
+		}
+	}
+	// A valid neighbor in the same string is still parsed.
+	if got := ParseTimes("bad 25:99 but real 6:30 PM"); !reflect.DeepEqual(got, []HM{{18, 30}}) {
+		t.Errorf("want [{18 30}], got %v", got)
+	}
+}
+
 func TestParseTimesNoonMidnight(t *testing.T) {
 	if got := ParseTimes("12:00 PM"); !reflect.DeepEqual(got, []HM{{12, 0}}) {
 		t.Errorf("noon: got %v", got)
