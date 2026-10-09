@@ -15,8 +15,6 @@
     <button data-tab="adddata">Add Data</button>
     <button data-tab="week">My Week</button>
     <button data-tab="tasks">Tasks</button>
-    <button data-tab="review">Review</button>
-    <button data-tab="ask">Ask school</button>
     <button data-tab="directory">Directory</button>
     <button data-tab="activity">Activity</button>
     <div class="grp">Operator</div>
@@ -32,8 +30,6 @@
     <button data-tab="policies">Policies</button>
     <button data-tab="budgets">Budgets</button>
     <button data-tab="eval">Eval</button>
-    <button data-tab="commands">Commands</button>
-    <button data-tab="incidents">Incidents</button>
   </nav>
   <button id="themeToggle" class="switch" onclick="toggleTheme()" style="cursor:pointer">🌙 Dark</button>
   <a id="surfaceSwitch" class="switch" href="/"></a>
@@ -106,6 +102,10 @@
   </section>
 
   <section id="tasks" class="hide">
+    <div class="card hide" id="reviewCard">
+      <strong>⚠ Needs your OK</strong> <span class="mut">— low-confidence or flagged extractions the agent wants you to confirm before trusting (it won't add them unattended)</span>
+      <div id="reviewList" style="margin-top:8px"></div>
+    </div>
     <div class="card">
       <strong>Tasks &amp; reminders</strong> <span class="mut">— the non-meeting things an email asks of you</span>
       <h3>To do</h3><div id="taskList"></div>
@@ -118,33 +118,16 @@
     </div>
   </section>
 
-  <section id="review" class="hide">
-    <div class="card">
-      <strong>Needs review</strong> <span class="mut">— low-confidence or flagged; not added unattended</span>
-      <div id="reviewList"></div>
-    </div>
-  </section>
-
   <section id="activity" class="hide">
     <div class="card">
-      <strong>Agent activity</strong> <span class="mut">— what the agent did, newest first (from the tamper-evident log)</span>
-      <div class="feed" id="feed"></div>
-    </div>
-  </section>
-
-  <section id="commands" class="hide">
-    <div class="card">
-      <strong>Commands</strong> <span class="mut">— the raw tool-call stream: every command the agent ran (exec argv or fetch URL), its allow/block decision, and the sandbox outcome, correlated by trace. Output is never logged — only whether it ran and its size. (Activity is the plain-language version of the same log.)</span>
-      <div style="margin-top:8px"><button class="ghost" onclick="loadCommands()">Refresh</button></div>
-      <div id="commandList" style="margin-top:8px"><span class="mut">loading…</span></div>
-    </div>
-  </section>
-
-  <section id="ask" class="hide">
-    <div class="card">
-      <strong>Ask school</strong> <span class="mut">— search your past emails &amp; the handbook; returns the matching source lines to read. For a written answer, use Chat.</span>
-      <div style="margin-top:8px"><input id="askq" placeholder="e.g. nurse, phone policy, book fair" style="width:70%"><button class="go" onclick="doAsk()">Search</button></div>
-      <div id="askOut" style="margin-top:10px"></div>
+      <strong>Activity</strong> <span class="mut">— what the agent did, newest first, from the tamper-evident log. "Detailed" shows the raw tool calls (exec argv / fetch URL + allow/block + outcome); click a trace to replay its full timeline. Output is never logged.</span>
+      <div style="margin-top:8px">
+        <button class="ghost active" id="actPlain" onclick="setActView('plain')">Plain</button>
+        <button class="ghost" id="actDetail" onclick="setActView('detail')">Detailed (tool calls)</button>
+      </div>
+      <div class="feed" id="feed" style="margin-top:8px"></div>
+      <div id="commandList" class="hide" style="margin-top:8px"></div>
+      <div class="card hide" id="replayCard" style="margin-top:8px"><strong>Trace replay</strong><pre id="replay"></pre></div>
     </div>
   </section>
 
@@ -329,13 +312,6 @@
     </div>
   </section>
 
-  <section id="incidents" class="hide">
-    <div class="card">
-      <strong>Incidents</strong> <span class="mut">— click a trace to replay it on tamper-evident evidence</span>
-      <table id="traces"><tbody></tbody></table>
-    </div>
-    <div class="card hide" id="replayCard"><strong>Replay</strong><pre id="replay"></pre></div>
-  </section>
 </main>
 </div>
 <script>const __CAP__="{{.CapToken}}";const SURFACE="{{.Surface}}";</script>

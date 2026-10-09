@@ -3,7 +3,7 @@
 // request. Empty (household mode) = no header, unchanged behavior.
 (function(){const f=window.fetch.bind(window);window.fetch=(u,o)=>{o=o||{};const s=typeof u==='string'?u:(u&&u.url)||'';if(__CAP__&&(s.indexOf('/api/')===0||s.indexOf('/ics/')===0)){o.headers=Object.assign({},o.headers||{},{'Authorization':'Bearer '+__CAP__});}return f(u,o);};})();
 const $=s=>document.querySelector(s);
-const TABS=['chat','calendar','adddata','week','tasks','review','activity','ask','directory','security','prompts','sampling','models','runtime','skills','retrieval','rag','grammar','policies','budgets','eval','commands','incidents'];
+const TABS=['chat','calendar','adddata','week','tasks','activity','directory','security','prompts','sampling','models','runtime','skills','retrieval','rag','grammar','policies','budgets','eval'];
 const esc=s=>{const d=document.createElement('div');d.textContent=s||'';return d.innerHTML;};
 const when=e=>e.all_day?((e.due||e.start)+' · all day'):((e.start||e.due)+(e.end?(' – '+e.end.slice(11)):''));
 // Theme: a manual light/dark toggle that overrides the OS preference (persisted).
@@ -20,13 +20,9 @@ document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
   if(t==='calendar'){loadEvents();loadDeadlines();setView('month');}
   if(t==='adddata') loadAddData();
   if(t==='week'){loadWeekStrip();loadProfile();}
-  if(t==='tasks') loadTasks();
-  if(t==='review') loadReview();
-  if(t==='ask'){const q=$('#askq');if(q)q.focus();}
+  if(t==='tasks'){loadTasks();loadReview();}
   if(t==='directory') loadDirectory();
-  if(t==='activity') loadActivity();
-  if(t==='commands') loadCommands();
-  if(t==='incidents') loadIncidents();
+  if(t==='activity') setActView('plain');
   if(t==='security'){loadKill();loadMCP();loadBundles();}
   if(t==='prompts') loadPrompts();
   if(t==='sampling') loadSampling();
@@ -43,8 +39,8 @@ document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
 // --- App / Studio surface split: 1 view, 1 job ---
 // App = consumer (zero control knobs); Studio = operator (the tuning/governance plane).
 const SURFACES={
-  app:['chat','calendar','adddata','week','tasks','review','ask','directory'],
-  studio:['security','prompts','sampling','models','runtime','skills','retrieval','rag','grammar','policies','budgets','eval','commands','incidents','activity']
+  app:['chat','calendar','adddata','week','tasks','directory'],
+  studio:['security','prompts','sampling','models','runtime','skills','retrieval','rag','grammar','policies','budgets','eval','activity']
 };
 (function(){
   const vis=(SURFACES[SURFACE]||TABS);
@@ -62,14 +58,6 @@ const SURFACES={
   const first=document.querySelector('nav button[data-tab="'+vis[0]+'"]');
   if(first) first.click(); // land on this surface's first tab
 })();
-async function doAsk(){
-  const q=$('#askq').value.trim();const c=$('#askOut');if(!q){c.innerHTML='';return;}
-  c.innerHTML='<span class="mut">searching…</span>';
-  const d=await getJSON('/api/ask?q='+encodeURIComponent(q));const hits=d.hits||[];
-  if(!hits.length){c.innerHTML='<p class="mut">no matches — drop more emails to build the corpus</p>';return;}
-  c.innerHTML=hits.map(h=>'<div class="ev"><div><b>'+esc(h.source)+'</b>'+(h.untrusted?' <span class="kind warn">untrusted</span>':'')+'<br><span class="mut">'+esc(h.snippet)+'</span></div></div>').join('');
-}
-document.addEventListener('keydown',e=>{if(e.key==='Enter'&&document.activeElement&&document.activeElement.id==='askq')doAsk();});
 // A directory, not a raw address dump: real Name · Role entries first (from the
 // profile teachers today), then the scraped addresses grouped so a school address
 // isn't mixed in with a personal one. Addresses are shown as plain text, never
@@ -829,8 +817,10 @@ async function loadSummaries(items){
     c.appendChild(div);}
 }
 async function loadReview(){
-  const d=await getJSON('/api/review');const c=$('#reviewList');c.innerHTML='';
-  const xs=d.items||[];if(!xs.length){c.innerHTML='<p class="mut">nothing to review 🎉</p>';return;}
+  const d=await getJSON('/api/review');const c=$('#reviewList');if(!c)return;c.innerHTML='';
+  const card=$('#reviewCard');const xs=d.items||[];
+  if(card)card.classList.toggle('hide',!xs.length); // the "Needs your OK" card shows only when there's something to confirm
+  if(!xs.length)return;
   xs.forEach(i=>{if(i.file&&i.index>=0)__ITEMS__[i.file+'|'+i.index]=i;
     const div=document.createElement('div');div.className='ev';
     const why=(i.warnings&&i.warnings.join(', '))||('confidence '+Math.round((i.confidence||0)*100)+'%');
@@ -854,8 +844,20 @@ async function sendFeedback(source,label,rating,btn){
   const r=await (await postJSON('/api/feedback',{source,label,rating})).json();
   if(r.ok&&btn){const row=btn.closest('.fb');if(row)row.querySelectorAll('button').forEach(b=>b.style.opacity=b===btn?'1':'.35');}
 }
+// Activity has two views of the SAME tamper-evident log: Plain (friendly feed) and Detailed
+// (the raw tool-call stream, with clickable traces to replay a full timeline).
+function setActView(v){
+  const plain=v!=='detail';
+  const f=$('#feed'),cl=$('#commandList'),rc=$('#replayCard');
+  if(f)f.classList.toggle('hide',!plain);
+  if(cl)cl.classList.toggle('hide',plain);
+  if(rc&&plain)rc.classList.add('hide');
+  const pb=$('#actPlain'),db=$('#actDetail');
+  if(pb)pb.classList.toggle('active',plain);if(db)db.classList.toggle('active',!plain);
+  if(plain)loadActivity();else loadCommands();
+}
 async function loadActivity(){
-  const d=await getJSON('/api/activity');const c=$('#feed');c.innerHTML='';
+  const d=await getJSON('/api/activity');const c=$('#feed');if(!c)return;c.innerHTML='';
   const xs=d.activity||[];if(!xs.length){c.innerHTML='<p class="mut">no activity logged yet</p>';return;}
   xs.forEach(a=>{const div=document.createElement('div');
     div.innerHTML='<time>'+esc((a.ts||'').slice(11,19))+'</time>'+esc(a.text);c.appendChild(div);});
@@ -871,8 +873,9 @@ async function loadCommands(){
       ?('<span class="pill fail">block</span>'+(x.reason?' <span class="mut">'+esc(x.reason)+'</span>':''))
       :('<span class="pill pass">allow</span>'+(x.outcome?' → <span class="mut">'+esc(x.outcome)+'</span>':''));
     const t=esc((x.ts||'').slice(11,19));
+    const tr=x.trace?'<span class="trace" title="replay this trace" onclick="replay(\''+esc(x.trace)+'\')">trace '+esc(x.trace.slice(0,8))+'</span>':'';
     return '<div class="ev"><div style="width:100%">'+icon+' <span class="kind">'+esc(x.kind)+'</span> <code>'+esc(x.command||'—')+'</code>'+
-      '<br><span class="mut">'+dec+' · trace '+esc((x.trace||'').slice(0,8))+' · '+t+'</span></div></div>';
+      '<br><span class="mut">'+dec+' · '+tr+' · '+t+'</span></div></div>';
   }).join('');
 }
 
@@ -973,14 +976,6 @@ async function runScorecard(){
     const c=tr.insertCell(); c.innerHTML='<span class="pill '+(r.pass?'pass':'fail')+'">'+(r.pass?'ok':'FAIL')+'</span>';});
   $('#score').classList.remove('hide');
   $('#verdict').innerHTML=d.all_pass?' <span class="pill pass">all defenses hold</span>':' <span class="pill fail">regression!</span>';
-}
-async function loadIncidents(){
-  const d=await getJSON('/api/incidents');
-  const tb=$('#traces tbody'); tb.innerHTML='';
-  (d.traces||[]).forEach(t=>{const tr=tb.insertRow();
-    const c=tr.insertCell(); const a=document.createElement('span'); a.className='trace'; a.textContent=t.id.slice(0,12); a.onclick=()=>replay(t.id); c.appendChild(a);
-    tr.insertCell().textContent=t.n+' events';});
-  if(!(d.traces||[]).length) tb.innerHTML='<tr><td class="mut">no incidents recorded yet</td></tr>';
 }
 async function replay(id){
   const d=await getJSON('/api/incident?trace='+id);
