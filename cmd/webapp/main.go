@@ -62,6 +62,7 @@ func main() {
 	assetsDir := flag.String("assets", envOr("WEBAPP_ASSETS", "set-up/vm-assets"), "directory holding the served GGUF models (for the Runtime health panel)")
 	seedDir := flag.String("seed", envOr("WEBAPP_SEED", "examples"), "dir of example emails to ingest into the inbox on first run (empty to disable)")
 	autoModels := flag.Bool("automodels", envOr("WEBAPP_AUTOMODELS", "true") != "false", "automatically bring the local models up on startup (planner/coder + gateway) so chat & extraction work out of the box")
+	allowEphemeralID := flag.Bool("allow-ephemeral-identity", envOr("WEBAPP_ALLOW_EPHEMERAL_IDENTITY", "false") == "true", "allow starting on a throwaway in-memory signing key when the persistent agent seed cannot be loaded/persisted (DEV ONLY: signatures will not verify across restarts)")
 	flag.Parse()
 
 	// Single source for the gateway endpoint (was two hardcoded literals). The chat
@@ -101,7 +102,20 @@ func main() {
 	// Provenance (M20): a persistent agent identity signs every emitted .ics, so
 	// the UI can prove the agent produced it unaltered. The ed25519 seed lives in
 	// the drop dir (0600); generated once, reused across restarts.
-	signer, verifier := agentIdentity(filepath.Join(*drop, "agent.key"))
+	keyPath := filepath.Join(*drop, "agent.key")
+	signer, verifier, persistentID, err := agentIdentity(keyPath)
+	if err != nil {
+		log.Fatalf("webapp: agent identity: %v", err)
+	}
+	if !persistentID {
+		// Fail closed: an ephemeral identity means every .ics signed this run stops
+		// verifying after a restart, and the authz trust anchor changes — a silent
+		// security downgrade. Refuse to start unless a dev explicitly opts in.
+		if !*allowEphemeralID {
+			log.Fatalf("webapp: SECURITY: could not load or persist the agent identity at %s — refusing to start on an ephemeral key (signatures would not verify across restarts). Fix the seed path/permissions, or pass -allow-ephemeral-identity (env WEBAPP_ALLOW_EPHEMERAL_IDENTITY=true) for a throwaway dev run.", keyPath)
+		}
+		log.Printf("webapp: WARNING: running on an EPHEMERAL agent identity (seed at %s not persisted) — previously signed .ics will NOT verify and this key dies on restart. Dev mode only.", keyPath)
+	}
 	pipe.Signer = signer
 
 	// Kill switch (M18): Pause halts processing of new drops; the console toggles it.
@@ -583,7 +597,7 @@ func main() {
 			Authz: authz, OperatorToken: opToken, AppToken: appToken, Audit: audit,
 			MCP: mcpReg, Prompts: prompts, Policies: policies, Sampling: sampling, Budgets: budgets, Retrieval: retrieval, Grammars: grammars, Models: models,
 			Skills: skillsPlane, SkillCatalog: skillSupply, ModelCatalog: modelCatalogSvc, Events: eventsSvc, Summaries: summariesSvc, Items: itemsSvc, RAG: ragLabSvc,
-			AssetsDir: *assetsDir, GatewayURL: *gwFlag, GatewayUp: func() bool { return gw != nil && gw.Up() },
+			AssetsDir: *assetsDir, GatewayURL: *gwFlag, GatewayUp: func() bool { return gw != nil && gw.Up() }, IdentityEphemeral: !persistentID,
 			Eval:    evalSvc,
 			Bundles: bundleSvc,
 			Profile: profileSvc,
@@ -617,24 +631,40 @@ func main() {
 	log.Println("webapp: stopped.")
 }
 
-// agentIdentity loads (or creates) the persistent ed25519 seed at path and
-// returns the signer + a verifier trusting that key. On any error it falls back
-// to an ephemeral key so the app still runs (signatures just won't verify across
-// restarts).
-func agentIdentity(path string) (*provenance.Signer, *provenance.Verifier) {
+// agentIdentity loads (or creates) the persistent ed25519 seed at path and returns
+// the signer, a verifier trusting that key, and whether the identity is PERSISTENT
+// (the seed is backed on disk and will survive a restart). persistent is false when
+// the seed could not be read AND a freshly generated one could not be written, or the
+// seed on disk is unusable — in both cases the key lives only in memory, so every .ics
+// signed this run stops verifying after a restart. It never degrades silently: the
+// caller decides (fail closed by default; opt-in for a throwaway dev run). err is
+// returned only when no signer can be constructed at all.
+func agentIdentity(path string) (signer *provenance.Signer, verifier *provenance.Verifier, persistent bool, err error) {
 	const keyID = "email-agent"
-	seed, err := os.ReadFile(path)
-	if err != nil || len(seed) != ed25519.SeedSize {
+	persistent = true
+	seed, rerr := os.ReadFile(path)
+	if rerr != nil || len(seed) != ed25519.SeedSize {
 		seed = make([]byte, ed25519.SeedSize)
-		if _, rerr := rand.Read(seed); rerr == nil {
-			_ = os.WriteFile(path, seed, 0o600)
+		if _, gerr := rand.Read(seed); gerr != nil {
+			return nil, nil, false, fmt.Errorf("generate agent seed: %w", gerr)
+		}
+		// First boot (or a replaced seed): persist it so the next boot reuses it. A
+		// write failure means the key is in-memory only — NOT persistent.
+		if werr := os.WriteFile(path, seed, 0o600); werr != nil {
+			persistent = false
 		}
 	}
 	signer, pub, serr := provenance.SignerFromSeed(keyID, seed)
 	if serr != nil {
-		signer, pub, _ = provenance.NewSigner(keyID) // ephemeral fallback
+		// The seed is unusable; fall back to an ephemeral key so a signer exists, but
+		// flag it as non-persistent for the caller to surface/refuse.
+		signer, pub, serr = provenance.NewSigner(keyID)
+		if serr != nil {
+			return nil, nil, false, fmt.Errorf("agent signer: %w", serr)
+		}
+		persistent = false
 	}
-	return signer, provenance.NewVerifier().Trust(keyID, pub)
+	return signer, provenance.NewVerifier().Trust(keyID, pub), persistent, nil
 }
 
 // gw is the chat gateway client (pkg/gateway), set from the -gateway flag in main.

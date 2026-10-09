@@ -282,7 +282,10 @@ async function reindexRAG(){
 async function loadRuntime(){
   const c=$('#runtimeOut');if(!c)return;const d=await getJSON('/api/runtime');const gw=d.gateway||{};
   const gwPill=gw.up?'<span class="pill pass">up</span>':'<span class="pill fail">down</span>';
-  let html='<div class="ev"><div><b>gateway</b> '+gwPill+' <span class="mut">'+esc(gw.url||'')+'</span></div></div>';
+  let html='';
+  const id=d.identity||{};
+  if(id.ephemeral) html+='<div class="ev"><div><b>agent identity</b> <span class="pill fail">ephemeral</span> <span class="mut">throwaway key — signed .ics will not verify across restarts</span></div></div>';
+  html+='<div class="ev"><div><b>gateway</b> '+gwPill+' <span class="mut">'+esc(gw.url||'')+'</span></div></div>';
   html+='<div class="mut" style="margin:10px 0 4px">model servers <span style="opacity:.7">(assets: '+esc(d.assets_dir||'')+')</span></div>';
   (d.models||[]).forEach(m=>{
     const file=m.present?(m.valid_gguf?'<span class="pill pass">file ok</span>':'<span class="pill fail">file invalid</span>'):'<span class="pill fail">file missing</span>';

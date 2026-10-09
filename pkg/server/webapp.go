@@ -153,6 +153,11 @@ type Config struct {
 	AssetsDir  string
 	GatewayURL string
 	GatewayUp  func() bool
+	// IdentityEphemeral is true when the agent is running on a throwaway in-memory
+	// signing key (the persistent seed could not be loaded/persisted). Surfaced red in
+	// the Runtime panel: previously signed .ics will not verify and the key dies on
+	// restart. The boot path refuses to start in this state unless explicitly opted in.
+	IdentityEphemeral bool
 
 	// Skills, when set, is the governed skill-approval resolver (the pin side of the
 	// skills supply-chain control): which skill versions an operator has approved.

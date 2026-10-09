@@ -49,6 +49,7 @@ func (s *Server) runtimeStatus(w http.ResponseWriter, _ *http.Request) {
 		"gateway":    map[string]any{"url": s.GatewayURL, "up": gwUp},
 		"assets_dir": s.AssetsDir,
 		"models":     rows,
+		"identity":   map[string]any{"ephemeral": s.IdentityEphemeral},
 	})
 }
 
