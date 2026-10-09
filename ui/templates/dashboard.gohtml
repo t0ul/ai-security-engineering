@@ -17,6 +17,7 @@
     <button data-tab="tasks">Tasks</button>
     <button data-tab="review">Review</button>
     <button data-tab="ask">Ask school</button>
+    <button data-tab="directory">Directory</button>
     <button data-tab="activity">Activity</button>
     <div class="grp">Operator</div>
     <button data-tab="security">Security</button>
@@ -126,18 +127,16 @@
 
   <section id="ask" class="hide">
     <div class="card">
-      <strong>Ask school</strong> <span class="mut">— search your past emails &amp; the handbook (what you've dropped)</span>
+      <strong>Ask school</strong> <span class="mut">— search your past emails &amp; the handbook; returns the matching source lines to read. For a written answer, use Chat.</span>
       <div style="margin-top:8px"><input id="askq" placeholder="e.g. nurse, phone policy, book fair" style="width:70%"><button class="go" onclick="doAsk()">Search</button></div>
       <div id="askOut" style="margin-top:10px"></div>
     </div>
+  </section>
+
+  <section id="directory" class="hide">
     <div class="card">
-      <strong>Enrich from a link</strong> <span class="mut">— fetch an allow-listed handbook URL into the knowledge base (R6: HITL + egress-gated + fetched in the MicroVM, indexed untrusted)</span>
-      <div style="margin-top:8px"><input id="enrichURL" placeholder="https://ps51eliashowe.org/handbook" style="width:70%"><button class="go" onclick="doEnrich()">Fetch</button></div>
-      <div id="enrichOut" style="margin-top:10px" class="mut"></div>
-    </div>
-    <div class="card">
-      <strong>Directory</strong> <span class="mut">— contacts the agent surfaced across your emails + profile teachers (R5, host-only)</span>
-      <div id="directory" style="margin-top:8px"><span class="mut">loading…</span></div>
+      <strong>Directory</strong> <span class="mut">— school people &amp; contacts surfaced from your emails and the profile teachers (R5, host-only; stays on this host)</span>
+      <div id="directoryList" style="margin-top:8px"><span class="mut">loading…</span></div>
     </div>
   </section>
 
@@ -261,6 +260,11 @@
         <span id="ragMsg" class="mut"></span>
       </div>
       <div id="ragStats" style="margin-top:10px" class="mut"></div>
+    </div>
+    <div class="card">
+      <strong>Enrich from a link</strong> <span class="mut">— fetch an allow-listed handbook URL into the knowledge base (R6: HITL + egress-gated, fetched in the MicroVM, indexed as untrusted)</span>
+      <div style="margin-top:8px"><input id="enrichURL" placeholder="https://ps51eliashowe.org/handbook" style="width:70%"><button class="go" onclick="doEnrich()">Fetch</button></div>
+      <div id="enrichOut" style="margin-top:10px" class="mut"></div>
     </div>
   </section>
   <section id="grammar" class="hide">

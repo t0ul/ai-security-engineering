@@ -3,7 +3,7 @@
 // request. Empty (household mode) = no header, unchanged behavior.
 (function(){const f=window.fetch.bind(window);window.fetch=(u,o)=>{o=o||{};const s=typeof u==='string'?u:(u&&u.url)||'';if(__CAP__&&(s.indexOf('/api/')===0||s.indexOf('/ics/')===0)){o.headers=Object.assign({},o.headers||{},{'Authorization':'Bearer '+__CAP__});}return f(u,o);};})();
 const $=s=>document.querySelector(s);
-const TABS=['chat','calendar','adddata','week','tasks','review','activity','ask','security','prompts','sampling','models','runtime','skills','retrieval','rag','grammar','policies','budgets','eval','incidents'];
+const TABS=['chat','calendar','adddata','week','tasks','review','activity','ask','directory','security','prompts','sampling','models','runtime','skills','retrieval','rag','grammar','policies','budgets','eval','incidents'];
 const esc=s=>{const d=document.createElement('div');d.textContent=s||'';return d.innerHTML;};
 const when=e=>e.all_day?((e.due||e.start)+' · all day'):((e.start||e.due)+(e.end?(' – '+e.end.slice(11)):''));
 // Theme: a manual light/dark toggle that overrides the OS preference (persisted).
@@ -22,7 +22,8 @@ document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
   if(t==='week'){loadWeek('today');loadProfile();}
   if(t==='tasks') loadTasks();
   if(t==='review') loadReview();
-  if(t==='ask') loadDirectory();
+  if(t==='ask'){const q=$('#askq');if(q)q.focus();}
+  if(t==='directory') loadDirectory();
   if(t==='activity') loadActivity();
   if(t==='incidents') loadIncidents();
   if(t==='security'){loadKill();loadMCP();loadBundles();}
@@ -41,7 +42,7 @@ document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
 // --- App / Studio surface split: 1 view, 1 job ---
 // App = consumer (zero control knobs); Studio = operator (the tuning/governance plane).
 const SURFACES={
-  app:['chat','calendar','adddata','week','tasks','review','ask'],
+  app:['chat','calendar','adddata','week','tasks','review','ask','directory'],
   studio:['security','prompts','sampling','models','runtime','skills','retrieval','rag','grammar','policies','budgets','eval','incidents','activity']
 };
 (function(){
@@ -68,13 +69,21 @@ async function doAsk(){
   c.innerHTML=hits.map(h=>'<div class="ev"><div><b>'+esc(h.source)+'</b>'+(h.untrusted?' <span class="kind warn">untrusted</span>':'')+'<br><span class="mut">'+esc(h.snippet)+'</span></div></div>').join('');
 }
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&document.activeElement&&document.activeElement.id==='askq')doAsk();});
+// A directory, not a raw address dump: real Name · Role entries first (from the
+// profile teachers today), then the scraped addresses grouped so a school address
+// isn't mixed in with a personal one. Addresses are shown as plain text, never
+// clickable links — they came from untrusted email and we don't action them here.
+function isSchoolAddr(e){const d=(e.split('@')[1]||'').toLowerCase();return /(^|\.)schools\.|\.gov$|\.edu$|nycps|\.org$/.test(d);}
+function addrRow(e){return '<div class="ev"><div><span class="mut">'+esc(e)+'</span></div></div>';}
 async function loadDirectory(){
-  const c=$('#directory');if(!c)return;const d=await getJSON('/api/directory');
+  const c=$('#directoryList');if(!c)return;const d=await getJSON('/api/directory');
   const ppl=d.people||[];const em=d.emails||[];
-  if(!ppl.length&&!em.length){c.innerHTML='<p class="mut">no contacts surfaced yet</p>';return;}
+  if(!ppl.length&&!em.length){c.innerHTML='<p class="mut">No contacts yet — add your child’s teacher in My Week, or drop a school email in Add Data.</p>';return;}
   let h='';
-  if(ppl.length) h+=ppl.map(p=>'<div class="ev"><div><b>'+esc(p.name)+'</b> <span class="kind">'+esc(p.role)+'</span></div></div>').join('');
-  if(em.length) h+='<div class="ev"><div><b>Emails</b><br><span class="mut">'+em.map(esc).join(', ')+'</span></div></div>';
+  if(ppl.length) h+='<h3>People</h3>'+ppl.map(p=>'<div class="ev"><div><b>'+esc(p.name)+'</b> <span class="kind">'+esc(p.role)+'</span></div></div>').join('');
+  const school=em.filter(isSchoolAddr),other=em.filter(e=>!isSchoolAddr(e));
+  if(school.length) h+='<h3>School contacts</h3>'+school.map(addrRow).join('');
+  if(other.length) h+='<h3>Other addresses seen</h3><p class="mut" style="margin:4px 0 8px">Scraped from your emails; may be personal — not an official directory.</p>'+other.map(addrRow).join('');
   c.innerHTML=h;
 }
 function chatFeedbackHTML(turnId,rating){
