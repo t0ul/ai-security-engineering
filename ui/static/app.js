@@ -3,15 +3,22 @@
 // request. Empty (household mode) = no header, unchanged behavior.
 (function(){const f=window.fetch.bind(window);window.fetch=(u,o)=>{o=o||{};const s=typeof u==='string'?u:(u&&u.url)||'';if(__CAP__&&(s.indexOf('/api/')===0||s.indexOf('/ics/')===0)){o.headers=Object.assign({},o.headers||{},{'Authorization':'Bearer '+__CAP__});}return f(u,o);};})();
 const $=s=>document.querySelector(s);
-const TABS=['chat','calendar','week','tasks','review','activity','ask','security','prompts','sampling','models','runtime','skills','retrieval','rag','grammar','policies','budgets','eval','incidents'];
+const TABS=['chat','calendar','adddata','week','tasks','review','activity','ask','security','prompts','sampling','models','runtime','skills','retrieval','rag','grammar','policies','budgets','eval','incidents'];
 const esc=s=>{const d=document.createElement('div');d.textContent=s||'';return d.innerHTML;};
 const when=e=>e.all_day?((e.due||e.start)+' · all day'):((e.start||e.due)+(e.end?(' – '+e.end.slice(11)):''));
+// Theme: a manual light/dark toggle that overrides the OS preference (persisted).
+function effectiveDark(){const dt=document.documentElement.dataset.theme;if(dt)return dt==='dark';return window.matchMedia&&matchMedia('(prefers-color-scheme:dark)').matches;}
+function themeBtnText(){const b=$('#themeToggle');if(b)b.textContent=effectiveDark()?'☀️ Light mode':'🌙 Dark mode';}
+function applyTheme(t){document.documentElement.dataset.theme=t;try{localStorage.setItem('theme',t);}catch(e){}themeBtnText();}
+function toggleTheme(){applyTheme(effectiveDark()?'light':'dark');}
+themeBtnText();
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
   document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('active',x===b));
   TABS.forEach(t=>$('#'+t).classList.toggle('hide',t!==b.dataset.tab));
   const t=b.dataset.tab;
   if(t==='chat'){const q=$('#chatq');if(q)q.focus();loadMiniCal();loadChatHistory();}
-  if(t==='calendar'){loadEvents();loadDeadlines();}
+  if(t==='calendar'){loadEvents();loadDeadlines();setView('month');}
+  if(t==='adddata') loadAddData();
   if(t==='week'){loadWeek('today');loadProfile();}
   if(t==='tasks') loadTasks();
   if(t==='review') loadReview();
@@ -34,7 +41,7 @@ document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
 // --- App / Studio surface split: 1 view, 1 job ---
 // App = consumer (zero control knobs); Studio = operator (the tuning/governance plane).
 const SURFACES={
-  app:['chat','calendar','week','tasks','review','ask'],
+  app:['chat','calendar','adddata','week','tasks','review','ask'],
   studio:['security','prompts','sampling','models','runtime','skills','retrieval','rag','grammar','policies','budgets','eval','incidents','activity']
 };
 (function(){
@@ -489,12 +496,16 @@ async function loadDeadlines(){
   dated.slice(0,8).forEach(i=>{const el=document.createElement('div');el.className='chip';
     el.innerHTML='<b>'+esc((i.due||i.start).slice(0,10))+'</b>'+esc(i.title.slice(0,40));c.appendChild(el);});
 }
-async function loadEvents(){
+async function loadAddData(){
   const d=await getJSON('/api/events');
   if(d.inbox) $('#inbox').innerHTML='📥 Drop <b>.txt</b> emails here: <code>'+esc(d.inbox)+'</code>';
+}
+async function loadEvents(){
+  const d=await getJSON('/api/events');
+  if(d.inbox && $('#inbox')) $('#inbox').innerHTML='📥 Drop <b>.txt</b> emails here: <code>'+esc(d.inbox)+'</code>';
   const c=$('#events'); c.innerHTML='';
   const evs=(d.events||[]).filter(e=>(e.kind||'event')==='event');
-  if(!evs.length){c.innerHTML='<p class="mut">no meetings yet — drop a .txt email above</p>';return;}
+  if(!evs.length){c.innerHTML='<p class="mut">no meetings yet — add one above or drop an email in Add Data</p>';return;}
   evs.forEach(e=>{const div=document.createElement('div');div.className='ev';
     const del=e.key?' <button class="ghost" title="remove from calendar" onclick="deleteEvent(\''+esc(e.key)+'\',this)">Delete</button>':'';
     div.innerHTML='<div><b>'+esc(e.title)+'</b>'+(e.signed?' <span class="kind" title="signed by this agent, unaltered">✓ signed</span>':'')+'<br><span class="mut">'+esc(when(e))+(e.location?(' · '+esc(e.location)):'')+'</span></div>'+
@@ -648,10 +659,28 @@ async function loadSummaries(items){
 async function loadReview(){
   const d=await getJSON('/api/review');const c=$('#reviewList');c.innerHTML='';
   const xs=d.items||[];if(!xs.length){c.innerHTML='<p class="mut">nothing to review 🎉</p>';return;}
-  xs.forEach(i=>{const div=document.createElement('div');div.className='ev';
+  xs.forEach(i=>{if(i.file&&i.index>=0)__ITEMS__[i.file+'|'+i.index]=i;
+    const div=document.createElement('div');div.className='ev';
     const why=(i.warnings&&i.warnings.join(', '))||('confidence '+Math.round((i.confidence||0)*100)+'%');
-    div.innerHTML='<div><b>'+esc(i.title)+'</b><br><span class="warn" style="font-size:13px">'+esc(why)+'</span></div>';
+    const lbl=(i.title||'').slice(0,60);
+    let act='';
+    if(i.file&&i.index>=0){act='<button class="ghost" onclick="accept(\''+esc(i.file)+'\','+i.index+',this)">Add this</button> '+
+      '<button class="ghost" onclick="openEditModal(\''+esc(i.file)+'\','+i.index+')">Edit &amp; add</button> '+
+      '<button class="ghost" onclick="rejectItem(\''+esc(i.file)+'\','+i.index+',this)">Not real</button> ';}
+    act+=feedbackBtns('review',lbl);
+    div.innerHTML='<div><b>'+esc(i.title)+'</b><br><span class="warn" style="font-size:13px">'+esc(why)+'</span></div><div>'+act+'</div>';
     c.appendChild(div);});
+}
+function feedbackBtns(source,label){
+  const s=esc(source),l=esc(label);
+  return '<span class="fb">'+
+    '<button class="ghost" title="good" onclick="sendFeedback(\''+s+'\',\''+l+'\',\'up\',this)">👍</button>'+
+    '<button class="ghost" title="meh" onclick="sendFeedback(\''+s+'\',\''+l+'\',\'neutral\',this)">😐</button>'+
+    '<button class="ghost" title="bad" onclick="sendFeedback(\''+s+'\',\''+l+'\',\'down\',this)">👎</button></span>';
+}
+async function sendFeedback(source,label,rating,btn){
+  const r=await (await postJSON('/api/feedback',{source,label,rating})).json();
+  if(r.ok&&btn){const row=btn.closest('.fb');if(row)row.querySelectorAll('button').forEach(b=>b.style.opacity=b===btn?'1':'.35');}
 }
 async function loadActivity(){
   const d=await getJSON('/api/activity');const c=$('#feed');c.innerHTML='';
@@ -745,7 +774,7 @@ async function postDrop(fd,label){$('#dropmsg').textContent='processing '+label+
   if(!r.ok){$('#dropmsg').textContent='error: '+(await r.text());return;}
   $('#dropmsg').textContent='queued — results appear shortly';
   setTimeout(()=>{loadEvents();loadDeadlines();},2500);setTimeout(()=>{loadEvents();loadDeadlines();},5000);}
-loadEvents();loadDeadlines();
+loadEvents();loadDeadlines();setView('month');
 
 async function runScorecard(){
   $('#verdict').textContent=' running…';

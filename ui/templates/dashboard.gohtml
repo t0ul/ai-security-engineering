@@ -3,6 +3,7 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Agent Console</title>
 <link rel="stylesheet" href="/static/app.css">
+<script>try{var _t=localStorage.getItem('theme');if(_t)document.documentElement.dataset.theme=_t;}catch(e){}</script>
 </head><body>
 <div class="app">
 <aside class="sidebar">
@@ -11,6 +12,7 @@
     <button data-tab="chat">💬 Chat</button>
     <div class="grp">You</div>
     <button data-tab="calendar" class="active">Calendar</button>
+    <button data-tab="adddata">Add Data</button>
     <button data-tab="week">My Week</button>
     <button data-tab="tasks">Tasks</button>
     <button data-tab="review">Review</button>
@@ -31,6 +33,7 @@
     <button data-tab="eval">Eval</button>
     <button data-tab="incidents">Incidents</button>
   </nav>
+  <button id="themeToggle" class="switch" onclick="toggleTheme()" style="cursor:pointer">🌙 Dark</button>
   <a id="surfaceSwitch" class="switch" href="/"></a>
 </aside>
 <main>
@@ -51,24 +54,29 @@
   </section>
   <section id="calendar">
     <div class="card">
+      <strong>Calendar</strong> <span class="mut">— your month at a glance; add your own events, delete any, or accept an extracted one</span>
+      <div style="margin-top:6px"><button class="go" onclick="openCreateModal()">➕ Add event</button>
+        <span class="viewtoggle" style="margin-left:10px">
+          <button class="ghost" id="vMonth" onclick="setView('month')">Month</button>
+          <button class="ghost" id="vList" onclick="setView('list')">List</button>
+        </span></div>
+      <div id="monthView"></div>
+      <div id="events" class="hide"></div>
+    </div>
+    <div class="card">
       <strong>Upcoming</strong> <span class="mut">— next things across meetings, tasks &amp; heads-ups</span>
       <div class="strip" id="deadlines"></div>
     </div>
+  </section>
+  <section id="adddata" class="hide">
     <div class="card">
-      <strong>Calendar</strong> <span class="mut">— meetings the agent extracted; accept downloads the .ics (with a reminder)</span>
-      <div style="margin-top:6px"><button class="go" onclick="openCreateModal()">➕ Add event</button> <span class="mut">add one yourself, or delete any below</span></div>
+      <strong>Add data</strong> <span class="mut">— drop a school email (.txt) and the agent extracts events, tasks &amp; contacts into your calendar and corpus</span>
       <p class="mut" id="inbox"></p>
       <div class="dz" id="dropzone">
         Drag a <b>.txt</b> email here, or <label class="link">choose a file<input id="file" type="file" accept=".txt" hidden></label>, or paste below.
-        <div style="margin-top:8px"><textarea id="paste" rows="3" placeholder="paste email text…"></textarea></div>
+        <div style="margin-top:8px"><textarea id="paste" rows="4" placeholder="paste email text…"></textarea></div>
         <div style="margin-top:8px"><button class="go" onclick="dropText()">Process email</button> <span id="dropmsg" class="mut"></span></div>
       </div>
-      <div class="viewtoggle">
-        <button class="ghost" id="vList" onclick="setView('list')">List</button>
-        <button class="ghost" id="vMonth" onclick="setView('month')">Month</button>
-      </div>
-      <div id="events"></div>
-      <div id="monthView" class="hide"></div>
     </div>
   </section>
 

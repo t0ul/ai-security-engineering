@@ -383,12 +383,63 @@ func (s *Server) itemStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 // review returns the needs-review queue (low-confidence / warned items).
+// reviewItem is a needs-review event plus the source linkage (file + index into the
+// email's Items) so the Review tab can accept/edit/reject it, and a stable key for the
+// delete overlay.
+type reviewItem struct {
+	schema.Event
+	File  string `json:"file"`
+	Index int    `json:"index"`
+	Key   string `json:"key"`
+}
+
 func (s *Server) review(w http.ResponseWriter, _ *http.Request) {
-	var all []schema.Event
+	var out []reviewItem
 	for _, ns := range s.loadSummaries() {
-		all = append(all, ns.S.NeedsReview...)
+		for _, nr := range ns.S.NeedsReview {
+			// NeedsReview items are a flagged subset of Items — find the matching index
+			// so accept/edit uses the same file+index path as the Tasks tab.
+			idx := -1
+			for i, it := range ns.S.Items {
+				if it.Title == nr.Title && it.Start == nr.Start && it.ResolvedKind() == nr.ResolvedKind() {
+					idx = i
+					break
+				}
+			}
+			out = append(out, reviewItem{Event: nr, File: ns.Name, Index: idx, Key: itemKey(nr)})
+		}
 	}
-	writeJSON(w, map[string]any{"items": all})
+	writeJSON(w, map[string]any{"items": out})
+}
+
+// feedback records a thumbs rating (up/down/neutral) into the data-flywheel, so Review
+// (and chat) thumbs become a counted ground-truth signal rather than a dead click. A
+// consumer action (list/corpus), CSRF-gated.
+func (s *Server) feedback(w http.ResponseWriter, r *http.Request) {
+	if s.Flywheel == nil {
+		http.Error(w, "feedback not configured", http.StatusNotImplemented)
+		return
+	}
+	var req struct {
+		Source string `json:"source"`
+		Label  string `json:"label"`
+		Rating string `json:"rating"`
+	}
+	if json.NewDecoder(r.Body).Decode(&req) != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	decision := map[string]string{"up": "accept", "down": "reject", "neutral": "neutral"}[req.Rating]
+	if decision == "" {
+		http.Error(w, "rating must be up|down|neutral", http.StatusBadRequest)
+		return
+	}
+	src := req.Source
+	if src == "" {
+		src = "review"
+	}
+	s.Flywheel.Record(decision, src, req.Label)
+	writeJSON(w, map[string]any{"ok": true})
 }
 
 // summary returns one email's sidecar (digest + contacts + action-items + items)

@@ -66,6 +66,16 @@ func (s *Server) chatFeedback(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "rating write failed", http.StatusInternalServerError)
 		return
 	}
+	// Make the thumbs actually COUNT: feed the data-flywheel so chat quality shows up in
+	// the accept/reject tally (previously the rating was stored but never aggregated).
+	if s.Flywheel != nil {
+		switch req.Rating {
+		case "up":
+			s.Flywheel.Record("accept", "chat", "chat answer")
+		case "down":
+			s.Flywheel.Record("reject", "chat", "chat answer")
+		}
+	}
 	writeJSON(w, map[string]any{"ok": true})
 }
 

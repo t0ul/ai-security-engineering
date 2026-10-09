@@ -321,7 +321,7 @@ type Server struct {
 	inflight atomic.Int64 // in-flight console API requests (governed MaxConcurrency budget)
 
 	denyMu     sync.Mutex
-	denyCount  int       // capability denials in the current window (AIDR deny-storm detector)
+	denyCount  int // capability denials in the current window (AIDR deny-storm detector)
 	denyWindow time.Time
 	denyFired  bool // deny-storm already reported this window (fire once)
 
@@ -508,6 +508,7 @@ func (s *Server) Handler() http.Handler {
 		mux.HandleFunc("POST /api/items/status", csrf(s.authz(controlplane.ActionWrite, "calendar", s.itemStatus)))
 		mux.HandleFunc("POST /api/events/create", csrf(s.authz(controlplane.ActionWrite, "calendar", s.eventCreate)))
 		mux.HandleFunc("POST /api/events/delete", csrf(s.authz(controlplane.ActionWrite, "calendar", s.eventDelete)))
+		mux.HandleFunc("POST /api/feedback", csrf(s.authz(controlplane.ActionList, "corpus", s.feedback)))
 		mux.HandleFunc("POST /api/action", csrf(s.authz(controlplane.ActionExport, "link", s.action))) // egress
 	}
 	if s.Fetch != nil && s.Index != nil {
