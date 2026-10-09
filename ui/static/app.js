@@ -496,9 +496,40 @@ async function loadEvents(){
   const evs=(d.events||[]).filter(e=>(e.kind||'event')==='event');
   if(!evs.length){c.innerHTML='<p class="mut">no meetings yet — drop a .txt email above</p>';return;}
   evs.forEach(e=>{const div=document.createElement('div');div.className='ev';
+    const del=e.key?' <button class="ghost" title="remove from calendar" onclick="deleteEvent(\''+esc(e.key)+'\',this)">Delete</button>':'';
     div.innerHTML='<div><b>'+esc(e.title)+'</b>'+(e.signed?' <span class="kind" title="signed by this agent, unaltered">✓ signed</span>':'')+'<br><span class="mut">'+esc(when(e))+(e.location?(' · '+esc(e.location)):'')+'</span></div>'+
-      '<div>'+(e.has_reminder?'<span class="bell">🔔</span>':'')+'<a class="go" href="/ics/'+encodeURIComponent(e.file)+'" download>Accept .ics</a></div>';
+      '<div>'+(e.has_reminder?'<span class="bell">🔔</span>':'')+'<a class="go" href="/ics/'+encodeURIComponent(e.file)+'" download>Accept .ics</a>'+del+'</div>';
     c.appendChild(div);});
+}
+async function deleteEvent(key,btn){
+  if(!confirm('Remove this event from your calendar?'))return;
+  btn.disabled=true;const r=await (await postJSON('/api/events/delete',{key})).json();
+  if(r.ok){loadEvents();loadDeadlines();}else{btn.disabled=false;btn.textContent='err';}
+}
+// Add a calendar event from scratch (not from an email) — the household "add event".
+function openCreateModal(){
+  const ov=document.createElement('div');
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:1000';
+  ov.innerHTML='<div style="background:var(--panel,#1a1a1a);border:1px solid var(--line,#333);border-radius:12px;padding:20px;width:min(440px,92vw)">'+
+    '<b>Add a calendar event</b>'+
+    '<div style="margin-top:12px"><label class="mut">Title</label><br><input id="ce_title" style="width:100%" placeholder="e.g. Dentist appointment"></div>'+
+    '<div style="margin-top:10px;display:flex;gap:10px"><div style="flex:1"><label class="mut">Date</label><br><input id="ce_date" type="date" style="width:100%"></div>'+
+    '<div style="flex:1"><label class="mut">Time</label><br><input id="ce_time" type="time" style="width:100%"></div></div>'+
+    '<div style="margin-top:8px"><label class="mut"><input id="ce_allday" type="checkbox"> all-day</label></div>'+
+    '<div style="margin-top:10px"><label class="mut">Location</label><br><input id="ce_loc" style="width:100%"></div>'+
+    '<div style="margin-top:16px;display:flex;gap:8px;justify-content:flex-end"><button class="ghost" id="ce_cancel">Cancel</button><button class="go" id="ce_save">Add event</button></div>'+
+    '<div id="ce_msg" class="mut" style="margin-top:8px"></div></div>';
+  document.body.appendChild(ov);
+  const close=()=>ov.remove();
+  ov.addEventListener('click',e=>{if(e.target===ov)close();});
+  $('#ce_cancel').onclick=close;
+  $('#ce_save').onclick=async()=>{
+    const allday=$('#ce_allday').checked,date=$('#ce_date').value,time=$('#ce_time').value;
+    if(!$('#ce_title').value.trim()||!date){$('#ce_msg').textContent='title and date are required';return;}
+    let start=date;if(date&&time&&!allday)start=date+'T'+time+':00';
+    const r=await (await postJSON('/api/events/create',{title:$('#ce_title').value.trim(),start,location:$('#ce_loc').value.trim(),all_day:allday||!time})).json();
+    if(r.ok){close();loadEvents();loadDeadlines();}else{$('#ce_msg').textContent='error';}
+  };
 }
 async function postJSON(url,body){return fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});}
 async function rejectItem(file,index,btn){btn.disabled=true;const r=await postJSON('/api/reject',{file,index});btn.textContent=r.ok?'rejected ✓':'err';}

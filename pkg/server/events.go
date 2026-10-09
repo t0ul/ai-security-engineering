@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -11,6 +12,9 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/t0ul/ai-security-engineering/pkg/agent/ics"
+	"github.com/t0ul/ai-security-engineering/pkg/agent/schema"
 )
 
 var reSafeName = regexp.MustCompile(`[^a-zA-Z0-9._-]+`)
@@ -70,7 +74,13 @@ type Event struct {
 	Kind        string `json:"kind"`          // event|task|heads_up|action (from X-KIND)
 	Due         string `json:"due,omitempty"` // task/action due date
 	URL         string `json:"url,omitempty"` // action target
+	Key         string `json:"key,omitempty"` // content fingerprint, for delete
 }
+
+// eventKey is the content fingerprint for the delete overlay: day | normalized title.
+// Stable across projection rebuilds (matches the dedup identity), so a deleted event
+// stays deleted.
+func eventKey(e Event) string { return dayOf(e) + "|" + normTitle(e.Title) }
 
 // events reads the accepted .ics artifacts in OutboxDir and returns their events
 // for the calendar view. The .ics is the source of truth the user accepts.
@@ -200,7 +210,83 @@ func dropFragments(in []Event) []Event {
 }
 
 func (s *Server) events(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, map[string]any{"events": s.allEvents(), "inbox": s.InboxPath})
+	all := s.allEvents()
+	var hidden map[string]bool
+	if s.HiddenEvents != nil {
+		hidden, _ = s.HiddenEvents.LoadHiddenEvents()
+	}
+	out := make([]Event, 0, len(all))
+	for _, e := range all {
+		k := eventKey(e)
+		if hidden[k] {
+			continue // deleted via the overlay
+		}
+		e.Key = k
+		out = append(out, e)
+	}
+	writeJSON(w, map[string]any{"events": out, "inbox": s.InboxPath})
+}
+
+// HiddenEventStore is the delete overlay for calendar events (hide by fingerprint,
+// without mutating the source .ics). Nil = events cannot be deleted.
+type HiddenEventStore interface {
+	HideEvent(key string) error
+	LoadHiddenEvents() (map[string]bool, error)
+}
+
+// eventCreate writes a manually-entered calendar event to its own .ics (the household
+// "add event" — a human touch not tied to any email). The operator's own input, so no
+// HITL; still CSRF + authz(write/calendar) gated, and sanitized by the .ics writer.
+func (s *Server) eventCreate(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Title    string `json:"title"`
+		Start    string `json:"start"`
+		End      string `json:"end"`
+		Location string `json:"location"`
+		AllDay   bool   `json:"all_day"`
+	}
+	if json.NewDecoder(r.Body).Decode(&req) != nil || strings.TrimSpace(req.Title) == "" || strings.TrimSpace(req.Start) == "" {
+		http.Error(w, "title and start are required", http.StatusBadRequest)
+		return
+	}
+	if s.toolsBlocked() {
+		http.Error(w, "blocked by the kill switch", http.StatusServiceUnavailable)
+		return
+	}
+	ev := schema.Event{Title: req.Title, Start: req.Start, End: req.End, Location: req.Location, AllDay: req.AllDay, SourceEmail: "manual"}
+	text, _, err := ics.Write([]schema.Event{ev}, "Manual")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	outName := fmt.Sprintf("manual-%d.events.ics", time.Now().UnixNano())
+	if err := os.WriteFile(filepath.Join(s.OutboxDir, outName), []byte(text), 0o644); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	// If the deleted overlay had the same fingerprint, clear it so re-adding re-shows.
+	writeJSON(w, map[string]any{"ok": true, "file": outName})
+}
+
+// eventDelete hides a calendar event by its content fingerprint. The source .ics is left
+// intact (tamper-evident record); the event is filtered from the calendar projection.
+func (s *Server) eventDelete(w http.ResponseWriter, r *http.Request) {
+	if s.HiddenEvents == nil {
+		http.Error(w, "event delete not configured", http.StatusNotImplemented)
+		return
+	}
+	var req struct {
+		Key string `json:"key"`
+	}
+	if json.NewDecoder(r.Body).Decode(&req) != nil || strings.TrimSpace(req.Key) == "" {
+		http.Error(w, "key required", http.StatusBadRequest)
+		return
+	}
+	if err := s.HiddenEvents.HideEvent(req.Key); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, map[string]any{"ok": true, "key": req.Key})
 }
 
 // parseICS extracts events from an .ics body (minimal VEVENT reader).

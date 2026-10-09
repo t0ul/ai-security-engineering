@@ -166,6 +166,10 @@ type Config struct {
 	// it frontier-bound for the residency policy. Nil = no Frontier card.
 	Frontier FrontierStore
 
+	// HiddenEvents, when set, is the calendar delete overlay: a deleted event is hidden
+	// by fingerprint without mutating the source .ics. Nil = events cannot be deleted.
+	HiddenEvents HiddenEventStore
+
 	// RAG, when set, is the retrieval experimentation surface (RAG tab): tune the
 	// ingestion config (mode/chunker/size/overlap/embedder) and reindex. Nil = no tab.
 	RAG RAGLab
@@ -502,6 +506,8 @@ func (s *Server) Handler() http.Handler {
 		mux.HandleFunc("POST /api/accept", csrf(s.authz(controlplane.ActionWrite, "calendar", s.accept)))
 		mux.HandleFunc("POST /api/reject", csrf(s.authz(controlplane.ActionWrite, "calendar", s.reject)))
 		mux.HandleFunc("POST /api/items/status", csrf(s.authz(controlplane.ActionWrite, "calendar", s.itemStatus)))
+		mux.HandleFunc("POST /api/events/create", csrf(s.authz(controlplane.ActionWrite, "calendar", s.eventCreate)))
+		mux.HandleFunc("POST /api/events/delete", csrf(s.authz(controlplane.ActionWrite, "calendar", s.eventDelete)))
 		mux.HandleFunc("POST /api/action", csrf(s.authz(controlplane.ActionExport, "link", s.action))) // egress
 	}
 	if s.Fetch != nil && s.Index != nil {

@@ -497,6 +497,31 @@ func (s *Store) ClearChatTurns() error {
 	return err
 }
 
+// HideEvent records a calendar event as deleted by its content fingerprint; it is then
+// filtered out of the calendar projection without touching the source .ics.
+func (s *Store) HideEvent(key string) error {
+	_, err := s.db.Exec(`INSERT OR IGNORE INTO hidden_events(key) VALUES(?)`, key)
+	return err
+}
+
+// LoadHiddenEvents returns the set of deleted-event fingerprints.
+func (s *Store) LoadHiddenEvents() (map[string]bool, error) {
+	rows, err := s.db.Query(`SELECT key FROM hidden_events`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]bool{}
+	for rows.Next() {
+		var k string
+		if err := rows.Scan(&k); err != nil {
+			return nil, err
+		}
+		out[k] = true
+	}
+	return out, rows.Err()
+}
+
 // ItemStatus is the mutable status overlay for one projected item, keyed by a content
 // fingerprint stable across projection rebuilds.
 type ItemStatus struct {

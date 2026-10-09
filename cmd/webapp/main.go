@@ -484,6 +484,7 @@ func main() {
 	var summariesSvc server.SummaryStore
 	var itemsSvc server.ItemStore
 	var itemStatusSvc server.ItemStatusStore
+	var hiddenEvtSvc server.HiddenEventStore
 	var frontierSvc server.FrontierStore
 	var modelCtl *modelController
 	var runtimeCtl server.RuntimeControl // nil unless modelCtl is created (avoids a typed-nil interface)
@@ -535,6 +536,7 @@ func main() {
 		summariesSvc = summaryProjection{inv: inv} // DB-backed tasks/digest/directory projection
 		itemsSvc = itemProjection{inv: inv}        // DB-backed DEDUPED item projection
 		itemStatusSvc = itemStatusStore{inv: inv}  // mutable done/dismiss/snooze overlay (C2)
+		hiddenEvtSvc = inv                         // calendar delete overlay (hide by fingerprint)
 		// Frontier endpoint bindings (C1): persist to the DB and load the frontier-bound
 		// subjects into the LIVE residency set so the policy enforces them from boot.
 		fstore := frontierStore{inv: inv, set: fset}
@@ -695,7 +697,7 @@ func main() {
 			Flywheel: flywheelSvc, Chat: chatSvc, ChatHistory: chatHistorySvc,
 			Authz: authz, OperatorToken: opToken, AppToken: appToken, Audit: audit, Detect: aidrDetect,
 			MCP: mcpReg, Prompts: prompts, Policies: policies, Sampling: sampling, Budgets: budgets, Retrieval: retrieval, Grammars: grammars, Models: models,
-			Skills: skillsPlane, SkillCatalog: skillSupply, ModelCatalog: modelCatalogSvc, Events: eventsSvc, Summaries: summariesSvc, Items: itemsSvc, ItemStatus: itemStatusSvc, Frontier: frontierSvc, RAG: ragLabSvc,
+			Skills: skillsPlane, SkillCatalog: skillSupply, ModelCatalog: modelCatalogSvc, Events: eventsSvc, Summaries: summariesSvc, Items: itemsSvc, ItemStatus: itemStatusSvc, HiddenEvents: hiddenEvtSvc, Frontier: frontierSvc, RAG: ragLabSvc,
 			AssetsDir: *assetsDir, GatewayURL: *gwFlag, GatewayUp: func() bool { return gw != nil && gw.Up() }, IdentityEphemeral: !persistentID,
 			VMURL: *vmURL, VMUp: func() bool { return vmReachable(*vmURL) }, Runtime: runtimeCtl,
 			Eval:    evalSvc,

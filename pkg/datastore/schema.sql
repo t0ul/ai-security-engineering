@@ -66,6 +66,12 @@ CREATE TABLE IF NOT EXISTS summaries(file TEXT PRIMARY KEY, json TEXT, at DATETI
 -- accept can still resolve the original item.
 CREATE TABLE IF NOT EXISTS items(file TEXT, idx INTEGER, json TEXT);
 
+-- hidden_events is the delete overlay for calendar events: a deleted event is recorded
+-- here by a content fingerprint (day | normalized title) and filtered out of the calendar
+-- projection, so a delete never mutates or unsigns the source .ics (which stays the
+-- tamper-evident record). Current-state, keyed.
+CREATE TABLE IF NOT EXISTS hidden_events(key TEXT PRIMARY KEY, at DATETIME DEFAULT CURRENT_TIMESTAMP);
+
 -- item_status is the MUTABLE status overlay for projected items (done/dismissed/
 -- snoozed). The items projection itself is derived and rebuilt from the sidecars, so
 -- status cannot live there; it is keyed by a CONTENT fingerprint of the item
