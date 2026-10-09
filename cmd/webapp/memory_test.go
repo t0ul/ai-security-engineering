@@ -49,3 +49,17 @@ func TestMemoryCommands(t *testing.T) {
 		t.Error("nil memory store must not handle commands")
 	}
 }
+
+// TestMemKeyNoPrefixCollision locks the review fix: two distinct facts that share a long
+// opening must get DISTINCT keys (a prefix-truncated key merged them), while the same
+// fact always keys the same so a restatement overwrites.
+func TestMemKeyNoPrefixCollision(t *testing.T) {
+	a := "pickup is at 3pm on fridays from the main entrance by the gym on tuesday"
+	b := "pickup is at 3pm on fridays from the main entrance by the gym on thursday"
+	if memKey(a) == memKey(b) {
+		t.Error("facts differing only past 48 chars must not collide")
+	}
+	if memKey(a) != memKey("Pickup is at 3pm on Fridays from the main entrance by the gym on Tuesday") {
+		t.Error("the same fact (case/space-normalized) must key identically so it overwrites")
+	}
+}

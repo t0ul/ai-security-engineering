@@ -224,15 +224,17 @@ type ItemStatus struct {
 	SnoozeUntil string
 }
 
-// itemKey is the stable content fingerprint for an item's status overlay: the same
-// identity the dedup collapses on (normalized title | day | resolved kind), so it
-// survives a projection rebuild where File/Index would shift.
+// itemKey is the stable content fingerprint for an item's status overlay. It MUST match
+// the identity dedupItems collapses on — normalized title | day — and nothing else: the
+// deduped projection holds at most one item per (title, day), and the surviving item's
+// KIND can change across rebuilds, so including kind here would silently drop a prior
+// done/dismiss when the kind flipped. Keyed exactly like dedup, status is rebuild-stable.
 func itemKey(e schema.Event) string {
 	day := dateKey(e)
 	if len(day) >= 10 {
 		day = day[:10]
 	}
-	return normTitle(e.Title) + "|" + day + "|" + e.ResolvedKind()
+	return normTitle(e.Title) + "|" + day
 }
 
 // allItems returns the deduped items, served in three tiers (memory → DB projection →

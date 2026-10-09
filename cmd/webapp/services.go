@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -338,9 +340,14 @@ func compactHistory(turns []gateway.Turn, ctxLimit int, summarize compaction.Sum
 		Summarize:  summarize,
 		Sanitize:   guard.Sanitize,
 	}
+	// Provenance partition (the Compactor's whole point): the USER's own turns are
+	// trusted standing, but an ASSISTANT turn is model output shaped by untrusted
+	// retrieval — it may have echoed a laundered injection. Marking assistant turns
+	// untrusted keeps their running summary in the sanitized, quarantined partition
+	// (guard.Sanitize) instead of promoting it to trusted standing context.
 	in := make([]compaction.Turn, len(turns))
 	for i, t := range turns {
-		in[i] = compaction.Turn{Role: t.Role, Text: t.Content, Trusted: true}
+		in[i] = compaction.Turn{Role: t.Role, Text: t.Content, Trusted: t.Role == "user"}
 	}
 	out := c.Compact(in)
 	if len(out) == len(in) {
@@ -385,13 +392,13 @@ func (c *chatService) memoryCommand(question string) (server.ChatReply, bool) {
 	return server.ChatReply{}, false
 }
 
-// memKey is a stable short key for a remembered fact, so restating it overwrites.
+// memKey is a stable key for a remembered fact: the sha256 of the normalized text, so
+// restating the SAME fact overwrites in place while two distinct facts never collide
+// (a prefix-truncated key would merge long facts that share an opening).
 func memKey(fact string) string {
-	f := strings.ToLower(strings.Join(strings.Fields(fact), " "))
-	if len(f) > 48 {
-		f = f[:48]
-	}
-	return f
+	norm := strings.ToLower(strings.Join(strings.Fields(fact), " "))
+	sum := sha256.Sum256([]byte(norm))
+	return hex.EncodeToString(sum[:8]) // 16 hex chars — ample to avoid collisions here
 }
 
 func (c *chatService) Answer(question string, unsafe bool, appData string) (server.ChatReply, error) {
