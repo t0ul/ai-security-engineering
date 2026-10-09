@@ -164,7 +164,7 @@ func (s *Server) outboxFingerprint() string {
 // projectionVersion keys the events/items/summaries DB projections to the derivation
 // logic (dedup, cleaning, filtering). Bump it when that logic changes so the stored
 // projections rebuild from source instead of serving a stale result.
-const projectionVersion = "v6"
+const projectionVersion = "v7"
 
 // readAllEvents reads every .ics in the outbox into a sorted, de-duplicated event
 // list. allEvents caches the result.
@@ -207,7 +207,10 @@ func dropFragments(in []Event) []Event {
 	for _, e := range in {
 		t := strings.TrimSpace(e.Title)
 		if t == "" || (t[0] >= 'a' && t[0] <= 'z') {
-			continue
+			continue // a sentence fragment (a clean title never starts lowercase)
+		}
+		if items.IsJunkTitle(t) {
+			continue // a date, greeting or "nothing scheduled" line grabbed as a title
 		}
 		out = append(out, e)
 	}

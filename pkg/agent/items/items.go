@@ -56,6 +56,53 @@ func normTitle(s string) string {
 	return strings.Join(strings.Fields(nonAlnum.ReplaceAllString(strings.ToLower(s), " ")), " ")
 }
 
+var (
+	reGreeting = regexp.MustCompile(`(?i)^(dear|hi|hello|hey|greetings|good (morning|afternoon|evening))\b`)
+	reNoEvents = regexp.MustCompile(`(?i)\bno (new )?(meetings|events|field trips)\b|\bnothing (scheduled|planned)\b|\bno events scheduled\b`)
+	reOrdinal  = regexp.MustCompile(`^\d{1,2}(st|nd|rd|th)?$`) // 28th, 1st, 3, 22
+)
+
+// IsJunkTitle reports whether a "title" is really a date, a greeting, or a bulletin
+// "nothing scheduled" line rather than the name of an event — the residual noise the
+// regex extractor grabbed. Used to drop such entries from the calendar/export.
+func IsJunkTitle(t string) bool {
+	s := strings.TrimSpace(t)
+	if s == "" {
+		return true
+	}
+	if reGreeting.MatchString(s) || reNoEvents.MatchString(s) {
+		return true
+	}
+	// Date-only: nothing of substance remains after dropping date/weekday/month/ordinal
+	// /year and bare connector tokens (so "September 28th" or "Thursday October 1st" → junk).
+	for _, w := range strings.FieldsFunc(strings.ToLower(s), func(r rune) bool {
+		return !((r >= 'a' && r <= 'z') || (r >= '0' && r <= '9'))
+	}) {
+		if weekdaySet[w] || monthSet[w] || reYear.MatchString(w) || reOrdinal.MatchString(w) ||
+			w == "the" || w == "of" || w == "on" || w == "at" || w == "a" || w == "an" {
+			continue
+		}
+		if len(w) >= 2 {
+			return false // a real word survives → not junk
+		}
+	}
+	return true
+}
+
+func isJunkTitle(t string) bool { return IsJunkTitle(t) }
+
+// nextBulletFollows reports whether the next non-blank line after i is a bulleted item —
+// the signal that a bare date line heads a daily-agenda list rather than naming an event.
+func nextBulletFollows(lines []string, bullet []bool, i int) bool {
+	for j := i + 1; j < len(lines); j++ {
+		if lines[j] == "" {
+			continue
+		}
+		return bullet[j]
+	}
+	return false
+}
+
 var nonAlnum = regexp.MustCompile(`[^a-z0-9]+`)
 
 // keepWarnings drops noise that shouldn't force human review (assumed_year is
@@ -241,7 +288,9 @@ func Classify(email string, defaultYear int) []schema.Event {
 	}
 
 	var lines []string
+	var bullet []bool // whether the original line was a bulleted list item
 	for _, ln := range strings.Split(email, "\n") {
+		bullet = append(bullet, reBullet.MatchString(ln))
 		lines = append(lines, strings.TrimSpace(reBullet.ReplaceAllString(ln, "")))
 	}
 	subject := ""
@@ -264,18 +313,50 @@ func Classify(email string, defaultYear int) []schema.Event {
 	}
 
 	// --- events pass (line-aware): holidays, meetings, drills, closures ---
-	header := ""
+	// Two layouts are handled: an event named on its own dated line, AND a daily-agenda
+	// layout — a bare date line ("Thursday, October 8th") over bulleted events below. In
+	// the agenda layout each bullet is an event ON that date (sectionDate), so the bullets
+	// get the right day and the bare date line itself does not spawn a mis-titled event.
+	header, sectionDate := "", ""
 	eventDates := map[string]bool{}
 	for i, ln := range lines {
 		if ln == "" {
-			continue
+			continue // a blank line separates bullets; it does not end the agenda section
 		}
 		dt := dateparse.ExtractDatetime(ln, defaultYear)
 		if dt == nil {
+			// A bullet under an active section date is an event on that date (its own text
+			// is the title). Actions/links/heads-ups stay with the asks pass (they have a
+			// task/heads-up vocabulary), so only plain bullets become events here.
+			if sectionDate != "" && bullet[i] && significant(ln) &&
+				!reAction.MatchString(ln) && !reURL.MatchString(ln) && !reHeadsUp.MatchString(ln) {
+				if title := Tidy(cleanSubject(ln)); title != "" && !isJunkTitle(title) {
+					eventDates[sectionDate] = true
+					add(schema.Event{Title: title, Start: sectionDate, AllDay: true,
+						Kind: schema.KindEvent, Confidence: 0.7})
+				}
+				continue
+			}
+			if !bullet[i] {
+				sectionDate = "" // prose (not a bullet) ends the agenda list
+			}
 			if isHeader(ln) {
 				header = ln
 			}
 			continue
+		}
+		// A bare all-day date line with bullets below is an agenda SECTION HEADER: it opens
+		// a section (sectionDate) and takes a title only from its OWN text, never a stale
+		// top-of-email header — otherwise a greeting/newsletter title would land on the date.
+		var title string
+		if dt.AllDay && nextBulletFollows(lines, bullet, i) {
+			header = ""
+			title = Tidy(eventTitleOrEmpty(ln))
+		} else {
+			title = Tidy(bestTitle(ln, header, subject))
+		}
+		if dt.AllDay {
+			sectionDate = dt.Start[:10] // a bare date line opens an agenda section
 		}
 		// A dated ASK stays a task/heads-up (handled in the asks pass).
 		if dt.AllDay && (reAction.MatchString(ln) || reHeadsUp.MatchString(ln)) {
@@ -290,9 +371,8 @@ func Classify(email string, defaultYear int) []schema.Event {
 				}
 			}
 		}
-		title := Tidy(bestTitle(ln, header, subject))
-		if title == "" {
-			continue // a bare date with no name is a date reference, not an event
+		if title == "" || isJunkTitle(title) {
+			continue // a bare date, or a date/greeting/"nothing scheduled" line — not an event
 		}
 		eventDates[start[:10]] = true
 		add(schema.Event{Title: title, Start: start, End: end, AllDay: allDay,

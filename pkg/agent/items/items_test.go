@@ -179,3 +179,49 @@ func TestNearbyTimeStillBorrowedFromBareTimeLine(t *testing.T) {
 		t.Errorf("bare time range must still be borrowed: %+v", evs[0])
 	}
 }
+
+// TestClassifyDailyAgendaBulletDates: in a date-header-then-bullets layout, each bullet is an
+// event ON its section's date (not off-by-one, not borrowing a sibling's time), and the bare
+// date line / email-top header do not spawn junk events.
+func TestClassifyDailyAgendaBulletDates(t *testing.T) {
+	email := "Daily Bulletin\n\n" +
+		"Wednesday, October 7th\n\n" +
+		"- 3-407 visits the Columbus Branch of the NYPL\n\n" +
+		"Thursday, October 8th\n\n" +
+		"- Safety Committee Meeting in the Art Room\n\n" +
+		"- 3-410 visits the Columbus Branch of the NYPL\n\n" +
+		"Friday, October 9th\n\n" +
+		"- Spelling Bee\n"
+	evs := items.Classify(email, 2026)
+	if e, ok := find(evs, "3-407"); !ok || e.Start != "2026-10-07" {
+		t.Errorf("3-407 should be on Oct 7 (its section), got ok=%v start=%q", ok, e.Start)
+	}
+	if e, ok := find(evs, "3-410"); !ok || e.Start != "2026-10-08" {
+		t.Errorf("3-410 should be on Oct 8, got ok=%v start=%q", ok, e.Start)
+	}
+	if e, ok := find(evs, "safety committee"); !ok || e.Start != "2026-10-08" {
+		t.Errorf("safety committee should be on Oct 8, got ok=%v start=%q", ok, e.Start)
+	}
+	for _, e := range evs {
+		if items.IsJunkTitle(e.Title) || strings.Contains(strings.ToLower(e.Title), "daily bulletin") {
+			t.Errorf("a junk/header-leak event appeared: %q", e.Title)
+		}
+	}
+}
+
+// TestIsJunkTitle locks the noise filter: dates, greetings and "nothing scheduled" lines are
+// junk; real event names (including closures) are not.
+func TestIsJunkTitle(t *testing.T) {
+	for _, s := range []string{"September 28th", "Thursday October 1st", "Dear PS 51 Families",
+		"Hi families", "No new events scheduled", "No meetings, field trips, or events scheduled for today", "2026"} {
+		if !items.IsJunkTitle(s) {
+			t.Errorf("%q should be junk", s)
+		}
+	}
+	for _, s := range []string{"First day of school", "Back To School Night", "Multicultural Potluck",
+		"Yom Kippur, schools closed", "No School- Yom Kippur", "3-410 visits the Columbus Branch of the NYPL", "Election Day"} {
+		if items.IsJunkTitle(s) {
+			t.Errorf("%q should NOT be junk", s)
+		}
+	}
+}
