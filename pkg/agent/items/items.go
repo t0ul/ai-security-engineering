@@ -60,6 +60,7 @@ var (
 	reGreeting = regexp.MustCompile(`(?i)^(dear|hi|hello|hey|greetings|good (morning|afternoon|evening))\b`)
 	reNoEvents = regexp.MustCompile(`(?i)\bno (new )?(meetings|events|field trips)\b|\bnothing (scheduled|planned)\b|\bno events scheduled\b`)
 	reOrdinal  = regexp.MustCompile(`^\d{1,2}(st|nd|rd|th)?$`) // 28th, 1st, 3, 22
+	reLeadTime = regexp.MustCompile(`^\s*\d{1,2}:\d{2}`)       // a title starting with a clock time is a fragment
 )
 
 // IsJunkTitle reports whether a "title" is really a date, a greeting, or a bulletin
@@ -70,8 +71,8 @@ func IsJunkTitle(t string) bool {
 	if s == "" {
 		return true
 	}
-	if reGreeting.MatchString(s) || reNoEvents.MatchString(s) {
-		return true
+	if reGreeting.MatchString(s) || reNoEvents.MatchString(s) || reLeadTime.MatchString(s) {
+		return true // a greeting, a "nothing scheduled" line, or a clock-time fragment
 	}
 	// Date-only: nothing of substance remains after dropping date/weekday/month/ordinal
 	// /year and bare connector tokens (so "September 28th" or "Thursday October 1st" → junk).

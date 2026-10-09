@@ -213,13 +213,16 @@ func TestClassifyDailyAgendaBulletDates(t *testing.T) {
 // junk; real event names (including closures) are not.
 func TestIsJunkTitle(t *testing.T) {
 	for _, s := range []string{"September 28th", "Thursday October 1st", "Dear PS 51 Families",
-		"Hi families", "No new events scheduled", "No meetings, field trips, or events scheduled for today", "2026"} {
+		"Hi families", "Hi PS 51 Families", "No new events scheduled",
+		"No meetings, field trips, or events scheduled for today", "2026",
+		"5:30-:00 PM! Join us for a night of amazing food"} {
 		if !items.IsJunkTitle(s) {
 			t.Errorf("%q should be junk", s)
 		}
 	}
 	for _, s := range []string{"First day of school", "Back To School Night", "Multicultural Potluck",
-		"Yom Kippur, schools closed", "No School- Yom Kippur", "3-410 visits the Columbus Branch of the NYPL", "Election Day"} {
+		"Yom Kippur, schools closed", "No School- Yom Kippur", "3-410 visits the Columbus Branch of the NYPL",
+		"Election Day", "SLT meeting at 2:40 PM in the Library"} {
 		if items.IsJunkTitle(s) {
 			t.Errorf("%q should NOT be junk", s)
 		}
