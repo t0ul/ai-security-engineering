@@ -94,6 +94,12 @@ type Config struct {
 	// Audit, when set, records every refused capability for the admin trail.
 	Audit *gledger.AuditLog
 
+	// Detect, when set, receives security-relevant signals the controller observes at
+	// runtime (currently a burst of capability denials — a capability-probing signal).
+	// main feeds these to the aidr engine, which auto-escalates the kill switch, so a
+	// detection becomes automatic containment, not just a log line (A7). Nil = no AIDR.
+	Detect func(span, event string, fields map[string]any)
+
 	// MCP, when set, lists the MCP servers the agent reaches through the gustoms
 	// gateway with their pin status and re-pins one on rug-pull recovery (C6).
 	// Nil = no MCP tab.
@@ -300,6 +306,11 @@ type Server struct {
 	rlCount  int
 	rlWindow time.Time
 	inflight atomic.Int64 // in-flight console API requests (governed MaxConcurrency budget)
+
+	denyMu     sync.Mutex
+	denyCount  int       // capability denials in the current window (AIDR deny-storm detector)
+	denyWindow time.Time
+	denyFired  bool // deny-storm already reported this window (fire once)
 
 	// pending holds issued-but-unconfirmed HITL approvals, keyed by nonce (ASI09:
 	// evidence-first, single-use, clickjack/forgery-resistant confirm).
@@ -599,9 +610,35 @@ func (s *Server) authzGlass(action, resource string, h http.HandlerFunc) http.Ha
 	}
 }
 
+// denyStormThreshold is the number of capability denials within one minute that trips
+// the AIDR deny-storm detector (capability probing / brute force). One request fails at
+// most a handful of times legitimately; a burst is an attack signal.
+const denyStormThreshold = 10
+
 func (s *Server) denyAudit(action, resource, reason string) {
 	if s.Audit != nil {
 		s.Audit.Emit(gledger.NewTraceID(), "authz", "deny", gledger.F{"action": action, "resource": resource, "reason": reason})
+	}
+	// AIDR (A7): a BURST of denials is a capability-probing signal. On crossing the
+	// threshold in a one-minute window, raise a capability_violation once so the aidr
+	// engine can auto-contain (escalate the kill switch) — detection → response.
+	if s.Detect == nil {
+		return
+	}
+	s.denyMu.Lock()
+	now := time.Now()
+	if now.Sub(s.denyWindow) >= time.Minute {
+		s.denyWindow, s.denyCount, s.denyFired = now, 0, false
+	}
+	s.denyCount++
+	fire := s.denyCount >= denyStormThreshold && !s.denyFired
+	if fire {
+		s.denyFired = true
+	}
+	count := s.denyCount
+	s.denyMu.Unlock()
+	if fire {
+		s.Detect("authz", "capability_violation", map[string]any{"reason": "deny storm", "count": count})
 	}
 }
 

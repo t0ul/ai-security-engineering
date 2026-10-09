@@ -39,12 +39,14 @@ import (
 	"github.com/t0ul/ai-security-engineering/pkg/agent/roster"
 	"github.com/t0ul/ai-security-engineering/pkg/agent/tool"
 	"github.com/t0ul/ai-security-engineering/pkg/agent/watcher"
+	"github.com/t0ul/ai-security-engineering/pkg/aidr"
 	"github.com/t0ul/ai-security-engineering/pkg/compaction"
 	"github.com/t0ul/ai-security-engineering/pkg/controlplane"
 	"github.com/t0ul/ai-security-engineering/pkg/datastore"
 	"github.com/t0ul/ai-security-engineering/pkg/domain"
 	"github.com/t0ul/ai-security-engineering/pkg/durable"
 	"github.com/t0ul/ai-security-engineering/pkg/gateway"
+	"github.com/t0ul/ai-security-engineering/pkg/ir"
 	"github.com/t0ul/ai-security-engineering/pkg/memory"
 	"github.com/t0ul/ai-security-engineering/pkg/netpolicy"
 	"github.com/t0ul/ai-security-engineering/pkg/provenance"
@@ -301,6 +303,21 @@ func main() {
 			return pol.Approve(action, []a2a.Message{agentSig.Sign(action), fetcherSig.Sign(action)})
 		}
 	}()
+
+	// AIDR (A7): a runtime detect-and-respond engine turns a security signal into
+	// automatic containment. It watches signals the controller raises (a burst of
+	// capability denials = probing) and auto-escalates the kill switch, so an attack in
+	// progress stops side effects now, not after a human reads the log. The operator can
+	// still disengage via the break-glass kill switch.
+	aidrEngine := aidr.New(func(level controlplane.KillLevel, reason string) {
+		if level > safety.Level() {
+			log.Printf("webapp: AIDR auto-containment: %s → %s", reason, level)
+			safety.Set("aidr", level)
+		}
+	})
+	aidrDetect := func(span, event string, fields map[string]any) {
+		aidrEngine.Observe(ir.Event{Service: "webapp", Span: span, Event: event, Fields: fields})
+	}
 
 	// MCP governance tab (C6): surface the gateway's servers, their advertised +
 	// allow-listed tools, the approved pin vs the live manifest (rug-pull alert),
@@ -657,7 +674,7 @@ func main() {
 			AuditPath: auditPath, OutboxDir: cfg.Outbox, InboxPath: cfg.Inbox,
 			Egress: egress, Fetch: fetch, Quorum: actionQuorum, Verifier: verifier, Safety: safety, Search: search, Index: enrichIndex,
 			Flywheel: flywheelSvc, Chat: chatSvc, ChatHistory: chatHistorySvc,
-			Authz: authz, OperatorToken: opToken, AppToken: appToken, Audit: audit,
+			Authz: authz, OperatorToken: opToken, AppToken: appToken, Audit: audit, Detect: aidrDetect,
 			MCP: mcpReg, Prompts: prompts, Policies: policies, Sampling: sampling, Budgets: budgets, Retrieval: retrieval, Grammars: grammars, Models: models,
 			Skills: skillsPlane, SkillCatalog: skillSupply, ModelCatalog: modelCatalogSvc, Events: eventsSvc, Summaries: summariesSvc, Items: itemsSvc, ItemStatus: itemStatusSvc, RAG: ragLabSvc,
 			AssetsDir: *assetsDir, GatewayURL: *gwFlag, GatewayUp: func() bool { return gw != nil && gw.Up() }, IdentityEphemeral: !persistentID,
