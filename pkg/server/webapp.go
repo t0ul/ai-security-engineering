@@ -50,6 +50,10 @@ type Config struct {
 	// Both unset = action links are refused.
 	Egress netpolicy.Policy
 	Fetch  Fetcher
+	// Quorum, when set, is the multi-party sign-off gate for an egress action (A4/A5):
+	// the exact action string must carry attestations from a threshold of distinct
+	// trusted agents (a2a signatures) or the fetch is refused. Nil = no quorum.
+	Quorum func(action string) error
 	// Verifier, when set, checks each .ics against its .sig content credential so
 	// the UI can show whether the agent provably produced it unaltered (M20).
 	Verifier *provenance.Verifier

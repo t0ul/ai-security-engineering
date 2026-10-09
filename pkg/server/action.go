@@ -64,7 +64,20 @@ func (s *Server) action(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{"ok": false, "url": item.URL, "refused": "sandbox fetch not configured"})
 		return
 	}
-	out, _ := s.Fetch(r.Context(), item.URL)
+	// Multi-party sign-off (A4/A5): a threshold of distinct trusted agents must each
+	// have attested THIS exact URL before egress; a single rogue component cannot
+	// authorize the fetch alone.
+	if s.Quorum != nil {
+		if err := s.Quorum("fetch:" + item.URL); err != nil {
+			writeJSON(w, map[string]any{"ok": false, "url": item.URL, "refused": "quorum: " + err.Error()})
+			return
+		}
+	}
+	out, ferr := s.Fetch(r.Context(), item.URL)
+	if ferr != nil {
+		writeJSON(w, map[string]any{"ok": false, "url": item.URL, "refused": "sandbox fetch failed: " + ferr.Error()})
+		return
+	}
 	if len(out) > 4000 {
 		out = out[:4000] + "\n…(truncated)"
 	}

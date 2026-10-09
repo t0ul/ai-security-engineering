@@ -41,6 +41,13 @@ func (s *Server) enrich(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{"ok": false, "url": req.URL, "refused": "enrichment not configured"})
 		return
 	}
+	// Multi-party sign-off (A4/A5): the same quorum gate as an action link.
+	if s.Quorum != nil {
+		if err := s.Quorum("fetch:" + req.URL); err != nil {
+			writeJSON(w, map[string]any{"ok": false, "url": req.URL, "refused": "quorum: " + err.Error()})
+			return
+		}
+	}
 	// The fetch EXECUTES inside the MicroVM. If the VM is not running the fetch fails
 	// (or returns nothing) — do NOT index an empty body and report success (the silent
 	// out-of-box failure). Degrade with a clear, actionable message instead. (F2.)

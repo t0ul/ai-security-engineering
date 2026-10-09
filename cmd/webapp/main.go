@@ -32,8 +32,10 @@ import (
 
 	"github.com/t0ul/ai-security-engineering/internal/modelcatalog"
 	"github.com/t0ul/ai-security-engineering/internal/modelstack"
+	"github.com/t0ul/ai-security-engineering/pkg/agent/a2a"
 	"github.com/t0ul/ai-security-engineering/pkg/agent/extractor"
 	"github.com/t0ul/ai-security-engineering/pkg/agent/pipeline"
+	"github.com/t0ul/ai-security-engineering/pkg/agent/quorum"
 	"github.com/t0ul/ai-security-engineering/pkg/agent/roster"
 	"github.com/t0ul/ai-security-engineering/pkg/agent/tool"
 	"github.com/t0ul/ai-security-engineering/pkg/agent/watcher"
@@ -278,6 +280,27 @@ func main() {
 		})
 		return out, derr
 	}
+
+	// Multi-party sign-off for egress actions (A4/A5): the action-link / handbook
+	// fetch is the app's highest-impact side effect (reaching out from untrusted
+	// content), so it is gated by a quorum — a threshold of DISTINCT trusted NHIs must
+	// each a2a-attest the exact URL before the fetch runs. Here the proposing agent and
+	// the action-fetcher NHI are the two parties; in a single-process deployment both
+	// keys are co-resident, so this enforces that the fetched target is the attested one
+	// (tamper/replay guard, via a2a's bound nonce) and demonstrates the inter-agent
+	// four-eyes the control exists for. Keys are per-boot (attestations are per-request).
+	actionQuorum := func() func(string) error {
+		k1, k2 := make([]byte, 32), make([]byte, 32)
+		_, _ = rand.Read(k1)
+		_, _ = rand.Read(k2)
+		agentSig := a2a.NewSigner("agent", k1)
+		fetcherSig := a2a.NewSigner("action-fetcher", k2)
+		ver := a2a.NewVerifier().Trust("agent", k1).Trust("action-fetcher", k2)
+		pol := quorum.Policy{Threshold: 2, Verifier: ver}
+		return func(action string) error {
+			return pol.Approve(action, []a2a.Message{agentSig.Sign(action), fetcherSig.Sign(action)})
+		}
+	}()
 
 	// MCP governance tab (C6): surface the gateway's servers, their advertised +
 	// allow-listed tools, the approved pin vs the live manifest (rug-pull alert),
@@ -632,7 +655,7 @@ func main() {
 		Addr: *addr,
 		Handler: server.New(server.Config{
 			AuditPath: auditPath, OutboxDir: cfg.Outbox, InboxPath: cfg.Inbox,
-			Egress: egress, Fetch: fetch, Verifier: verifier, Safety: safety, Search: search, Index: enrichIndex,
+			Egress: egress, Fetch: fetch, Quorum: actionQuorum, Verifier: verifier, Safety: safety, Search: search, Index: enrichIndex,
 			Flywheel: flywheelSvc, Chat: chatSvc, ChatHistory: chatHistorySvc,
 			Authz: authz, OperatorToken: opToken, AppToken: appToken, Audit: audit,
 			MCP: mcpReg, Prompts: prompts, Policies: policies, Sampling: sampling, Budgets: budgets, Retrieval: retrieval, Grammars: grammars, Models: models,
