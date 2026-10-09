@@ -452,15 +452,56 @@ async function loadWeek(day){
   else html+=items.map(e=>'<div class="ev"><div><b>'+esc(e.title)+'</b>'+(e.kind&&e.kind!=='event'?' <span class="kind">'+esc(e.kind)+'</span>':'')+'<br><span class="mut">'+esc(when(e))+(e.location?(' · '+esc(e.location)):'')+'</span></div></div>').join('');
   c.innerHTML=html;
 }
+// Child profile is edited as a plain form (no raw JSON): one card per child with the
+// anchors (arrival/lunch/dismissal) that drive My Week. Host-only config, never an email.
+let __PROFILE__=[];
 async function loadProfile(){
-  const ta=$('#profileJSON');if(!ta)return;const p=await getJSON('/api/profile');
-  ta.value=JSON.stringify(p&&p.children?p:{children:[]},null,2);
+  const host=$('#profileForm');if(!host)return;
+  const p=await getJSON('/api/profile');
+  __PROFILE__=(p&&Array.isArray(p.children))?p.children:[];
+  renderProfile();
 }
+function childCard(i,c){
+  const F=(f,label,ph)=>'<div style="flex:1;min-width:120px"><label class="mut">'+label+'</label><br><input data-f="'+f+'" style="width:100%" value="'+esc(c[f]||'')+'" placeholder="'+esc(ph||'')+'"></div>';
+  const row=inner=>'<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px">'+inner+'</div>';
+  const half=(c.half_days||[]).join(', ');
+  return '<div class="pf-child card" style="margin-top:8px;padding:12px">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center"><b>'+esc(c.name||('Child '+(i+1)))+'</b> <button class="ghost" onclick="removeChild('+i+')">Remove</button></div>'+
+    row(F('name','Name','e.g. Ada')+F('grade','Grade','e.g. 3')+F('class','Class','e.g. 3B'))+
+    row(F('teacher','Teacher','e.g. Ms. Rivera')+F('school','School',''))+
+    row(F('in','Arrival','e.g. 8:15')+F('lunch','Lunch','e.g. 10:55')+F('out','Dismissal','e.g. 2:30'))+
+    '<div style="margin-top:8px"><label class="mut">Notes</label><br><input data-f="notes" style="width:100%" value="'+esc(c.notes||'')+'" placeholder="allergies, bus, after-school…"></div>'+
+    row('<div style="flex:2;min-width:160px"><label class="mut">Half days (optional, ISO dates, comma-separated)</label><br><input data-f="half_days" style="width:100%" value="'+esc(half)+'" placeholder="2026-11-26, 2026-12-24"></div>'+
+      '<div style="flex:1;min-width:120px"><label class="mut">Half-day dismissal</label><br><input data-f="half_day_out" style="width:100%" value="'+esc(c.half_day_out||'')+'" placeholder="e.g. 11:30"></div>')+
+    '</div>';
+}
+function renderProfile(){
+  const host=$('#profileForm');if(!host)return;
+  host.innerHTML=__PROFILE__.length?__PROFILE__.map((c,i)=>childCard(i,c)).join(''):'<p class="mut">No children yet — add one so My Week can show arrival, lunch and dismissal.</p>';
+}
+// Read the current inputs back into __PROFILE__ so add/remove/save don't lose edits.
+function syncProfile(){
+  const cards=document.querySelectorAll('#profileForm .pf-child');
+  if(!cards.length)return;
+  __PROFILE__=Array.from(cards).map(el=>{
+    const c={};
+    el.querySelectorAll('input[data-f]').forEach(inp=>{
+      const f=inp.dataset.f,v=inp.value.trim();
+      if(f==='half_days'){if(v)c.half_days=v.split(',').map(s=>s.trim()).filter(Boolean);}
+      else if(v)c[f]=v;
+    });
+    return c;
+  });
+}
+function addChild(){syncProfile();__PROFILE__.push({});renderProfile();}
+function removeChild(i){syncProfile();__PROFILE__.splice(i,1);renderProfile();}
 async function saveProfile(){
-  const ta=$('#profileJSON');const m=$('#profileMsg');if(!ta)return;
-  let body;try{body=JSON.parse(ta.value);}catch(e){if(m)m.textContent='invalid JSON';return;}
-  const r=await postJSON('/api/profile/save',body);
-  if(m)m.textContent=r.ok?'saved':'save failed';loadWeek('today');
+  const m=$('#profileMsg');
+  syncProfile();
+  __PROFILE__=__PROFILE__.filter(c=>c.name||c.grade||c.teacher||c.in||c.out||c.notes);
+  const r=await postJSON('/api/profile/save',{children:__PROFILE__});
+  if(m)m.textContent=r.ok?'saved ✓':'save failed';
+  renderProfile();loadWeek('today');
 }
 async function loadFlywheel(){
   const c=$('#flywheel');if(!c)return;const d=await getJSON('/api/flywheel');

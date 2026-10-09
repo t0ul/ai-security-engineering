@@ -91,9 +91,9 @@
       <div id="timeline" style="margin-top:8px"><span class="mut">loading…</span></div>
     </div>
     <div class="card">
-      <strong>Child profile</strong> <span class="mut">— personalizes the day (stays on this host). JSON: children[] with name/grade/teacher/in/lunch/out/notes.</span>
-      <textarea id="profileJSON" rows="8" style="width:100%;margin-top:6px"></textarea>
-      <div style="margin-top:6px"><button class="go" onclick="saveProfile()">Save profile</button> <span id="profileMsg" class="mut"></span></div>
+      <strong>Child profile</strong> <span class="mut">— personalizes the day (arrival / lunch / dismissal anchors). Stays on this host, never sent anywhere.</span>
+      <div id="profileForm" style="margin-top:8px"><span class="mut">loading…</span></div>
+      <div style="margin-top:8px"><button class="ghost" onclick="addChild()">➕ Add child</button> <button class="go" onclick="saveProfile()">Save profile</button> <span id="profileMsg" class="mut"></span></div>
     </div>
   </section>
 
