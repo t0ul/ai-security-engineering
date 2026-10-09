@@ -274,6 +274,7 @@ type ChatTurnDTO struct {
 	PromptTokens     int      `json:"prompt_tokens"`
 	CompletionTokens int      `json:"completion_tokens"`
 	Rating           string   `json:"rating"`
+	Unsafe           bool     `json:"unsafe,omitempty"` // controls-off demo turn
 }
 
 // Flywheel captures operator accept/reject decisions as durable ground-truth and

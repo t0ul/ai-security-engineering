@@ -77,4 +77,7 @@ CREATE TABLE IF NOT EXISTS item_status(key TEXT PRIMARY KEY, status TEXT, snooze
 -- chat survives a reload, is multi-turn (prior turns are replayed to the model), and
 -- carries observability (which model answered, token usage) + a per-answer rating
 -- (up/down/neutral) that feeds the feedback flywheel.
-CREATE TABLE IF NOT EXISTS chat_turns(id INTEGER PRIMARY KEY AUTOINCREMENT, role TEXT, content TEXT, sources TEXT, model TEXT, prompt_tokens INTEGER, completion_tokens INTEGER, rating TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);
+-- unsafe=1 marks a turn produced on the CONTROLS-OFF demo path (raw-concat retrieval,
+-- no M8 encapsulation), so the persisted history shows which answers were the unsafe
+-- demonstration and not the defended agent. Added via migration in Open() for older DBs.
+CREATE TABLE IF NOT EXISTS chat_turns(id INTEGER PRIMARY KEY AUTOINCREMENT, role TEXT, content TEXT, sources TEXT, model TEXT, prompt_tokens INTEGER, completion_tokens INTEGER, rating TEXT, unsafe INTEGER DEFAULT 0, at DATETIME DEFAULT CURRENT_TIMESTAMP);

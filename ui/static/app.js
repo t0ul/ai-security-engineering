@@ -104,7 +104,7 @@ async function loadChatHistory(){
   log.innerHTML='';let last=null;
   turns.forEach(t=>{
     if(t.role==='user')log.insertAdjacentHTML('beforeend','<div class="msg u">'+esc(t.content)+'</div>');
-    else{log.insertAdjacentHTML('beforeend',assistantHTML({answer:t.content,sources:t.sources,model:t.model,prompt_tokens:t.prompt_tokens,completion_tokens:t.completion_tokens,turn_id:t.id,rating:t.rating},false));last={model:t.model,prompt_tokens:t.prompt_tokens,completion_tokens:t.completion_tokens};}
+    else{log.insertAdjacentHTML('beforeend',assistantHTML({answer:t.content,sources:t.sources,model:t.model,prompt_tokens:t.prompt_tokens,completion_tokens:t.completion_tokens,turn_id:t.id,rating:t.rating},!!t.unsafe));last={model:t.model,prompt_tokens:t.prompt_tokens,completion_tokens:t.completion_tokens};}
   });
   updateChatStatus(last);
   log.scrollTop=log.scrollHeight;

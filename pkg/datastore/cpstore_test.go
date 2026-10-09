@@ -83,3 +83,30 @@ func TestRecordersDoNotError(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// TestChatTurnUnsafeFlag locks D2: a controls-off (unsafe) turn is persisted with its
+// flag and reads back set, so the history distinguishes the demo answers. A defended
+// turn reads back unflagged.
+func TestChatTurnUnsafeFlag(t *testing.T) {
+	s := open(t)
+	if _, err := s.AppendChatTurn(datastore.ChatTurn{Role: "assistant", Content: "defended", Unsafe: false}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.AppendChatTurn(datastore.ChatTurn{Role: "assistant", Content: "controls off", Unsafe: true}); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := s.LoadChatTurns(10)
+	if err != nil || len(rows) != 2 {
+		t.Fatalf("load: %v rows=%d", err, len(rows))
+	}
+	byContent := map[string]bool{}
+	for _, r := range rows {
+		byContent[r.Content] = r.Unsafe
+	}
+	if byContent["defended"] {
+		t.Error("a defended turn must not be flagged unsafe")
+	}
+	if !byContent["controls off"] {
+		t.Error("a controls-off turn must persist its unsafe flag")
+	}
+}

@@ -48,6 +48,11 @@ func Open(path string) (*Store, error) {
 		db.Close()
 		return nil, err
 	}
+	if _, err := db.Exec(`ALTER TABLE chat_turns ADD COLUMN unsafe INTEGER DEFAULT 0`); err != nil &&
+		!strings.Contains(err.Error(), "duplicate column") {
+		db.Close()
+		return nil, err
+	}
 	return &Store{db: db}, nil
 }
 
@@ -429,14 +434,15 @@ type ChatTurn struct {
 	PromptTokens     int    `json:"prompt_tokens"`
 	CompletionTokens int    `json:"completion_tokens"`
 	Rating           string `json:"rating"` // up | down | neutral | ""
+	Unsafe           bool   `json:"unsafe"` // produced on the controls-off demo path
 	At               string `json:"at"`
 }
 
 // AppendChatTurn stores one conversation turn and returns its id.
 func (s *Store) AppendChatTurn(t ChatTurn) (int64, error) {
 	res, err := s.db.Exec(
-		`INSERT INTO chat_turns(role,content,sources,model,prompt_tokens,completion_tokens,rating) VALUES(?,?,?,?,?,?,?)`,
-		t.Role, t.Content, t.Sources, t.Model, t.PromptTokens, t.CompletionTokens, t.Rating)
+		`INSERT INTO chat_turns(role,content,sources,model,prompt_tokens,completion_tokens,rating,unsafe) VALUES(?,?,?,?,?,?,?,?)`,
+		t.Role, t.Content, t.Sources, t.Model, t.PromptTokens, t.CompletionTokens, t.Rating, boolToInt(t.Unsafe))
 	if err != nil {
 		return 0, err
 	}
@@ -450,7 +456,7 @@ func (s *Store) LoadChatTurns(limit int) ([]ChatTurn, error) {
 		limit = 50
 	}
 	rows, err := s.db.Query(
-		`SELECT id,role,content,sources,model,prompt_tokens,completion_tokens,rating,at FROM chat_turns ORDER BY id DESC LIMIT ?`, limit)
+		`SELECT id,role,content,sources,model,prompt_tokens,completion_tokens,rating,COALESCE(unsafe,0),at FROM chat_turns ORDER BY id DESC LIMIT ?`, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -458,9 +464,11 @@ func (s *Store) LoadChatTurns(limit int) ([]ChatTurn, error) {
 	var out []ChatTurn
 	for rows.Next() {
 		var t ChatTurn
-		if err := rows.Scan(&t.ID, &t.Role, &t.Content, &t.Sources, &t.Model, &t.PromptTokens, &t.CompletionTokens, &t.Rating, &t.At); err != nil {
+		var unsafe int
+		if err := rows.Scan(&t.ID, &t.Role, &t.Content, &t.Sources, &t.Model, &t.PromptTokens, &t.CompletionTokens, &t.Rating, &unsafe, &t.At); err != nil {
 			return nil, err
 		}
+		t.Unsafe = unsafe != 0
 		out = append(out, t)
 	}
 	// reverse to chronological order
@@ -474,6 +482,13 @@ func (s *Store) LoadChatTurns(limit int) ([]ChatTurn, error) {
 func (s *Store) SetChatRating(id int64, rating string) error {
 	_, err := s.db.Exec(`UPDATE chat_turns SET rating=? WHERE id=?`, rating, id)
 	return err
+}
+
+func boolToInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }
 
 // ClearChatTurns wipes the conversation history.

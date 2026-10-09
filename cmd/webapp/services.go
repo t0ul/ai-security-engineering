@@ -482,6 +482,7 @@ func (c *chatService) Answer(question string, unsafe bool, appData string) (serv
 		turnID, _ = c.hist.AppendChatTurn(datastore.ChatTurn{
 			Role: "assistant", Content: res.Answer, Sources: strings.Join(sources, "\n"),
 			Model: res.Model, PromptTokens: res.PromptTokens, CompletionTokens: res.CompletionTokens,
+			Unsafe: unsafe, // tag the controls-off demo answer distinctly in history (D2)
 		})
 	}
 	limit := 0
@@ -564,7 +565,7 @@ func (h chatHistoryStore) LoadChatTurns(limit int) ([]server.ChatTurnDTO, error)
 		out = append(out, server.ChatTurnDTO{
 			ID: t.ID, Role: t.Role, Content: t.Content, Sources: srcs,
 			Model: shortModel(t.Model), PromptTokens: t.PromptTokens,
-			CompletionTokens: t.CompletionTokens, Rating: t.Rating,
+			CompletionTokens: t.CompletionTokens, Rating: t.Rating, Unsafe: t.Unsafe,
 		})
 	}
 	return out, nil
