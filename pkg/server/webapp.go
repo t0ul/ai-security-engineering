@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/t0ul/ai-security-engineering/pkg/controlplane"
@@ -101,8 +102,9 @@ type Config struct {
 
 	// Budgets, when set, is the governed budgets/limits resolver (C9): rate/token/
 	// concurrency/spend ceilings + key POINTERS (env-var names, never values). The
-	// "api" budget's RatePerMin is enforced on the console API here; the rest are
-	// gateway-side. Nil = no Budgets tab, no rate limit.
+	// "api" budget's RatePerMin and MaxConcurrency are enforced on the console API
+	// here; per-model token/spend caps are enforced gateway-side (and labeled so in the
+	// Budgets tab). Nil = no Budgets tab, no rate/concurrency limit.
 	Budgets *controlplane.Budgets
 
 	// Sampling, when set, is the governed decoding-params resolver (C5):
@@ -288,6 +290,7 @@ type Server struct {
 	rlMu     sync.Mutex
 	rlCount  int
 	rlWindow time.Time
+	inflight atomic.Int64 // in-flight console API requests (governed MaxConcurrency budget)
 
 	// pending holds issued-but-unconfirmed HITL approvals, keyed by nonce (ASI09:
 	// evidence-first, single-use, clickjack/forgery-resistant confirm).
@@ -550,6 +553,13 @@ func (s *Server) authz(action, resource string, h http.HandlerFunc) http.Handler
 			http.Error(w, "rate budget exceeded", http.StatusTooManyRequests)
 			return
 		}
+		release, ok := s.apiSlot() // governed max-concurrency budget (C9)
+		if !ok {
+			s.denyAudit(action, resource, "concurrency budget exceeded")
+			http.Error(w, "concurrency budget exceeded", http.StatusTooManyRequests)
+			return
+		}
+		defer release()
 		h(w, r)
 	}
 }

@@ -55,9 +55,10 @@ func (s *Server) budgetsReset(w http.ResponseWriter, r *http.Request) {
 }
 
 // overBudget enforces the governed per-minute request rate for the console API (a
-// fixed-window limiter). RatePerMin <= 0 (or no Budgets) means unlimited. This is
-// the one budget the app enforces itself; rate/token/spend on model calls are
-// enforced gateway-side by gouncer.
+// fixed-window limiter). RatePerMin <= 0 (or no Budgets) means unlimited. Rate and
+// max-concurrency (apiSlot) are the two budgets the app enforces itself; per-model
+// token and spend caps are enforced gateway-side by gouncer (and are labeled as such
+// in the Budgets tab, so the console never claims to enforce what it does not).
 func (s *Server) overBudget() bool {
 	if s.Budgets == nil {
 		return false
@@ -75,4 +76,20 @@ func (s *Server) overBudget() bool {
 	}
 	s.rlCount++
 	return s.rlCount > limit
+}
+
+// apiSlot enforces the governed max-concurrency budget for the console API. It takes an
+// in-flight slot and returns a release func, or ok=false when the limit is already
+// reached (the caller refuses with 429). MaxConcurrency <= 0 (or no Budgets) = unlimited.
+func (s *Server) apiSlot() (release func(), ok bool) {
+	limit := 0
+	if s.Budgets != nil {
+		limit = s.Budgets.Config("api").MaxConcurrency
+	}
+	n := s.inflight.Add(1)
+	if limit > 0 && int(n) > limit {
+		s.inflight.Add(-1)
+		return func() {}, false
+	}
+	return func() { s.inflight.Add(-1) }, true
 }

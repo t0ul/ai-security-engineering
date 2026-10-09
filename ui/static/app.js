@@ -351,9 +351,11 @@ async function loadBudgets(){
     const key=cf.key_ref?(' · key <code>'+esc(cf.key_ref)+'</code> <span class="pill '+(b.key_set?'pass':'fail')+'">'+(b.key_set?'set':'unset')+'</span>'):'';
     return '<div class="ev"><div><b>'+esc(b.name)+'</b> <span class="pill '+(governed?'pass':'')+'">v'+b.version+'</span>'+key+
       '<div style="margin-top:6px">rate/min <input id="br_'+esc(b.name)+'" type="number" value="'+(cf.rate_per_min||0)+'" style="width:80px"> '+
-      'max tokens <input id="bt_'+esc(b.name)+'" type="number" value="'+(cf.max_tokens||0)+'" style="width:90px"> '+
       'concurrency <input id="bc_'+esc(b.name)+'" type="number" value="'+(cf.max_concurrency||0)+'" style="width:80px"> '+
-      'spend $ <input id="bs_'+esc(b.name)+'" type="number" step="0.01" value="'+(cf.spend_cap_usd||0)+'" style="width:90px"></div>'+
+      '<span class="pill pass">enforced here</span></div>'+
+      '<div style="margin-top:6px">max tokens <input id="bt_'+esc(b.name)+'" type="number" value="'+(cf.max_tokens||0)+'" style="width:90px"> '+
+      'spend $ <input id="bs_'+esc(b.name)+'" type="number" step="0.01" value="'+(cf.spend_cap_usd||0)+'" style="width:90px"> '+
+      '<span class="pill" title="enforced by the gouncer gateway on model calls, not by this console">gateway-side</span></div>'+
       '<div style="margin-top:6px"><button class="go" onclick="activateBudget(\''+esc(b.name)+'\',\''+esc(cf.key_ref||'')+'\')">Activate</button>'+
       (governed?(' <button class="ghost" onclick="resetBudget(\''+esc(b.name)+'\')">Reset to default</button>'):'')+'</div></div></div>';
   }).join('');
