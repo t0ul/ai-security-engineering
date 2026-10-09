@@ -401,6 +401,28 @@ func memKey(fact string) string {
 	return hex.EncodeToString(sum[:8]) // 16 hex chars — ample to avoid collisions here
 }
 
+// budgetChunks trims each retrieved chunk so the combined context stays within maxChars,
+// giving every chunk an equal share so all sources still contribute. Without this a single
+// large doc (a whole-chunked handbook) can exceed the model's context window and force a
+// fallback. A trimmed chunk is marked so it is visibly partial.
+func budgetChunks(chunks []rag.Chunk, maxChars int) []rag.Chunk {
+	if len(chunks) == 0 || maxChars <= 0 {
+		return chunks
+	}
+	per := maxChars / len(chunks)
+	if per < 200 {
+		per = 200 // keep each source minimally useful even with many chunks
+	}
+	out := make([]rag.Chunk, len(chunks))
+	for i, ch := range chunks {
+		if len([]rune(ch.Text)) > per {
+			ch.Text = string([]rune(ch.Text)[:per]) + " …(truncated)"
+		}
+		out[i] = ch
+	}
+	return out
+}
+
 func (c *chatService) Answer(question string, unsafe bool, appData string) (server.ChatReply, error) {
 	if _, err := c.authz.Verify(c.grant, controlplane.Capability{Action: controlplane.ActionList, Resource: "corpus", Tenant: "public"}); err != nil {
 		return server.ChatReply{}, fmt.Errorf("rag-reader capability refused: %w", err)
@@ -432,6 +454,18 @@ func (c *chatService) Answer(question string, unsafe bool, appData string) (serv
 	for _, ch := range chunks {
 		sources = append(sources, ch.DocID)
 	}
+	// Bound the retrieved context to the model's window so a large doc (e.g. a
+	// whole-chunked handbook) can't overflow it and force a silent fallback. Reserve
+	// most of the window for the system prompt + history + question + answer; budget the
+	// context to ~a third of it (≈4 chars/token). Trimming happens per chunk so every
+	// source still contributes.
+	ctxLimitTokens := 8192
+	if c.ctxLimit != nil {
+		if v := c.ctxLimit(); v > 0 {
+			ctxLimitTokens = v
+		}
+	}
+	chunks = budgetChunks(chunks, ctxLimitTokens/3*4)
 	var ctxText string
 	if unsafe {
 		var b strings.Builder
