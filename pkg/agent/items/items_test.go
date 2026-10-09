@@ -216,7 +216,7 @@ func TestIsJunkTitle(t *testing.T) {
 		"Hi families", "Hi PS 51 Families", "No new events scheduled",
 		"No meetings, field trips, or events scheduled for today", "2026",
 		"5:30-:00 PM! Join us for a night of amazing food",
-		"In-Person!", "Virtual!", "Cancelled", "TBD"} {
+		"In-Person!", "Virtual!", "Cancelled", "TBD", "Date", "Subject", "Time"} {
 		if !items.IsJunkTitle(s) {
 			t.Errorf("%q should be junk", s)
 		}

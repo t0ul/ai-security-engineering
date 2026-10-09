@@ -64,6 +64,9 @@ var (
 	// reModifierOnly: a title that is ONLY an event modifier (a detail of some other event,
 	// e.g. a standalone "In-Person!" sub-bullet), not the name of an event in its own right.
 	reModifierOnly = regexp.MustCompile(`(?i)^(in-?person|virtual|online|remote|hybrid|cancell?ed|postponed|rescheduled|tba|tbd)[!.]*$`)
+	// reGenericLabel: a bare field label — usually an email header ("Date:", "Subject:")
+	// grabbed as an event, not an event name.
+	reGenericLabel = regexp.MustCompile(`(?i)^(date|time|when|where|location|subject|from|to|re|details?|info|information|notes?|agenda)$`)
 )
 
 // IsJunkTitle reports whether a "title" is really a date, a greeting, or a bulletin
@@ -74,8 +77,9 @@ func IsJunkTitle(t string) bool {
 	if s == "" {
 		return true
 	}
-	if reGreeting.MatchString(s) || reNoEvents.MatchString(s) || reLeadTime.MatchString(s) || reModifierOnly.MatchString(s) {
-		return true // a greeting, "nothing scheduled", a clock-time fragment, or a bare modifier
+	if reGreeting.MatchString(s) || reNoEvents.MatchString(s) || reLeadTime.MatchString(s) ||
+		reModifierOnly.MatchString(s) || reGenericLabel.MatchString(s) {
+		return true // greeting, "nothing scheduled", clock-time fragment, bare modifier, or field label
 	}
 	// Date-only: nothing of substance remains after dropping date/weekday/month/ordinal
 	// /year and bare connector tokens (so "September 28th" or "Thursday October 1st" → junk).
@@ -121,7 +125,14 @@ func keepWarnings(ws []string) []string {
 	return out
 }
 
+// genericWord: a word too generic to be an event name on its own. If stripping the org
+// prefix leaves only one of these ("PTA Meeting" -> "Meeting"), the prefix was part of the
+// name, so it is kept.
+var genericWord = map[string]bool{"meeting": true, "event": true, "day": true, "night": true,
+	"date": true, "time": true, "update": true, "reminder": true, "notice": true, "announcement": true, "info": true}
+
 func cleanSubject(s string) string {
+	orig := strings.TrimSpace(strings.Trim(s, " :–—-"))
 	for {
 		n := reOrgPrefix.ReplaceAllString(s, "")
 		if n == s {
@@ -130,6 +141,11 @@ func cleanSubject(s string) string {
 		s = n
 	}
 	s = strings.TrimSpace(strings.Trim(s, " :–—-"))
+	// Don't strip an org tag into a bare generic word: "PTA Meeting" -> keep "PTA Meeting",
+	// not "Meeting". (But "Our Potluck" -> "Potluck" is fine — "Potluck" is not generic.)
+	if f := strings.Fields(s); len(f) == 1 && genericWord[strings.ToLower(f[0])] && len(strings.Fields(orig)) >= 2 {
+		s = orig
+	}
 	if s == strings.ToUpper(s) { // de-SHOUT an all-caps header
 		s = strings.Title(strings.ToLower(s))
 	}

@@ -84,3 +84,18 @@ func TestTidyEventKeepsFragmentLowercase(t *testing.T) {
 		t.Errorf("a cleaned event fragment must stay lowercase for culling, got %q", got)
 	}
 }
+
+// TestCleanSubjectKeepsOrgTagWhenGeneric: stripping an org prefix must not reduce a name to
+// a bare generic word ("PTA Meeting" stays), while a real name after the prefix is kept.
+func TestCleanSubjectKeepsOrgTagWhenGeneric(t *testing.T) {
+	cases := map[string]string{
+		"PTA Meeting":                    "PTA Meeting",
+		"PS 51 PTA Multicultural Potluck": "Multicultural Potluck",
+		"Our Potluck":                    "Potluck",
+	}
+	for in, want := range cases {
+		if got := cleanSubject(in); got != want {
+			t.Errorf("cleanSubject(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
