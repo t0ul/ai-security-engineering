@@ -287,6 +287,7 @@ type chatService struct {
 	hist      *datastore.Store         // persists the conversation (multi-turn + reload); nil = stateless
 	ctxLimit  func() int               // the chat model's context window size (for the usage bar)
 	summarize compaction.Summarizer    // LLM-backed running-summary for history compaction; nil = no-op
+	summon    func() []string          // approved+trusted skill instructions to inject (B3); nil = none
 }
 
 // retrieve runs the governed retrieval mode and returns the chunks plus the mode that
@@ -406,7 +407,16 @@ func (c *chatService) Answer(question string, unsafe bool, appData string) (serv
 	}
 	// chat_system is a GOVERNED prompt (C2), decoding is GOVERNED sampling (C5), model
 	// binding is DB config — all resolved live, none hardcoded.
-	res := c.gw.Chat(chatParams(c.sampling, c.models), c.prompts.Text("chat_system"), dateBlock, appData, ctxText, history, question, unsafe)
+	// Summon approved+trusted skills into the system prompt (B3): the governed skill
+	// gate (sign + pin + scope) is the live control, so only operator-approved,
+	// trusted-signed instructions reach the model — as trusted standing context.
+	systemPrompt := c.prompts.Text("chat_system")
+	if c.summon != nil {
+		if sk := c.summon(); len(sk) > 0 {
+			systemPrompt += "\n\n<skills>\n" + strings.Join(sk, "\n") + "\n</skills>"
+		}
+	}
+	res := c.gw.Chat(chatParams(c.sampling, c.models), systemPrompt, dateBlock, appData, ctxText, history, question, unsafe)
 	// Persist the turn (DB-first): the question + the answer with its model + token
 	// usage, so the chat survives a reload and ratings are durable.
 	var turnID int64

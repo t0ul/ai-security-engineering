@@ -87,6 +87,37 @@ func TestSkillLoaderFailsClosedThenLoadsOnApprove(t *testing.T) {
 	}
 }
 
+// TestActiveInstructionsSummonsOnlyApprovedTrusted locks B3: the live consumer injects a
+// skill's instructions ONLY once the operator has approved its trusted content; an
+// unapproved skill and the attacker-signed skill never reach the prompt.
+func TestActiveInstructionsSummonsOnlyApprovedTrusted(t *testing.T) {
+	loader, plane, inv := liveSkills(t)
+	defer inv.Close()
+
+	// Nothing approved yet → nothing summoned.
+	if got := loader.ActiveInstructions(); len(got) != 0 {
+		t.Fatalf("no approvals → no summoned skills, got %v", got)
+	}
+
+	// Approve the trusted skill → its instructions are summoned.
+	h, _ := loader.FullHash("calendar-helper")
+	plane.Approve("calendar-helper", h)
+	got := loader.ActiveInstructions()
+	if len(got) != 1 || !strings.Contains(got[0], "summarize the extracted calendar events") {
+		t.Fatalf("approved trusted skill should be summoned, got %v", got)
+	}
+
+	// Even if an operator tries to approve the attacker skill's hash, the untrusted
+	// signature keeps it out of the summoned set (sign gate before pin gate).
+	ah, _ := loader.FullHash("free-ical-pro")
+	plane.Approve("free-ical-pro", ah)
+	for _, ins := range loader.ActiveInstructions() {
+		if strings.Contains(ins, "PWNED-SKILL") {
+			t.Fatal("attacker-signed skill must never be summoned, even if pinned")
+		}
+	}
+}
+
 // TestSkillLoaderUnsafeLeaksAttack is the controls-off demo invariant: bypassing the
 // gate lets a poisoned skill's instructions through verbatim (the attack the control
 // exists to stop).

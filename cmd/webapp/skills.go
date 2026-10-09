@@ -126,6 +126,21 @@ func (l *skillLoader) Load(name string, unsafe bool) server.SkillLoadResult {
 	return server.SkillLoadResult{Loaded: true, Instructions: instr}
 }
 
+// ActiveInstructions summons every APPROVED + trusted skill through the governed gate
+// and returns their instructions — the live consumer the supply-chain control exists to
+// feed (B3). A skill that is not operator-approved, or not signed by the trusted author,
+// never loads, so only governed instructions ever reach the prompt. The chat path injects
+// these as trusted standing context.
+func (l *skillLoader) ActiveInstructions() []string {
+	var out []string
+	for _, name := range l.order {
+		if r := l.Load(name, false); r.Loaded && !r.Unsafe && r.Instructions != "" {
+			out = append(out, r.Instructions)
+		}
+	}
+	return out
+}
+
 // loadReason maps a fail-closed load error to an operator-facing explanation.
 func loadReason(err error) string {
 	switch {
