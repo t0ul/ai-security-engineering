@@ -321,9 +321,14 @@ async function loadRuntime(){
   if(id.ephemeral) html+='<div class="ev"><div><b>agent identity</b> <span class="pill fail">ephemeral</span> <span class="mut">throwaway key — signed .ics will not verify across restarts</span></div></div>';
   html+='<div class="ev"><div><b>gateway</b> '+gwPill+' <span class="mut">'+esc(gw.url||'')+'</span></div></div>';
   if(d.sandbox){const sb=d.sandbox;const sbPill=sb.up?'<span class="pill pass">up</span>':'<span class="pill fail">down</span>';html+='<div class="ev"><div><b>sandbox (MicroVM)</b> '+sbPill+' <span class="mut">'+esc(sb.url||'')+(sb.up?'':' — enrich needs launchvm')+'</span></div></div>';}
-  if(d.control&&d.control.available){const run=d.control.running;
-    html+='<div class="ev"><div><b>model stack</b> <span class="pill '+(run?'pass':'')+'">'+(run?'running':'stopped')+'</span></div>'+
-      '<div>'+(run?'<button class="ghost" onclick="stopModels(this)">Stop</button>':'<button class="go" onclick="startModels(this)">Start</button>')+' <span class="ctlOut mut"></span></div></div>';}
+  if(d.control&&d.control.available){const run=d.control.running,managed=d.control.managed;
+    const label=run?(managed?'running':'running (reused gateway)'):'stopped';
+    let ctl;
+    if(!run)ctl='<button class="go" onclick="startModels(this)">Start</button>';
+    else if(managed)ctl='<button class="ghost" onclick="stopModels(this)">Stop</button>';
+    else ctl='<span class="mut">external — not managed by this instance</span>';
+    html+='<div class="ev"><div><b>model stack</b> <span class="pill '+(run?'pass':'')+'">'+label+'</span></div>'+
+      '<div>'+ctl+' <span class="ctlOut mut"></span></div></div>';}
   html+='<div class="mut" style="margin:10px 0 4px">model servers <span style="opacity:.7">(assets: '+esc(d.assets_dir||'')+')</span></div>';
   (d.models||[]).forEach(m=>{
     const file=m.present?(m.valid_gguf?'<span class="pill pass">file ok</span>':'<span class="pill fail">file invalid</span>'):'<span class="pill fail">file missing</span>';

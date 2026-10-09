@@ -89,7 +89,13 @@ func (s *Server) runtimeStatus(w http.ResponseWriter, _ *http.Request) {
 		out["sandbox"] = map[string]any{"url": s.VMURL, "up": s.VMUp != nil && s.VMUp()}
 	}
 	if s.Runtime != nil {
-		out["control"] = map[string]any{"available": true, "running": s.Runtime.ModelsRunning()}
+		// "running" reflects whether the models are actually reachable, which is true
+		// both when THIS instance started the stack (managed) and when it reused an
+		// already-running gateway — otherwise the panel misreports "stopped" on the
+		// reuse path even though chat works. "managed" distinguishes the two: Stop only
+		// affects a stack this instance owns.
+		managed := s.Runtime.ModelsRunning()
+		out["control"] = map[string]any{"available": true, "running": managed || gwUp, "managed": managed}
 	}
 	writeJSON(w, out)
 }
