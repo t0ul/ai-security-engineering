@@ -154,8 +154,17 @@
       </div>
     </div>
     <div class="card">
-      <strong>MCP servers</strong> <span class="mut">— tool gateway: manifest pins &amp; rug-pull defense (M7)</span>
-      <div id="mcp"><span class="mut">loading…</span></div>
+      <strong>Tool gateway (MCP)</strong> <span class="mut">— the agent reaches external tools only through here. Each server's tool manifest is pinned (approve); a changed manifest or a halt blocks it. A registered tool call runs through the egress-gated sandbox, so its host must be on the egress allow-list.</span>
+      <div id="mcp" style="margin-top:8px"><span class="mut">loading…</span></div>
+    </div>
+    <div class="card">
+      <strong>Register a tool server</strong> <span class="mut">— add a server by URL + the tool names it offers. Approve it to pin the manifest, then Invoke a tool (fetched through the sandbox).</span>
+      <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
+        <input id="mcpNewName" placeholder="name — e.g. weather" style="flex:1;min-width:120px">
+        <input id="mcpNewURL" placeholder="https://host.on.allowlist/endpoint" style="flex:2;min-width:200px">
+      </div>
+      <div style="margin-top:6px"><input id="mcpNewTools" placeholder="tools (comma-separated) — e.g. forecast, alerts" style="width:100%"></div>
+      <div style="margin-top:8px"><button class="go" onclick="registerMCP()">Register server</button> <span id="mcpNewMsg" class="mut"></span></div>
     </div>
     <div class="card">
       <strong>Config snapshots</strong> <span class="mut">— known-good bundles (M15/C10): snapshot the whole governed plane (prompts + sampling + policies) and roll it all back in one click.</span>

@@ -100,3 +100,11 @@ CREATE TABLE IF NOT EXISTS chat_turns(id INTEGER PRIMARY KEY AUTOINCREMENT, role
 -- content is persisted; the signature is re-derived deterministically from the author key,
 -- so authored skills survive a restart and re-sign under the current anchor.
 CREATE TABLE IF NOT EXISTS authored_skills(name TEXT PRIMARY KEY, instructions TEXT NOT NULL, tools TEXT NOT NULL DEFAULT '', at DATETIME DEFAULT CURRENT_TIMESTAMP);
+
+-- mcp_servers is the operator-registered tool-server registry: a named server, its base
+-- URL, and the tool manifest (comma-separated tool names) the operator declared. The
+-- manifest is PINNED on approve (mcp_pins) and a tool call executes by fetching the URL
+-- through the same egress-gated sandbox + kill switch as the action-link fetch. The host
+-- must be on the egress allow-list, so registering a server cannot by itself reach a new
+-- host. Persisted so registrations survive a restart.
+CREATE TABLE IF NOT EXISTS mcp_servers(name TEXT PRIMARY KEY, url TEXT NOT NULL, tools TEXT NOT NULL DEFAULT '', at DATETIME DEFAULT CURRENT_TIMESTAMP);

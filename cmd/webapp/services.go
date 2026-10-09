@@ -5,9 +5,11 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"os"
+	"regexp"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -204,15 +206,44 @@ func (s skillStore) ListAuthoredSkills() ([]authoredSkill, error) {
 	return out, nil
 }
 
-// mcpRegistry is the concrete server.MCPRegistry over the gustoms tool gateway.
+// MCPStore persists operator-registered tool servers and their approved manifest pins.
+// *datastore.Store satisfies it directly.
+type MCPStore interface {
+	AddMCPServer(name, url string, tools []string) error
+	ListMCPServers() ([]datastore.MCPServerRow, error)
+	DeleteMCPServer(name string) error
+	RecordPin(server, hash, approvedBy string) error
+	LatestPin(server string) (string, bool, error)
+}
+
+var reMCPName = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{1,39}$`)
+
+// mcpRegistry is the concrete server.MCPRegistry: the built-in sandbox tool gateway PLUS an
+// operator-registered server registry. A registered server declares a base URL and a tool
+// manifest; the manifest is pinned on approve, and a tool call executes by fetching the URL
+// through the SAME egress-gated sandbox + kill switch as the action-link fetch — so a
+// registered server cannot reach a host that is not on the egress allow-list, and Halt
+// revokes it in flight. The built-in sandbox entry comes straight from gustoms.
 type mcpRegistry struct {
 	gw     *gustoms.Gateway
 	safety *controlplane.Safety
+	store  MCPStore                                              // nil = registration unavailable (no DB)
+	fetch  func(ctx context.Context, url string) (string, error) // the egress-gated sandbox path
+}
+
+// manifestHash is the pin of a registered server's declared tool manifest (same hash
+// function gustoms uses for the built-in gateway).
+func manifestHash(tools []string) string {
+	specs := make([]gustoms.ToolSpec, 0, len(tools))
+	for _, t := range tools {
+		specs = append(specs, gustoms.ToolSpec{Name: t})
+	}
+	return gustoms.ManifestHash(specs)
 }
 
 func (m mcpRegistry) List() []domain.MCPServer {
 	var out []domain.MCPServer
-	for _, st := range m.gw.Status(context.Background()) {
+	for _, st := range m.gw.Status(context.Background()) { // built-in sandbox
 		status := "pinned"
 		switch {
 		case st.Err != "":
@@ -229,11 +260,117 @@ func (m mcpRegistry) List() []domain.MCPServer {
 			Pinned: shortHash(st.Pinned), Current: shortHash(st.Current), Status: status,
 		})
 	}
+	if m.store != nil { // operator-registered servers
+		rows, _ := m.store.ListMCPServers()
+		for _, r := range rows {
+			cur := manifestHash(r.Tools)
+			pin, _, _ := m.store.LatestPin(r.Name)
+			status := "pinned"
+			switch {
+			case !m.safety.AllowToolExec():
+				status = "blocked"
+			case pin == "":
+				status = "unapproved"
+			case pin != cur:
+				status = "rug-pull" // the declared manifest changed since it was approved
+			}
+			out = append(out, domain.MCPServer{
+				Name: r.Name, Tools: r.Tools, Allowed: r.Tools,
+				Pinned: shortHash(pin), Current: shortHash(cur), Status: status,
+				URL: r.URL, Registered: true,
+			})
+		}
+	}
 	return out
 }
 
 func (m mcpRegistry) Approve(server string) error {
-	return m.gw.Approve(context.Background(), gledger.NewTraceID(), server)
+	if m.store != nil { // a registered server: pin its current declared manifest
+		rows, _ := m.store.ListMCPServers()
+		for _, r := range rows {
+			if r.Name == server {
+				return m.store.RecordPin(server, manifestHash(r.Tools), "operator")
+			}
+		}
+	}
+	return m.gw.Approve(context.Background(), gledger.NewTraceID(), server) // built-in re-pin
+}
+
+// Register adds (or updates) an operator tool server. Re-registering with a different
+// manifest changes the hash, so the prior pin no longer matches (status → rug-pull) until
+// the operator re-approves — the pin lifecycle for an operator-driven manifest change.
+func (m mcpRegistry) Register(name, url string, tools []string) error {
+	if m.store == nil {
+		return errors.New("registration unavailable (no datastore)")
+	}
+	name, url = strings.TrimSpace(name), strings.TrimSpace(url)
+	if !reMCPName.MatchString(name) || name == "sandbox" {
+		return errors.New("name must be lowercase letters/digits/dashes (2–40 chars) and not 'sandbox'")
+	}
+	if !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") {
+		return errors.New("url must be http(s)")
+	}
+	var clean []string
+	for _, t := range tools {
+		if t = strings.TrimSpace(t); t != "" {
+			clean = append(clean, t)
+		}
+	}
+	if len(clean) == 0 {
+		return errors.New("declare at least one tool")
+	}
+	return m.store.AddMCPServer(name, url, clean)
+}
+
+func (m mcpRegistry) Delete(name string) error {
+	if m.store == nil {
+		return errors.New("no datastore")
+	}
+	return m.store.DeleteMCPServer(name)
+}
+
+// Call invokes a tool on a registered server. Fails closed: the kill switch must allow
+// tools, the server must be approved (pin == current manifest), and the tool must be in the
+// declared manifest. Execution is the egress-gated sandbox fetch of the server URL, so the
+// host must be on the egress allow-list and Halt revokes it in flight.
+func (m mcpRegistry) Call(ctx context.Context, name, tool string) (string, error) {
+	if m.store == nil {
+		return "", errors.New("no datastore")
+	}
+	if !m.safety.AllowToolExec() {
+		return "", errors.New("blocked by the kill switch")
+	}
+	rows, err := m.store.ListMCPServers()
+	if err != nil {
+		return "", err
+	}
+	var srv *datastore.MCPServerRow
+	for i := range rows {
+		if rows[i].Name == name {
+			srv = &rows[i]
+			break
+		}
+	}
+	if srv == nil {
+		return "", errors.New("no such server")
+	}
+	inManifest := false
+	for _, t := range srv.Tools {
+		if t == tool {
+			inManifest = true
+			break
+		}
+	}
+	if !inManifest {
+		return "", fmt.Errorf("tool %q is not in %s's manifest", tool, name)
+	}
+	if pin, ok, _ := m.store.LatestPin(name); !ok || pin != manifestHash(srv.Tools) {
+		return "", errors.New("server not approved (pin does not match the current manifest) — approve it first")
+	}
+	if m.fetch == nil {
+		return "", errors.New("sandbox tool path unavailable")
+	}
+	return m.fetch(ctx, srv.URL)
 }
 
 // bundleStore is the concrete server.BundleStore (C10): snapshot/list/roll-back the

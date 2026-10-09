@@ -307,6 +307,11 @@ type FeedbackEntry struct {
 type MCPRegistry interface {
 	List() []domain.MCPServer
 	Approve(server string) error
+	// Register adds/updates an operator tool server (name + URL + declared tool manifest);
+	// Delete removes one; Call invokes a declared tool through the egress-gated sandbox.
+	Register(name, url string, tools []string) error
+	Delete(name string) error
+	Call(ctx context.Context, name, tool string) (string, error)
 }
 
 // ProfileStore reads/writes the household child profile (R1) in the governed DB.
@@ -430,6 +435,9 @@ func (s *Server) Handler() http.Handler {
 	if s.MCP != nil {
 		mux.HandleFunc("/api/mcp", op(s.mcpList))
 		mux.HandleFunc("POST /api/mcp/approve", csrf(s.authz(controlplane.ActionWrite, "mcp", s.mcpApprove)))
+		mux.HandleFunc("POST /api/mcp/register", csrf(s.authz(controlplane.ActionWrite, "mcp", s.mcpRegister)))
+		mux.HandleFunc("POST /api/mcp/delete", csrf(s.authz(controlplane.ActionWrite, "mcp", s.mcpDelete)))
+		mux.HandleFunc("POST /api/mcp/call", csrf(s.authz(controlplane.ActionWrite, "mcp", s.mcpCall)))
 	}
 	if s.Prompts != nil {
 		mux.HandleFunc("/api/prompts", op(s.promptsList))

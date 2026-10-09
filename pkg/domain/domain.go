@@ -43,10 +43,12 @@ type SearchHit struct {
 // calls refused until re-approval), "unapproved" (no pin yet, strict pinning
 // refuses calls), "blocked" (kill switch is refusing all tool calls), or "error".
 type MCPServer struct {
-	Name    string   `json:"name"`
-	Tools   []string `json:"tools"`
-	Allowed []string `json:"allowed"`
-	Pinned  string   `json:"pinned"`  // short approved manifest hash
-	Current string   `json:"current"` // short live manifest hash
-	Status  string   `json:"status"`
+	Name       string   `json:"name"`
+	Tools      []string `json:"tools"`
+	Allowed    []string `json:"allowed"`
+	Pinned     string   `json:"pinned"`  // short approved manifest hash
+	Current    string   `json:"current"` // short live manifest hash
+	Status     string   `json:"status"`
+	URL        string   `json:"url,omitempty"`        // operator-registered servers only
+	Registered bool     `json:"registered,omitempty"` // true = operator-registered (deletable), false = built-in
 }

@@ -333,10 +333,6 @@ func main() {
 		aidrEngine.Observe(ir.Event{Service: "webapp", Span: span, Event: event, Fields: fields})
 	}
 
-	// MCP governance tab (C6): surface the gateway's servers, their advertised +
-	// allow-listed tools, the approved pin vs the live manifest (rug-pull alert),
-	// and an operator Approve (re-pin). "blocked" reflects the kill switch.
-	mcpReg := mcpRegistry{gw: toolGW, safety: safety}
 
 	// Governed prompts (C2): the console lists/activates/rolls-back the system
 	// prompts the LLM planner/coder/extractor resolve at runtime. Activations are
@@ -435,6 +431,17 @@ func main() {
 	if inv != nil {
 		skillSupply.loadPersisted(skillStore{inv}) // pull operator-authored skills into the catalog
 	}
+
+	// MCP tool-gateway tab (C6): the built-in sandbox gateway PLUS an operator-registered
+	// server registry. A registered server declares a URL + tool manifest; the manifest is
+	// pinned on approve, and a tool call executes through the SAME egress-gated sandbox +
+	// kill switch as the action-link fetch. Registration persists in the datastore (nil DB
+	// = sandbox-only, no registration). *datastore.Store satisfies MCPStore directly.
+	var mcpStore MCPStore
+	if inv != nil {
+		mcpStore = inv
+	}
+	mcpReg := mcpRegistry{gw: toolGW, safety: safety, store: mcpStore, fetch: fetch}
 	// Activating the "extractor" sampling drives the live LLM decoding params.
 	baseSampOnActivate := sampling.OnActivate
 	sampling.OnActivate = func(sv controlplane.SamplingVersion) {

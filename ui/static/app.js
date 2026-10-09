@@ -165,17 +165,39 @@ async function loadKill(){const d=await getJSON('/api/safety');const p=$('#kleve
 async function setKill(l){await postJSON('/api/killswitch',{level:l});loadKill();loadMCP();}
 async function loadMCP(){
   const c=$('#mcp');if(!c)return;const d=await getJSON('/api/mcp');const s=d.servers||[];
-  if(!s.length){c.innerHTML='<p class="mut">no MCP servers registered</p>';return;}
+  if(!s.length){c.innerHTML='<p class="mut">no servers</p>';return;}
   c.innerHTML=s.map(m=>{
     const ok=m.status==='pinned';
     const act=(m.status==='rug-pull'||m.status==='unapproved')?(' <button class="ghost" onclick="approveMCP(\''+esc(m.name)+'\')">Approve</button>'):'';
     const drift=(m.current&&m.current!==m.pinned)?(' → now '+esc(m.current)):'';
-    return '<div class="ev"><div><b>'+esc(m.name)+'</b> <span class="pill '+(ok?'pass':'fail')+'">'+esc(m.status)+'</span>'+act+
-      '<br><span class="mut">tools: '+esc((m.tools||[]).join(', ')||'—')+' · allowed: '+esc((m.allowed||[]).join(', ')||'any')+'</span>'+
-      '<br><span class="mut">pin '+esc(m.pinned||'—')+drift+'</span></div></div>';
+    const tag=m.registered?' <span class="kind">registered</span>':' <span class="kind">built-in</span>';
+    const url=m.url?'<br><span class="mut">'+esc(m.url)+'</span>':'';
+    // Invoke buttons only on an approved registered server.
+    let invoke='';
+    if(m.registered&&ok){invoke='<div style="margin-top:4px">'+(m.tools||[]).map(t=>'<button class="ghost" onclick="invokeMCP(\''+esc(m.name)+'\',\''+esc(t)+'\',this)">▶ '+esc(t)+'</button>').join(' ')+'</div>';}
+    const del=m.registered?(' <button class="ghost" onclick="deleteMCP(\''+esc(m.name)+'\')">Delete</button>'):'';
+    return '<div class="ev"><div style="width:100%"><b>'+esc(m.name)+'</b>'+tag+' <span class="pill '+(ok?'pass':'fail')+'">'+esc(m.status)+'</span>'+act+del+url+
+      '<br><span class="mut">tools: '+esc((m.tools||[]).join(', ')||'—')+'</span>'+
+      '<br><span class="mut">pin '+esc(m.pinned||'—')+drift+'</span>'+invoke+
+      '<div class="mcpOut mut" style="margin-top:6px"></div></div></div>';
   }).join('');
 }
 async function approveMCP(name){await postJSON('/api/mcp/approve',{server:name});loadMCP();}
+async function registerMCP(){
+  const name=$('#mcpNewName').value.trim(),url=$('#mcpNewURL').value.trim(),msg=$('#mcpNewMsg');
+  const tools=$('#mcpNewTools').value.split(',').map(x=>x.trim()).filter(Boolean);
+  if(!name||!url||!tools.length){if(msg)msg.textContent='name, url and at least one tool required';return;}
+  const resp=await postJSON('/api/mcp/register',{name:name,url:url,tools:tools});
+  if(resp.ok){if(msg)msg.textContent='registered — Approve it above to pin the manifest';$('#mcpNewName').value='';$('#mcpNewURL').value='';$('#mcpNewTools').value='';loadMCP();}
+  else{if(msg)msg.textContent=(await resp.text())||'failed';}
+}
+async function deleteMCP(name){if(!confirm('Delete server "'+name+'"?'))return;await postJSON('/api/mcp/delete',{server:name});loadMCP();}
+async function invokeMCP(server,tool,btn){
+  const out=btn.closest('.ev').querySelector('.mcpOut');out.textContent='calling '+tool+'…';
+  const r=await (await postJSON('/api/mcp/call',{server:server,tool:tool})).json();
+  if(r.ok){out.innerHTML='<pre>'+esc((r.output||'(empty)').slice(0,600))+'</pre>';}
+  else{out.innerHTML='<span class="warn">refused: '+esc(r.refused||'error')+'</span>';}
+}
 async function loadBundles(){
   const c=$('#bundleList');if(!c)return;const d=await getJSON('/api/bundles');const bs=d.bundles||[];
   if(!bs.length){c.innerHTML='<p class="mut">no snapshots yet</p>';return;}

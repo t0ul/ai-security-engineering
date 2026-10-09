@@ -829,6 +829,66 @@ func (s *Store) RecordPin(server, hash, approvedBy string) error {
 	return err
 }
 
+// LatestPin returns the most recent approved manifest pin for a server.
+func (s *Store) LatestPin(server string) (hash string, ok bool, err error) {
+	row := s.db.QueryRow(`SELECT hash FROM mcp_pins WHERE server=? ORDER BY at DESC, rowid DESC LIMIT 1`, server)
+	switch err = row.Scan(&hash); err {
+	case nil:
+		return hash, true, nil
+	case sql.ErrNoRows:
+		return "", false, nil
+	default:
+		return "", false, err
+	}
+}
+
+// MCPServerRow is one operator-registered tool server (manifest = declared tool names).
+type MCPServerRow struct {
+	Name  string
+	URL   string
+	Tools []string
+}
+
+// AddMCPServer upserts a registered tool server (name is the key).
+func (s *Store) AddMCPServer(name, url string, tools []string) error {
+	_, err := s.db.Exec(`INSERT OR REPLACE INTO mcp_servers(name,url,tools) VALUES(?,?,?)`,
+		name, url, strings.Join(tools, ","))
+	return err
+}
+
+// ListMCPServers returns every registered tool server, sorted by name.
+func (s *Store) ListMCPServers() ([]MCPServerRow, error) {
+	rows, err := s.db.Query(`SELECT name,url,tools FROM mcp_servers ORDER BY name`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []MCPServerRow
+	for rows.Next() {
+		var r MCPServerRow
+		var tools string
+		if err := rows.Scan(&r.Name, &r.URL, &tools); err != nil {
+			return nil, err
+		}
+		for _, t := range strings.Split(tools, ",") {
+			if t = strings.TrimSpace(t); t != "" {
+				r.Tools = append(r.Tools, t)
+			}
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+// DeleteMCPServer removes a registered tool server and its pins.
+func (s *Store) DeleteMCPServer(name string) error {
+	if _, err := s.db.Exec(`DELETE FROM mcp_servers WHERE name=?`, name); err != nil {
+		return err
+	}
+	_, err := s.db.Exec(`DELETE FROM mcp_pins WHERE server=?`, name)
+	return err
+}
+
 // RecordEval stores an eval score (feeds the MLOps promotion gate).
 func (s *Store) RecordEval(label string, f1 float64) error {
 	_, err := s.db.Exec(`INSERT INTO eval_scores(label,f1) VALUES(?,?)`, label, f1)
