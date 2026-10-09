@@ -438,6 +438,7 @@ func (s *Server) Handler() http.Handler {
 		mux.HandleFunc("/api/modelcatalog", op(s.modelCatalogList))
 		mux.HandleFunc("POST /api/modelcatalog/upsert", csrf(s.authz(controlplane.ActionWrite, "model", s.modelCatalogUpsert)))
 		mux.HandleFunc("POST /api/modelcatalog/delete", csrf(s.authz(controlplane.ActionWrite, "model", s.modelCatalogDelete)))
+		mux.HandleFunc("POST /api/modelcatalog/download", csrf(s.authz(controlplane.ActionWrite, "model", s.modelCatalogDownload)))
 		mux.HandleFunc("/api/runtime", op(s.runtimeStatus))
 	}
 	if s.RAG != nil {

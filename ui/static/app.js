@@ -235,9 +235,19 @@ async function loadModelCatalog(){
     return '<div class="ev"><div><b>'+esc(m.name)+'</b> '+pin+' <span class="mut">:'+m.port+' · ctx '+m.ctx+' · '+esc(m.host)+'</span>'+
       '<div class="mut" style="margin-top:4px">'+esc(m.file)+'</div>'+
       '<div class="mut" style="margin-top:2px;word-break:break-all">'+esc(m.url)+'</div>'+
-      '<div style="margin-top:6px"><button class="ghost" onclick="editModel(\''+esc(m.name)+'\')">Edit</button> '+
-      '<button class="ghost" onclick="delModel(\''+esc(m.name)+'\')">Delete</button></div></div></div>';
+      '<div style="margin-top:6px"><button class="ghost" onclick="downloadModel(\''+esc(m.name)+'\',this)">Download</button> '+
+      '<button class="ghost" onclick="editModel(\''+esc(m.name)+'\')">Edit</button> '+
+      '<button class="ghost" onclick="delModel(\''+esc(m.name)+'\')">Delete</button>'+
+      ' <span class="dlOut mut"></span></div></div></div>';
   }).join('');
+}
+async function downloadModel(name,btn){
+  const out=btn.closest('.ev').querySelector('.dlOut');
+  btn.disabled=true;out.textContent='downloading + verifying…';
+  const r=await (await postJSON('/api/modelcatalog/download',{name:name})).json();
+  btn.disabled=false;
+  if(r.ok){out.innerHTML='<span class="pill pass">downloaded + verified</span>';loadRuntime&&null;}
+  else{out.innerHTML='<span class="pill fail">'+esc(r.error||'failed')+'</span>';}
 }
 function editModel(name){const m=__CAT__.find(e=>e.name===name);if(!m)return;
   $('#mc_name').value=m.name;$('#mc_file').value=m.file;$('#mc_url').value=m.url;

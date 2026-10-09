@@ -3,7 +3,9 @@ package server
 import (
 	"encoding/json"
 	"net/http"
+	"path/filepath"
 
+	"github.com/t0ul/ai-security-engineering/internal/assets"
 	"github.com/t0ul/ai-security-engineering/internal/modelcatalog"
 	"github.com/t0ul/gledger"
 )
@@ -87,6 +89,41 @@ func (s *Server) modelCatalogDelete(w http.ResponseWriter, r *http.Request) {
 	}
 	s.auditModel("catalog-delete", req.Name)
 	writeJSON(w, map[string]any{"ok": true, "name": req.Name})
+}
+
+// modelCatalogDownload fetches a catalog entry's GGUF to the asset dir and verifies it
+// (SHA-256 pin + GGUF magic) in-console (B5), so "swap a model in" no longer requires an
+// out-of-band `prepareassets` run. A hash mismatch removes the partial file (the download
+// helper fails closed). CSRF + authz(write/model).
+func (s *Server) modelCatalogDownload(w http.ResponseWriter, r *http.Request) {
+	if s.AssetsDir == "" {
+		http.Error(w, "asset dir not configured", http.StatusNotImplemented)
+		return
+	}
+	var req struct {
+		Name string `json:"name"`
+	}
+	if json.NewDecoder(r.Body).Decode(&req) != nil || req.Name == "" {
+		http.Error(w, "name required", http.StatusBadRequest)
+		return
+	}
+	e, ok, err := s.ModelCatalog.GetModelCatalog(req.Name)
+	if err != nil || !ok {
+		http.Error(w, "no such catalog entry", http.StatusBadRequest)
+		return
+	}
+	if e.URL == "" || e.File == "" {
+		http.Error(w, "entry has no url/file to download", http.StatusBadRequest)
+		return
+	}
+	dest := filepath.Join(s.AssetsDir, e.File)
+	if derr := assets.DownloadAndVerify(e.URL, dest, e.SHA256); derr != nil {
+		s.auditModel("catalog-download-failed", e.Name)
+		writeJSON(w, map[string]any{"ok": false, "name": e.Name, "error": derr.Error()})
+		return
+	}
+	s.auditModel("catalog-download", e.Name)
+	writeJSON(w, map[string]any{"ok": true, "name": e.Name, "file": e.File, "verified": true, "pinned": e.SHA256 != ""})
 }
 
 // roleBoundTo returns a role currently bound to the given logical model name, or ""
