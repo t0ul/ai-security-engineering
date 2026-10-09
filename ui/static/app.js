@@ -372,12 +372,13 @@ async function loadRetrieval(){
   if(!rs.length){c.innerHTML='<p class="mut">no corpora registered</p>';return;}
   c.innerHTML=rs.map(s=>{const cf=s.config||{};const governed=s.version>0;
     return '<div class="ev"><div><b>'+esc(s.name)+'</b> <span class="pill '+(governed?'pass':'')+'">v'+s.version+'</span> <span class="mut">'+esc(s.hash)+'</span>'+
-      '<div style="margin-top:6px">top-k <input id="rk_'+esc(s.name)+'" type="number" value="'+(cf.k||0)+'" style="width:80px"></div>'+
+      '<div style="margin-top:6px">top-k <input id="rk_'+esc(s.name)+'" type="number" value="'+(cf.k||0)+'" style="width:80px"> '+
+      'context tokens <input id="rc_'+esc(s.name)+'" type="number" value="'+(cf.context_tokens||0)+'" style="width:100px"> <span class="mut">0 = auto (≈window/3)</span></div>'+
       '<div style="margin-top:6px"><button class="go" onclick="activateRetrieval(\''+esc(s.name)+'\')">Activate</button>'+
       (governed?(' <button class="ghost" onclick="resetRetrieval(\''+esc(s.name)+'\')">Reset to default</button>'):'')+'</div></div></div>';
   }).join('');
 }
-async function activateRetrieval(name){await postJSON('/api/retrieval/activate',{name:name,config:{k:parseInt($('#rk_'+name).value)||0}});loadRetrieval();}
+async function activateRetrieval(name){await postJSON('/api/retrieval/activate',{name:name,config:{k:parseInt($('#rk_'+name).value)||0,context_tokens:parseInt($('#rc_'+name).value)||0}});loadRetrieval();}
 async function resetRetrieval(name){await postJSON('/api/retrieval/reset',{name:name});loadRetrieval();}
 async function loadGrammar(){
   const c=$('#grammarList');if(!c)return;const d=await getJSON('/api/grammar');const gs=d.grammars||[];

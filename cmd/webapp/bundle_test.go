@@ -41,7 +41,7 @@ func TestBundleRoundTripsRAGAndCatalog(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer corpus.Close()
-	lab := newRAGLab(inv, corpus, t.TempDir(), []string{"none"}, nil)
+	lab := newRAGLab(inv, corpus, t.TempDir(), t.TempDir(), []string{"none"}, nil)
 	if _, err := lab.Save(server.RAGConfig{Mode: "fts", Chunker: "paragraph", ChunkSize: 800}); err != nil {
 		t.Fatal(err)
 	}

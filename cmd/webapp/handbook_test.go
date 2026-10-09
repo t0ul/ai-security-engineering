@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/t0ul/ai-security-engineering/pkg/rag"
@@ -49,6 +50,44 @@ func TestIngestHandbooks(t *testing.T) {
 	ingestHandbooks(corpus, dir)
 	if docs, _ := corpus.Stats(); docs != 1 {
 		t.Errorf("re-ingest must be idempotent, got %d docs", docs)
+	}
+}
+
+// TestHandbookChunksIntoPassages locks the real fix: with the default (paragraph)
+// chunker set on the corpus, a long handbook is indexed as MANY passages, not one whole
+// chunk — so retrieval returns the relevant passage and never a window-overflowing blob.
+func TestHandbookChunksIntoPassages(t *testing.T) {
+	if defaultRAGConfig().Chunker != "paragraph" {
+		t.Fatalf("default chunker must be paragraph, got %q", defaultRAGConfig().Chunker)
+	}
+	dir := t.TempDir()
+	// A multi-paragraph handbook well over one chunk's MaxChars.
+	var b strings.Builder
+	for i := 0; i < 20; i++ {
+		b.WriteString("Paragraph ")
+		b.WriteString(strings.Repeat("word ", 40))
+		b.WriteString("\n\n")
+	}
+	if err := os.WriteFile(filepath.Join(dir, "family-handbook.txt"), []byte(b.String()), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	corpus, err := rag.Open(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer corpus.Close()
+	corpus.Chunker = chunkerFor(loadRAGConfig(nil)) // same as the boot path (nil inv → default)
+
+	if ids := ingestHandbooks(corpus, dir); len(ids) != 1 {
+		t.Fatalf("expected the handbook ingested, got %v", ids)
+	}
+	docs, chunks := corpus.Stats()
+	if docs != 1 {
+		t.Fatalf("expected 1 doc, got %d", docs)
+	}
+	if chunks < 3 {
+		t.Fatalf("the handbook must split into multiple passages, got %d chunks", chunks)
 	}
 }
 

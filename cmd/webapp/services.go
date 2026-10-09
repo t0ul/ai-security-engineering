@@ -454,18 +454,23 @@ func (c *chatService) Answer(question string, unsafe bool, appData string) (serv
 	for _, ch := range chunks {
 		sources = append(sources, ch.DocID)
 	}
-	// Bound the retrieved context to the model's window so a large doc (e.g. a
-	// whole-chunked handbook) can't overflow it and force a silent fallback. Reserve
-	// most of the window for the system prompt + history + question + answer; budget the
-	// context to ~a third of it (≈4 chars/token). Trimming happens per chunk so every
-	// source still contributes.
+	// Bound the retrieved context so a large corpus can't overflow the model window and
+	// force a silent fallback. The budget is a GOVERNED retrieval knob (ContextTokens);
+	// 0 falls back to ~a third of the model's context size. Trimming is per chunk so
+	// every source still contributes (≈4 chars/token).
 	ctxLimitTokens := 8192
 	if c.ctxLimit != nil {
 		if v := c.ctxLimit(); v > 0 {
 			ctxLimitTokens = v
 		}
 	}
-	chunks = budgetChunks(chunks, ctxLimitTokens/3*4)
+	ctxBudgetTokens := ctxLimitTokens / 3
+	if c.retrieval != nil {
+		if ct := c.retrieval.Config("public").ContextTokens; ct > 0 {
+			ctxBudgetTokens = ct
+		}
+	}
+	chunks = budgetChunks(chunks, ctxBudgetTokens*4)
 	var ctxText string
 	if unsafe {
 		var b strings.Builder

@@ -17,6 +17,10 @@ import (
 // literal in the chat/search path and is now a governed, versioned artifact.
 type RetrievalConfig struct {
 	K int `json:"k"`
+	// ContextTokens caps the retrieved context handed to the chat model, so a large
+	// corpus can't overflow the window and force a fallback. 0 = a sane default derived
+	// from the model's context size. A governed, versioned, bundle-referenced knob.
+	ContextTokens int `json:"context_tokens,omitempty"`
 }
 
 // RetrievalVersion is a resolved, content-hashed retrieval config. Version 0 is

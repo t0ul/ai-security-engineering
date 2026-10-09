@@ -186,6 +186,11 @@ func main() {
 	if corpus, cerr := rag.Open(corpusPath); cerr == nil {
 		defer corpus.Close()
 		corpusWritable = corpus
+		// Set the chunker BEFORE any ingest (emails via pipe.Index, handbooks via
+		// ingestHandbooks) — otherwise boot-time Adds run with a nil = whole-document
+		// chunker regardless of config, so a long doc becomes one giant chunk that
+		// overflows the model window. The RAG lab re-applies the same config later.
+		corpus.Chunker = chunkerFor(loadRAGConfig(inv))
 		pipe.Index = func(traceID, source, rawText string) error {
 			return corpus.Add(rag.Doc{ID: source, Text: rawText, Prov: rag.Untrusted}) // readable source in Ask results
 		}
@@ -561,7 +566,7 @@ func main() {
 			}
 			embedMgr := newEmbedManager(ctx, modelstack.BinPath(), *assetsDir, modelCatalog)
 			addCleanup(embedMgr.stop)
-			ragLabSvc = newRAGLab(inv, corpusWritable, cfg.Processed, embedders, ragApplyEmbed(corpusWritable, reader, embedMgr, &ragSemantic))
+			ragLabSvc = newRAGLab(inv, corpusWritable, cfg.Processed, *seedDir, embedders, ragApplyEmbed(corpusWritable, reader, embedMgr, &ragSemantic))
 		}
 		// One owner of the stack lifecycle (C3): boot auto-start and the console
 		// Start/Stop buttons both go through this controller, and shutdown stops it.
