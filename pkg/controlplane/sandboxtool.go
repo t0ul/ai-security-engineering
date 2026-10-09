@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
+	"github.com/t0ul/ai-security-engineering/pkg/argcheck"
 	"github.com/t0ul/ai-security-engineering/pkg/mcp"
 )
 
@@ -47,14 +49,52 @@ func SandboxFetchTool(in *Interpreter) mcp.Tool {
 		Name:        "web_fetch",
 		Description: "Fetch an allow-listed HTTP(S) URL inside the isolated MicroVM (egress brokered through the host) and return its status and body.",
 		Handler: func(ctx context.Context, args map[string]any) (any, error) {
-			rawURL, _ := args["url"].(string)
-			if rawURL == "" {
-				return nil, errors.New("web_fetch: 'url' argument is required")
+			// Tool-argument injection gate (M16, A6): validate the args BEFORE they
+			// cross the vsock boundary into the VM. Reject unknown args; require a
+			// well-formed http(s) URL (netpolicy still re-checks SSRF/allowlist); and
+			// reject shell metacharacters in the trace_id token via argcheck.
+			if err := fetchArgsOK(args); err != nil {
+				return nil, err
 			}
+			rawURL, _ := args["url"].(string)
 			traceID, _ := args["trace_id"].(string)
 			return map[string]any{"output": in.ExecuteFetch(ctx, traceID, rawURL)}, nil
 		},
 	}
+}
+
+// fetchArgsOK is the tool-argument injection gate (M16, A6) that runs BEFORE a web_fetch
+// crosses the vsock boundary into the VM. It rejects unknown arguments, a url that is not
+// a string / is empty / carries control characters or whitespace (an injection shape),
+// and a trace_id — which becomes part of the in-VM command context — containing shell
+// metacharacters (argcheck). It deliberately does NOT police the URL scheme/host: the
+// interpreter's allowlist + netpolicy remain the egress/SSRF authority (and audit a
+// refused scheme as a BLOCKED detonation), so this gate only hardens arg SHAPE.
+func fetchArgsOK(args map[string]any) error {
+	for k := range args {
+		if k != "url" && k != "trace_id" {
+			return fmt.Errorf("web_fetch: unexpected argument %q", k)
+		}
+	}
+	rawURL, ok := args["url"].(string)
+	if !ok || rawURL == "" {
+		return errors.New("web_fetch: 'url' argument is required")
+	}
+	if strings.ContainsAny(rawURL, "\x00\n\r\t ") {
+		return errors.New("web_fetch: 'url' contains control characters or whitespace")
+	}
+	if tid, ok := args["trace_id"]; ok {
+		s, ok := tid.(string)
+		if !ok {
+			return errors.New("web_fetch: 'trace_id' must be a string")
+		}
+		if s != "" {
+			if err := argcheck.CheckToken(s); err != nil {
+				return fmt.Errorf("web_fetch: %w", err)
+			}
+		}
+	}
+	return nil
 }
 
 // toArgv coerces a JSON array of strings into an argv slice.
