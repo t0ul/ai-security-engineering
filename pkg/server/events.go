@@ -73,10 +73,11 @@ type Event struct {
 	HasReminder bool   `json:"has_reminder"`
 	Signed      bool   `json:"signed"` // the .ics has a valid agent content credential (M20)
 	File        string `json:"file"`
-	Kind        string `json:"kind"`          // event|task|heads_up|action (from X-KIND)
-	Due         string `json:"due,omitempty"` // task/action due date
-	URL         string `json:"url,omitempty"` // action target
-	Key         string `json:"key,omitempty"` // content fingerprint, for delete
+	Kind        string `json:"kind"`           // event|task|heads_up|action (from X-KIND)
+	Due         string `json:"due,omitempty"`  // task/action due date
+	URL         string `json:"url,omitempty"`  // action target
+	Notes       string `json:"notes,omitempty"` // source-context description (from the .ics DESCRIPTION)
+	Key         string `json:"key,omitempty"`  // content fingerprint, for delete
 }
 
 // eventKey is the content fingerprint for the delete overlay: day | normalized title.
@@ -165,7 +166,7 @@ func (s *Server) outboxFingerprint() string {
 // projectionVersion keys the events/items/summaries DB projections to the derivation
 // logic (dedup, cleaning, filtering). Bump it when that logic changes so the stored
 // projections rebuild from source instead of serving a stale result.
-const projectionVersion = "v8"
+const projectionVersion = "v10"
 
 // readAllEvents reads every .ics in the outbox into a sorted, de-duplicated event
 // list. allEvents caches the result.
@@ -269,7 +270,11 @@ func (s *Server) buildExport(onlyNew bool) ([]schema.Event, []string) {
 		if hidden[k] || exported[k] {
 			continue
 		}
-		se := schema.Event{Title: e.Title, Start: norm(e.Start), End: norm(e.End), AllDay: e.AllDay, Location: e.Location, Kind: schema.KindEvent}
+		notes := e.Notes
+		if strings.EqualFold(strings.TrimSpace(notes), strings.TrimSpace(e.Title)) {
+			notes = "" // the source line is just the title — a redundant description
+		}
+		se := schema.Event{Title: e.Title, Start: norm(e.Start), End: norm(e.End), AllDay: e.AllDay, Location: e.Location, Notes: notes, Kind: schema.KindEvent}
 		if e.Kind != "" && e.Kind != "event" {
 			day := e.Due
 			if day == "" {
@@ -428,6 +433,8 @@ func parseICS(body, file string) []Event {
 			cur.Title = unescapeICS(strings.TrimPrefix(line, "SUMMARY:"))
 		case strings.HasPrefix(line, "LOCATION:"):
 			cur.Location = unescapeICS(strings.TrimPrefix(line, "LOCATION:"))
+		case strings.HasPrefix(line, "DESCRIPTION:"):
+			cur.Notes = unescapeICS(strings.TrimPrefix(line, "DESCRIPTION:"))
 		case strings.HasPrefix(line, "URL:"):
 			cur.URL = unescapeICS(strings.TrimPrefix(line, "URL:"))
 		case strings.HasPrefix(line, "DTSTART;VALUE=DATE:"):

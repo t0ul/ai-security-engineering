@@ -57,8 +57,10 @@ var leadSubordinator = map[string]bool{
 var leadFillerPair = map[string]bool{
 	"you can": true, "we are": true, "we will": true, "we ask": true,
 	"we would": true, "we have": true, "there will": true, "there is": true,
-	"this is": true, "it is": true, "do not": true, "don't forget": true,
+	"this is": true, "it is": true,
 	"please note": true, "as a": true, "in addition": true, "be sure": true,
+	// NB: never strip a leading negation ("do not", "don't", "no") — dropping it inverts
+	// the meaning ("We do not accept …" → "accept …"). Keep negations in the title.
 }
 
 // piiAnalyzer is the shared goflage scrubber (regex + checksum, zero deps). First
@@ -118,6 +120,20 @@ func Tidy(s string) string { return CleanTitle(ScrubTitle(s)) }
 // letter is capitalized for display.
 func TidyItem(s string) string { return capitalizeFirst(Tidy(s)) }
 
+// SourceNote prepares an event's source line for display as a description — the actual
+// email words the item was extracted from, so a reader can tell what a cryptic title
+// ("In-Person!") actually is. It is untrusted email text, so it is PII-scrubbed here,
+// whitespace-collapsed and length-capped; the UI HTML-escapes it and the .ics writer
+// sanitizes it (strips exfil vectors) before it is shown or exported.
+func SourceNote(s string) string {
+	s = reSpace.ReplaceAllString(strings.TrimSpace(s), " ")
+	s = ScrubTitle(s)
+	if r := []rune(s); len(r) > 240 {
+		s = strings.TrimSpace(string(r[:240])) + "…"
+	}
+	return s
+}
+
 func dropLeadSubordinate(s string) string {
 	for {
 		i := strings.Index(s, ", ")
@@ -158,7 +174,11 @@ func stripLeadFiller(s string) string {
 			break
 		}
 		w0 := strings.ToLower(strings.Trim(words[0], ",.;:!?"))
-		pair := w0 + " " + strings.ToLower(strings.Trim(words[1], ",.;:!?"))
+		w1 := strings.ToLower(strings.Trim(words[1], ",.;:!?"))
+		pair := w0 + " " + w1
+		if isNegation(w0) || isNegation(w1) {
+			return strings.TrimSpace(s) // never strip a negation — dropping it inverts meaning
+		}
 		switch {
 		case leadFillerPair[pair]:
 			s = strings.Join(words[2:], " ")
@@ -169,6 +189,16 @@ func stripLeadFiller(s string) string {
 		}
 	}
 	return strings.TrimSpace(s)
+}
+
+// isNegation reports whether a word negates — these must never be stripped as filler,
+// since dropping one flips the meaning ("do not accept" → "accept").
+func isNegation(w string) bool {
+	switch w {
+	case "no", "not", "never", "none", "cannot":
+		return true
+	}
+	return strings.Contains(w, "n't") // don't, can't, won't, doesn't, isn't …
 }
 
 func capWords(s string, n int) string {

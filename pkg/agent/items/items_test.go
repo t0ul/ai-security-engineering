@@ -215,16 +215,35 @@ func TestIsJunkTitle(t *testing.T) {
 	for _, s := range []string{"September 28th", "Thursday October 1st", "Dear PS 51 Families",
 		"Hi families", "Hi PS 51 Families", "No new events scheduled",
 		"No meetings, field trips, or events scheduled for today", "2026",
-		"5:30-:00 PM! Join us for a night of amazing food"} {
+		"5:30-:00 PM! Join us for a night of amazing food",
+		"In-Person!", "Virtual!", "Cancelled", "TBD"} {
 		if !items.IsJunkTitle(s) {
 			t.Errorf("%q should be junk", s)
 		}
 	}
 	for _, s := range []string{"First day of school", "Back To School Night", "Multicultural Potluck",
 		"Yom Kippur, schools closed", "No School- Yom Kippur", "3-410 visits the Columbus Branch of the NYPL",
-		"Election Day", "SLT meeting at 2:40 PM in the Library"} {
+		"Election Day", "SLT meeting at 2:40 PM in the Library", "In-person K/1 author visit with Devin Elle Kurtz"} {
 		if items.IsJunkTitle(s) {
 			t.Errorf("%q should NOT be junk", s)
 		}
+	}
+}
+
+// TestClassifyAttachesSourceDescription: an event carries its source line as a description
+// (Notes), so a cryptic title is understandable, and PII in that line is scrubbed out.
+func TestClassifyAttachesSourceDescription(t *testing.T) {
+	email := "PS 51 Potluck\n\n" +
+		"October 23rd - Multicultural Potluck - In-Person! A fun night of food. Email ps51pta@gmail.com for details.\n"
+	evs := items.Classify(email, 2026)
+	e, ok := find(evs, "potluck")
+	if !ok {
+		t.Fatalf("potluck event not found: %+v", evs)
+	}
+	if !strings.Contains(e.Notes, "In-Person") || !strings.Contains(e.Notes, "fun night") {
+		t.Errorf("event should carry its source line as a description, got notes %q", e.Notes)
+	}
+	if strings.Contains(e.Notes, "ps51pta@gmail.com") || strings.Contains(e.Notes, "gmail") {
+		t.Errorf("PII must be scrubbed from the description, got %q", e.Notes)
 	}
 }

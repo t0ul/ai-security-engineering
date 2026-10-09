@@ -61,6 +61,9 @@ var (
 	reNoEvents = regexp.MustCompile(`(?i)\bno (new )?(meetings|events|field trips)\b|\bnothing (scheduled|planned)\b|\bno events scheduled\b`)
 	reOrdinal  = regexp.MustCompile(`^\d{1,2}(st|nd|rd|th)?$`) // 28th, 1st, 3, 22
 	reLeadTime = regexp.MustCompile(`^\s*\d{1,2}:\d{2}`)       // a title starting with a clock time is a fragment
+	// reModifierOnly: a title that is ONLY an event modifier (a detail of some other event,
+	// e.g. a standalone "In-Person!" sub-bullet), not the name of an event in its own right.
+	reModifierOnly = regexp.MustCompile(`(?i)^(in-?person|virtual|online|remote|hybrid|cancell?ed|postponed|rescheduled|tba|tbd)[!.]*$`)
 )
 
 // IsJunkTitle reports whether a "title" is really a date, a greeting, or a bulletin
@@ -71,8 +74,8 @@ func IsJunkTitle(t string) bool {
 	if s == "" {
 		return true
 	}
-	if reGreeting.MatchString(s) || reNoEvents.MatchString(s) || reLeadTime.MatchString(s) {
-		return true // a greeting, a "nothing scheduled" line, or a clock-time fragment
+	if reGreeting.MatchString(s) || reNoEvents.MatchString(s) || reLeadTime.MatchString(s) || reModifierOnly.MatchString(s) {
+		return true // a greeting, "nothing scheduled", a clock-time fragment, or a bare modifier
 	}
 	// Date-only: nothing of substance remains after dropping date/weekday/month/ordinal
 	// /year and bare connector tokens (so "September 28th" or "Thursday October 1st" → junk).
@@ -333,7 +336,7 @@ func Classify(email string, defaultYear int) []schema.Event {
 				!reAction.MatchString(ln) && !reURL.MatchString(ln) && !reHeadsUp.MatchString(ln) {
 				if title := Tidy(cleanSubject(ln)); title != "" && !isJunkTitle(title) {
 					eventDates[sectionDate] = true
-					add(schema.Event{Title: title, Start: sectionDate, AllDay: true,
+					add(schema.Event{Title: title, Start: sectionDate, AllDay: true, Notes: SourceNote(ln),
 						Kind: schema.KindEvent, Confidence: 0.7})
 				}
 				continue
@@ -375,8 +378,14 @@ func Classify(email string, defaultYear int) []schema.Event {
 		if title == "" || isJunkTitle(title) {
 			continue // a bare date, or a date/greeting/"nothing scheduled" line — not an event
 		}
+		note := "" // the source context: the line's own text, else the section header
+		if significant(ln) {
+			note = SourceNote(ln)
+		} else if significant(header) {
+			note = SourceNote(header)
+		}
 		eventDates[start[:10]] = true
-		add(schema.Event{Title: title, Start: start, End: end, AllDay: allDay,
+		add(schema.Event{Title: title, Start: start, End: end, AllDay: allDay, Notes: note,
 			Kind: schema.KindEvent, Confidence: 0.75, Warnings: keepWarnings(dt.Warnings)})
 	}
 
@@ -402,7 +411,7 @@ func Classify(email string, defaultYear int) []schema.Event {
 			continue
 		}
 
-		ev := schema.Event{Title: TidyItem(s), Confidence: 0.9, Warnings: []string{}, AllDay: true}
+		ev := schema.Event{Title: TidyItem(s), Notes: SourceNote(s), Confidence: 0.9, Warnings: []string{}, AllDay: true}
 		switch {
 		case hasURL:
 			ev.Kind = schema.KindAction
@@ -427,7 +436,7 @@ func Classify(email string, defaultYear int) []schema.Event {
 			} else {
 				ev.Due = primary
 			}
-			ev.Notes = "date inferred from the email"
+			ev.Warnings = append(ev.Warnings, "date inferred from the email")
 		case ev.Kind == schema.KindHeadsUp:
 			continue // undated, un-anchored heads-up isn't a calendar item
 		}

@@ -6,6 +6,13 @@ const $=s=>document.querySelector(s);
 const TABS=['chat','calendar','adddata','week','tasks','activity','directory','security','prompts','sampling','models','runtime','skills','retrieval','rag','grammar','policies','budgets','eval'];
 const esc=s=>{const d=document.createElement('div');d.textContent=s||'';return d.innerHTML;};
 const when=e=>e.all_day?((e.due||e.start)+' · all day'):((e.start||e.due)+(e.end?(' – '+e.end.slice(11)):''));
+// descLine renders an item's source-context description (the email words it came from),
+// so a cryptic title is understandable. Skipped when it just repeats the title.
+function descLine(e){
+  const n=((e.notes||'')+'').trim();
+  if(!n||n.toLowerCase()===((e.title||'')+'').toLowerCase().trim())return '';
+  return '<div class="mut" style="font-size:13px;margin-top:3px;font-style:italic">“'+esc(n)+'”</div>';
+}
 // Theme: a manual light/dark toggle that overrides the OS preference (persisted).
 function effectiveDark(){const dt=document.documentElement.dataset.theme;if(dt)return dt==='dark';return window.matchMedia&&matchMedia('(prefers-color-scheme:dark)').matches;}
 function themeBtnText(){const b=$('#themeToggle');if(b)b.textContent=effectiveDark()?'☀️ Light mode':'🌙 Dark mode';}
@@ -511,7 +518,7 @@ async function loadWeek(day){
   const items=d.items||[];
   html+='<h3>On this day</h3>';
   if(!items.length) html+='<p class="mut">nothing extracted for this day</p>';
-  else html+=items.map(e=>'<div class="ev"><div><b>'+esc(e.title)+'</b>'+(e.kind&&e.kind!=='event'?' <span class="kind">'+esc(e.kind)+'</span>':'')+'<br><span class="mut">'+esc(when(e))+(e.location?(' · '+esc(e.location)):'')+'</span></div></div>').join('');
+  else html+=items.map(e=>'<div class="ev"><div><b>'+esc(e.title)+'</b>'+(e.kind&&e.kind!=='event'?' <span class="kind">'+esc(e.kind)+'</span>':'')+'<br><span class="mut">'+esc(when(e))+(e.location?(' · '+esc(e.location)):'')+'</span>'+descLine(e)+'</div></div>').join('');
   c.innerHTML=html;
 }
 // Child profile is edited as a plain form (no raw JSON): one card per child with the
@@ -762,7 +769,7 @@ function itemRow(i){
     ' <button class="ghost" title="not for me" onclick="setItemStatus(\''+k+'\',\'dismissed\')">Dismiss</button>'+
     ' <button class="ghost" title="remind me later" onclick="snoozeItem(\''+k+'\')">Snooze</button>';}
   const badge=i.status&&i.status!=='active'?' <span class="kind warn">'+esc(i.status)+(i.snooze_until?' → '+esc(i.snooze_until):'')+'</span>':'';
-  div.innerHTML='<div><span class="kind">'+esc(i.kind||'item')+'</span>'+badge+' <b>'+esc(i.title)+'</b><br><span class="mut">'+esc((i.due||i.start)?when(i):'no date')+'</span></div><div>'+btn+'</div>';
+  div.innerHTML='<div><span class="kind">'+esc(i.kind||'item')+'</span>'+badge+' <b>'+esc(i.title)+'</b>'+descLine(i)+'<br><span class="mut">'+esc((i.due||i.start)?when(i):'no date')+'</span></div><div>'+btn+'</div>';
   return div;
 }
 async function setItemStatus(key,status,snooze){
@@ -830,7 +837,7 @@ async function loadReview(){
       '<button class="ghost" onclick="openEditModal(\''+esc(i.file)+'\','+i.index+')">Edit &amp; add</button> '+
       '<button class="ghost" onclick="rejectItem(\''+esc(i.file)+'\','+i.index+',this)">Not real</button> ';}
     act+=feedbackBtns('review',lbl);
-    div.innerHTML='<div><b>'+esc(i.title)+'</b><br><span class="warn" style="font-size:13px">'+esc(why)+'</span></div><div>'+act+'</div>';
+    div.innerHTML='<div><b>'+esc(i.title)+'</b>'+descLine(i)+'<br><span class="warn" style="font-size:13px">'+esc(why)+'</span></div><div>'+act+'</div>';
     c.appendChild(div);});
 }
 function feedbackBtns(source,label){

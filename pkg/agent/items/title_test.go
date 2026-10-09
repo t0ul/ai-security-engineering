@@ -12,6 +12,7 @@ func TestCleanTitle(t *testing.T) {
 	cases := []struct{ in, want string }{
 		{"PTA Meeting: Thursday, September 24th following drop-off", "PTA Meeting"},
 		{"Our first PTA Meeting of the school year is coming up next Thursday", "first PTA Meeting of the school year is coming up"},
+		{"We do not accept changes or cancellations via email", "do not accept changes or cancellations via email"}, // negation must survive
 		{"You can donate at the link above, pay via Zelle, or deposit a check", "donate at the link above"},
 		{"If you do not have time, we would appreciate any donation to buy food", "appreciate any donation to buy food"},
 		{"Plus, please check to see if your employer will match your donation - double your impact", "check to see if your employer will match your donation"},
