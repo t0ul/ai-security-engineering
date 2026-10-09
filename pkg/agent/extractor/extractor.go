@@ -17,6 +17,7 @@ import (
 	"os"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -24,6 +25,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/t0ul/ai-security-engineering/pkg/agent/dateparse"
+	"github.com/t0ul/ai-security-engineering/pkg/agent/ensemble"
 	"github.com/t0ul/ai-security-engineering/pkg/agent/guard"
 	"github.com/t0ul/ai-security-engineering/pkg/agent/ics"
 	"github.com/t0ul/ai-security-engineering/pkg/agent/schema"
@@ -293,7 +295,7 @@ func dbg(format string, a ...any) {
 	}
 }
 
-func candidatesToEvents(cands []candidate, source string, year int) []schema.Event {
+func candidatesToEvents(cands []candidate, source string, year int, rawText string) []schema.Event {
 	type grp struct {
 		titles, locs []string
 		dts          []*dateparse.Result
@@ -329,6 +331,14 @@ func candidatesToEvents(cands []candidate, source string, year int) []schema.Eve
 		chosen := firstTimedOrFirst(g.dts)
 		title := shortest(g.titles, "(untitled)")
 		warns := sortedWarnsNoYear(g.warns)
+		// Reject a FABRICATED time (M9 applied to the clock, not just the date): the LLM
+		// span can yield a stray "number:number" that dateparse reads as a time the email
+		// never states. If the chosen time is not actually written in the raw email,
+		// coerce the event to all-day instead of asserting a bogus precise time.
+		if !chosen.AllDay && !timeInText(chosen.Start, rawText) {
+			chosen = &dateparse.Result{Start: chosen.Start[:10], AllDay: true, Warnings: chosen.Warnings}
+			warns = append(warns, "dropped implausible time (not present in the email)")
+		}
 		conf := 0.85
 		if len(warns) > 0 {
 			conf = 0.85 - 0.3
@@ -565,8 +575,15 @@ func (*EventExtractor) Run(emailText string, ctx tool.Ctx) tool.Result {
 		if err != nil {
 			warnings = append(warnings, fmt.Sprintf("llm proposer unavailable (%v); regex fallback", err))
 		} else if len(cands) > 0 {
-			events = candidatesToEvents(cands, source, year)
-			used = "llm"
+			// Not single-shot: the LLM read an UNTRUSTED email, so its proposals are
+			// cross-checked against the deterministic regex extractor over the raw text
+			// (ensemble.Reconcile, M9/CaMeL). An LLM item on a date absent from the email
+			// is dropped as a hallucination; an item both found is boosted; a solo LLM
+			// item is kept but flagged for review.
+			llmEvents := candidatesToEvents(cands, source, year, emailText)
+			regexEvents := ExtractEvents(emailText, source, year)
+			events = ensemble.Reconcile(regexEvents, llmEvents, emailText, year)
+			used = "llm+regex"
 		}
 	}
 	if len(events) == 0 && mode != "llm" {
@@ -678,6 +695,45 @@ func sortedKeys[V any](m map[string]V) []string {
 	}
 	sort.Strings(ks)
 	return ks
+}
+
+// timeInText reports whether the clock time in an ISO datetime (…THH:MM:SS) plausibly
+// appears in raw — matching the 24h form, the 12h form, or a bare "6 pm"-style hour for
+// an on-the-hour time. Used to reject a fabricated time the LLM produced that the email
+// never actually states (the 22:27 "drills" bug). Conservative: a time it cannot match
+// is treated as not-present, so the event degrades to all-day rather than asserting a
+// bogus precise time.
+func timeInText(iso, raw string) bool {
+	ti := strings.IndexByte(iso, 'T')
+	if ti < 0 || len(iso) < ti+6 {
+		return false
+	}
+	h, herr := strconv.Atoi(iso[ti+1 : ti+3])
+	m, merr := strconv.Atoi(iso[ti+4 : ti+6])
+	if herr != nil || merr != nil {
+		return false
+	}
+	h12 := h % 12
+	if h12 == 0 {
+		h12 = 12
+	}
+	low := strings.ToLower(raw)
+	cands := []string{
+		fmt.Sprintf("%d:%02d", h, m),   // 18:00
+		fmt.Sprintf("%02d:%02d", h, m), // 06:00
+		fmt.Sprintf("%d:%02d", h12, m), // 6:00 (matches "6:00 pm")
+	}
+	if m == 0 {
+		cands = append(cands,
+			fmt.Sprintf("%d pm", h12), fmt.Sprintf("%dpm", h12),
+			fmt.Sprintf("%d am", h12), fmt.Sprintf("%dam", h12))
+	}
+	for _, c := range cands {
+		if strings.Contains(low, c) {
+			return true
+		}
+	}
+	return false
 }
 
 func firstTimedOrFirst(dts []*dateparse.Result) *dateparse.Result {
