@@ -10,7 +10,36 @@ import (
 	"time"
 
 	"github.com/t0ul/ai-security-engineering/pkg/datastore"
+	"github.com/t0ul/ai-security-engineering/pkg/rag"
+	"github.com/t0ul/goflage"
 )
+
+// ingestHandbooks auto-ingests reference handbooks (files matching *handbook*.txt in the
+// seed dir) straight into the RAG corpus (D1): they are standing REFERENCE documents, not
+// bulletins, so they belong in the Ask corpus but must never be shredded onto the
+// calendar. Each is PII-scrubbed on ingest (M3) and indexed as Untrusted provenance, the
+// same spine as a fetched link. Idempotent — Add replaces by ID, so it keeps them fresh
+// across boots. Returns the ids ingested.
+func ingestHandbooks(corpus *rag.Store, seedDir string) []string {
+	if corpus == nil || seedDir == "" {
+		return nil
+	}
+	matches, _ := filepath.Glob(filepath.Join(seedDir, "*handbook*.txt"))
+	scrubber := goflage.New()
+	var ids []string
+	for _, p := range matches {
+		b, err := os.ReadFile(p)
+		if err != nil {
+			continue
+		}
+		scrubbed, _ := scrubber.Scrub(string(b))
+		id := "handbook:" + filepath.Base(p)
+		if corpus.Add(rag.Doc{ID: id, Text: scrubbed, Prov: rag.Untrusted}) == nil {
+			ids = append(ids, id)
+		}
+	}
+	return ids
+}
 
 // gatewayReachable reports whether a model gateway is already listening at addr
 // (host:port), so the webapp can reuse it instead of starting its own.

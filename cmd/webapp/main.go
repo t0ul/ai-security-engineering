@@ -196,6 +196,11 @@ func main() {
 			scrubbed, _ := goflage.New().Scrub(text)
 			return corpus.Add(rag.Doc{ID: source, Text: scrubbed, Prov: rag.Untrusted})
 		}
+		// Auto-ingest reference handbooks from the seed dir (D1) — standing reference
+		// docs go straight into the Ask corpus (scrubbed, Untrusted), not the inbox.
+		if ids := ingestHandbooks(corpus, *seedDir); len(ids) > 0 {
+			log.Printf("webapp: ingested %d reference handbook(s): %v", len(ids), ids)
+		}
 		// Retrieval runs on a SEPARATE read-only handle (C4d least privilege): Ask
 		// can query but the engine refuses any write, so a bug or injection on the
 		// read path cannot mutate or poison the corpus. Falls back to the writable
