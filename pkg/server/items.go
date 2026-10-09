@@ -144,29 +144,42 @@ type itemRow struct {
 }
 
 // dedupItems collapses duplicate items the extractor emitted for the same real thing
-// (same normalized title on the same day, regardless of kind). The cleaner title wins.
-// Keyed by (normalized title, day), so distinct same-day items and the same item on
-// different days are kept.
+// on the same day (regardless of kind). Two items merge when their normalized titles
+// match exactly OR one's significant tokens are a subset of the other's (titleSubset,
+// the same near-dup rule the calendar uses) — so "Italian Heritage Day" and "Italian
+// Heritage and Indigenous Peoples' Day, schools closed" collapse to one. Distinct
+// same-day items (not subset-related) and the same item on different days are kept.
+// The cleaner title wins. Per-DAY, not per-timestamp, so a fabricated time can't dodge it.
 func dedupItems(rows []itemRow) []itemRow {
-	seen := map[string]int{}
+	dayOfItem := func(r itemRow) string {
+		d := dateKey(r.Event)
+		if len(d) >= 10 {
+			return d[:10]
+		}
+		return d
+	}
 	var out []itemRow
 	for _, r := range rows {
 		if strings.TrimSpace(r.Title) == "" {
 			continue
 		}
-		day := dateKey(r.Event) // dedup per DAY, not per timestamp (a fabricated time must not dodge it)
-		if len(day) >= 10 {
-			day = day[:10]
-		}
-		key := normTitle(r.Title) + "|" + day
-		if idx, ok := seen[key]; ok {
-			if itemCleaner(r, out[idx]) {
-				out[idx] = r
+		nr, day := normTitle(r.Title), dayOfItem(r)
+		merged := false
+		for i := range out {
+			if day != dayOfItem(out[i]) {
+				continue
 			}
-			continue
+			if nr == normTitle(out[i].Title) || titleSubset(r.Title, out[i].Title) {
+				if itemCleaner(r, out[i]) {
+					out[i] = r
+				}
+				merged = true
+				break
+			}
 		}
-		seen[key] = len(out)
-		out = append(out, r)
+		if !merged {
+			out = append(out, r)
+		}
 	}
 	return out
 }

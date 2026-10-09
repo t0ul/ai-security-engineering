@@ -665,12 +665,13 @@ const __ITEMS__={}; // file|index -> item, for the edit modal
 function itemRow(i){
   __ITEMS__[i.file+'|'+i.index]=i;
   const div=document.createElement('div');div.className='ev';
-  let btn='<button class="ghost" onclick="accept(\''+esc(i.file)+'\','+i.index+',this)">Add this</button> '+
-    '<button class="ghost" title="edit before adding" onclick="openEditModal(\''+esc(i.file)+'\','+i.index+')">Edit &amp; add</button> '+
-    '<button class="ghost" onclick="rejectItem(\''+esc(i.file)+'\','+i.index+',this)">Not real</button>';
-  // Durable status (C2): complete / dismiss / snooze, keyed by the item's stable
-  // fingerprint so it survives a projection rebuild.
-  if(i.key){const k=esc(i.key);btn+=' <button class="ghost" title="mark done" onclick="setItemStatus(\''+k+'\',\'done\')">✓ Done</button>'+
+  // Tasks and heads-ups are NOT calendar events: "Add this" writes an .ics, which is
+  // the wrong verb for a to-do or an FYI. The accept-to-calendar flow lives on events
+  // (Calendar tab). Here the vocabulary is task-shaped: done / dismiss / snooze,
+  // keyed by the item's stable fingerprint so it survives a projection rebuild (C2).
+  let btn='';
+  if(i.key){const k=esc(i.key),done=(i.kind==='heads_up')?'✓ Got it':'✓ Done';
+    btn='<button class="ghost" title="handled" onclick="setItemStatus(\''+k+'\',\'done\')">'+done+'</button>'+
     ' <button class="ghost" title="not for me" onclick="setItemStatus(\''+k+'\',\'dismissed\')">Dismiss</button>'+
     ' <button class="ghost" title="remind me later" onclick="snoozeItem(\''+k+'\')">Snooze</button>';}
   const badge=i.status&&i.status!=='active'?' <span class="kind warn">'+esc(i.status)+(i.snooze_until?' → '+esc(i.snooze_until):'')+'</span>':'';
