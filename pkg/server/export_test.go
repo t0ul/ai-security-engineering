@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -240,5 +241,38 @@ func TestCalendarIncrementalAcrossNewEmails(t *testing.T) {
 	// Nothing else arrives: a further export yields nothing.
 	if n, _ := exportNew(); n != 0 {
 		t.Errorf("with no new emails, export should be empty, got %d", n)
+	}
+}
+
+// TestParseICSIgnoresAlarmDescription locks the fix for the root cause of "descriptions not
+// showing": a VEVENT's VALARM carries its own DESCRIPTION (the alarm text = the title), and
+// parseICS must not let that overwrite the event's real DESCRIPTION.
+func TestParseICSIgnoresAlarmDescription(t *testing.T) {
+	dir := t.TempDir()
+	src := []schema.Event{{Title: "Back To School Night", Start: "2026-09-29T17:30:00", Kind: schema.KindEvent,
+		Notes: "Thursday Sept 29th, 5:30-8pm in the gym"}}
+	body, _, err := ics.Write(src, "seed")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "1.events.ics"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(New(Config{OutboxDir: dir}).Handler())
+	defer srv.Close()
+	r, err := http.Get(srv.URL + "/api/events")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Body.Close()
+	var d struct {
+		Events []map[string]any `json:"events"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&d)
+	if len(d.Events) != 1 {
+		t.Fatalf("want 1 event, got %d", len(d.Events))
+	}
+	if got := d.Events[0]["notes"]; got != "Thursday Sept 29th, 5:30-8pm in the gym" {
+		t.Errorf("event notes should be the event DESCRIPTION, not the alarm text; got %q", got)
 	}
 }

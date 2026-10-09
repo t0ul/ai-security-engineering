@@ -166,7 +166,7 @@ func (s *Server) outboxFingerprint() string {
 // projectionVersion keys the events/items/summaries DB projections to the derivation
 // logic (dedup, cleaning, filtering). Bump it when that logic changes so the stored
 // projections rebuild from source instead of serving a stale result.
-const projectionVersion = "v11"
+const projectionVersion = "v14"
 
 // readAllEvents reads every .ics in the outbox into a sorted, de-duplicated event
 // list. allEvents caches the result.
@@ -413,13 +413,14 @@ func (s *Server) eventDelete(w http.ResponseWriter, r *http.Request) {
 func parseICS(body, file string) []Event {
 	var out []Event
 	var cur *Event
+	inAlarm := false // VALARM carries its own SUMMARY/DESCRIPTION; those are the alarm's, not the event's
 	for _, line := range strings.Split(body, "\n") {
 		line = strings.TrimRight(line, "\r")
 		switch {
 		case line == "BEGIN:VEVENT":
-			cur = &Event{File: file, Kind: "event"}
+			cur, inAlarm = &Event{File: file, Kind: "event"}, false
 		case line == "BEGIN:VTODO":
-			cur = &Event{File: file, Kind: "task"}
+			cur, inAlarm = &Event{File: file, Kind: "task"}, false
 		case line == "END:VEVENT", line == "END:VTODO":
 			if cur != nil {
 				out = append(out, *cur)
@@ -427,6 +428,13 @@ func parseICS(body, file string) []Event {
 			}
 		case cur == nil:
 			continue
+		case line == "BEGIN:VALARM":
+			cur.HasReminder = true
+			inAlarm = true
+		case line == "END:VALARM":
+			inAlarm = false
+		case inAlarm:
+			continue // skip the alarm's own fields (its DESCRIPTION is not the event's)
 		case strings.HasPrefix(line, "X-KIND:"):
 			cur.Kind = strings.TrimPrefix(line, "X-KIND:")
 		case strings.HasPrefix(line, "SUMMARY:"):
@@ -451,8 +459,6 @@ func parseICS(body, file string) []Event {
 		case strings.HasPrefix(line, "DUE:"):
 			cur.Due = fmtDateTime(strings.TrimPrefix(line, "DUE:"))
 			cur.Start = cur.Due
-		case line == "BEGIN:VALARM":
-			cur.HasReminder = true
 		}
 	}
 	return out

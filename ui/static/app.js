@@ -649,7 +649,7 @@ async function loadEvents(){
   if(!evs.length){c.innerHTML='<p class="mut">no meetings yet — add one above or drop an email in Add Data</p>';return;}
   evs.forEach(e=>{const div=document.createElement('div');div.className='ev';
     const del=e.key?' <button class="ghost" title="remove from calendar" onclick="deleteEvent(\''+esc(e.key)+'\',this)">Delete</button>':'';
-    div.innerHTML='<div><b>'+esc(e.title)+'</b>'+(e.signed?' <span class="kind" title="signed by this agent, unaltered">✓ signed</span>':'')+'<br><span class="mut">'+esc(when(e))+(e.location?(' · '+esc(e.location)):'')+'</span></div>'+
+    div.innerHTML='<div style="min-width:0"><b>'+esc(e.title)+'</b>'+(e.signed?' <span class="kind" title="signed by this agent, unaltered">✓ signed</span>':'')+'<br><span class="mut">'+esc(when(e))+(e.location?(' · '+esc(e.location)):'')+'</span>'+descLine(e)+'</div>'+
       '<div>'+(e.has_reminder?'<span class="bell">🔔</span>':'')+'<a class="go" href="/ics/'+encodeURIComponent(e.file)+'" download>Accept .ics</a>'+del+'</div>';
     c.appendChild(div);});
 }
@@ -926,7 +926,7 @@ function renderMonth(){
 function shiftMonth(n){curMonth=new Date(curMonth.getFullYear(),curMonth.getMonth()+n,1);renderMonth();}
 function showDay(ds){const items=monthItems[ds]||[];const c=$('#dayDetail');
   if(!items.length){c.innerHTML='<p class="mut" style="margin-top:12px">'+esc(ds)+' — nothing</p>';return;}
-  c.innerHTML='<h3>'+esc(ds)+'</h3>'+items.map(i=>'<div class="ev"><div><span class="kind">'+esc(i.kind||'event')+'</span> <b>'+esc(i.title)+'</b>'+(i.location?(' <span class="mut">· '+esc(i.location)+'</span>'):'')+'</div></div>').join('');
+  c.innerHTML='<h3>'+esc(ds)+'</h3>'+items.map(i=>'<div class="ev"><div><span class="kind">'+esc(i.kind||'event')+'</span> <b>'+esc(i.title)+'</b>'+(i.location?(' <span class="mut">· '+esc(i.location)+'</span>'):'')+descLine(i)+'</div></div>').join('');
 }
 // Mini calendar on the Chat tab: a compact month glance sharing monthItems. It is
 // the trusted PROJECTION of the extracted calendar (untrusted email → extract +

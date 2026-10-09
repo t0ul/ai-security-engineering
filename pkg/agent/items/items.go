@@ -279,6 +279,27 @@ func timeDominant(line string) bool {
 	return !significant(reClock.ReplaceAllString(line, " "))
 }
 
+// eventContext gathers the source line for an event plus the detail that immediately
+// follows it (time/location/blurb), so a clean "Back to School Night" line gains a
+// description. It stops at the next dated event or bulleted item, so it never bleeds a
+// neighbouring event's text in; at most two detail lines are taken.
+func eventContext(lines []string, bullet []bool, i, year int) string {
+	parts := []string{lines[i]}
+	taken := 0
+	for j := i + 1; j < len(lines) && taken < 2; j++ {
+		ln := lines[j]
+		if ln == "" {
+			continue // skip a blank line but keep looking for the detail
+		}
+		if bullet[j] || dateparse.ExtractDatetime(ln, year) != nil {
+			break // the next item/date — not this event's detail
+		}
+		parts = append(parts, ln)
+		taken++
+	}
+	return strings.Join(parts, " ")
+}
+
 // nearbyTimes returns the times from the closest TIME-ONLY line around index i, so
 // "Tuesday Sept 29" + "5:30pm to 8:00pm" one line apart become a single timed event.
 // It refuses to borrow a time from a line that is its own event ("… Meeting at 8:45 AM"),
@@ -394,10 +415,11 @@ func Classify(email string, defaultYear int) []schema.Event {
 		if title == "" || isJunkTitle(title) {
 			continue // a bare date, or a date/greeting/"nothing scheduled" line — not an event
 		}
-		note := "" // the source context: the line's own text, else the section header
-		if significant(ln) {
-			note = SourceNote(ln)
-		} else if significant(header) {
+		// Source context (description): the event line plus the detail that follows it
+		// (time/location/blurb), stopping at the next dated event or bullet. Falls back to
+		// the section header when the dated line itself carries no words.
+		note := SourceNote(eventContext(lines, bullet, i, defaultYear))
+		if !significant(note) && significant(header) {
 			note = SourceNote(header)
 		}
 		eventDates[start[:10]] = true

@@ -56,11 +56,18 @@ func dayOf(e Event) string {
 }
 
 // betterEvent picks the keeper when two same-day duplicates merge: the cleaner title
-// wins, then an all-day entry beats a timed one (a school event mis-stamped with a
-// time like 22:27 is noise), then the one carrying a reminder.
+// wins, then the one whose description adds context (a note that is more than the title),
+// then an all-day entry beats a timed one (a school event mis-stamped with a time like
+// 22:27 is noise), then the one carrying a reminder.
 func betterEvent(a, b Event) Event {
 	if sa, sb := titleScore(a), titleScore(b); sa != sb {
 		if sa > sb {
+			return a
+		}
+		return b
+	}
+	if an, bn := hasDescription(a), hasDescription(b); an != bn {
+		if an {
 			return a
 		}
 		return b
@@ -75,6 +82,12 @@ func betterEvent(a, b Event) Event {
 		return a
 	}
 	return b
+}
+
+// hasDescription reports whether an event's note adds information beyond its title.
+func hasDescription(e Event) bool {
+	n := strings.TrimSpace(e.Notes)
+	return n != "" && !strings.EqualFold(n, strings.TrimSpace(e.Title))
 }
 
 // titleTokens is the set of significant word tokens in a title — lowercased, split on

@@ -91,3 +91,19 @@ func TestDropFragments(t *testing.T) {
 		}
 	}
 }
+
+// TestDedupPrefersDescription: when two same-day events have the same title, the one whose
+// note adds context (a description) is kept, so the useful description isn't deduped away.
+func TestDedupPrefersDescription(t *testing.T) {
+	in := []Event{
+		{Title: "Back To School Night", Start: "2026-09-29T17:30:00", Kind: "event", Notes: "Back To School Night"},
+		{Title: "Back To School Night", Start: "2026-09-29T17:30:00", Kind: "event", Notes: "Thursday Sept 29th, 5:30-8pm in the gym"},
+	}
+	got := dedupEvents(in)
+	if len(got) != 1 {
+		t.Fatalf("same-day duplicates should collapse to 1, got %d", len(got))
+	}
+	if got[0].Notes != "Thursday Sept 29th, 5:30-8pm in the gym" {
+		t.Errorf("dedup should keep the event WITH a description, got notes %q", got[0].Notes)
+	}
+}
