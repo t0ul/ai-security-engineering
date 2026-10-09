@@ -3,7 +3,7 @@
 // request. Empty (household mode) = no header, unchanged behavior.
 (function(){const f=window.fetch.bind(window);window.fetch=(u,o)=>{o=o||{};const s=typeof u==='string'?u:(u&&u.url)||'';if(__CAP__&&(s.indexOf('/api/')===0||s.indexOf('/ics/')===0)){o.headers=Object.assign({},o.headers||{},{'Authorization':'Bearer '+__CAP__});}return f(u,o);};})();
 const $=s=>document.querySelector(s);
-const TABS=['chat','calendar','adddata','week','tasks','review','activity','ask','directory','security','prompts','sampling','models','runtime','skills','retrieval','rag','grammar','policies','budgets','eval','incidents'];
+const TABS=['chat','calendar','adddata','week','tasks','review','activity','ask','directory','security','prompts','sampling','models','runtime','skills','retrieval','rag','grammar','policies','budgets','eval','commands','incidents'];
 const esc=s=>{const d=document.createElement('div');d.textContent=s||'';return d.innerHTML;};
 const when=e=>e.all_day?((e.due||e.start)+' · all day'):((e.start||e.due)+(e.end?(' – '+e.end.slice(11)):''));
 // Theme: a manual light/dark toggle that overrides the OS preference (persisted).
@@ -25,6 +25,7 @@ document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
   if(t==='ask'){const q=$('#askq');if(q)q.focus();}
   if(t==='directory') loadDirectory();
   if(t==='activity') loadActivity();
+  if(t==='commands') loadCommands();
   if(t==='incidents') loadIncidents();
   if(t==='security'){loadKill();loadMCP();loadBundles();}
   if(t==='prompts') loadPrompts();
@@ -43,7 +44,7 @@ document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
 // App = consumer (zero control knobs); Studio = operator (the tuning/governance plane).
 const SURFACES={
   app:['chat','calendar','adddata','week','tasks','review','ask','directory'],
-  studio:['security','prompts','sampling','models','runtime','skills','retrieval','rag','grammar','policies','budgets','eval','incidents','activity']
+  studio:['security','prompts','sampling','models','runtime','skills','retrieval','rag','grammar','policies','budgets','eval','commands','incidents','activity']
 };
 (function(){
   const vis=(SURFACES[SURFACE]||TABS);
@@ -833,6 +834,21 @@ async function loadActivity(){
   const xs=d.activity||[];if(!xs.length){c.innerHTML='<p class="mut">no activity logged yet</p>';return;}
   xs.forEach(a=>{const div=document.createElement('div');
     div.innerHTML='<time>'+esc((a.ts||'').slice(11,19))+'</time>'+esc(a.text);c.appendChild(div);});
+}
+// Commands: the raw tool-call stream (operator twin of Activity). Shows the exact command
+// (argv/URL), the allow/block decision, and the sandbox outcome — never the output content.
+async function loadCommands(){
+  const c=$('#commandList');if(!c)return;const d=await getJSON('/api/commands');const xs=d.commands||[];
+  if(!xs.length){c.innerHTML='<p class="mut">no tool calls yet — the agent runs commands &amp; fetches through the sandbox; they appear here as it does.</p>';return;}
+  c.innerHTML=xs.map(x=>{
+    const icon=x.decision==='block'?'⛔':(x.kind==='exec'?'🖥️':'🌐');
+    const dec=x.decision==='block'
+      ?('<span class="pill fail">block</span>'+(x.reason?' <span class="mut">'+esc(x.reason)+'</span>':''))
+      :('<span class="pill pass">allow</span>'+(x.outcome?' → <span class="mut">'+esc(x.outcome)+'</span>':''));
+    const t=esc((x.ts||'').slice(11,19));
+    return '<div class="ev"><div style="width:100%">'+icon+' <span class="kind">'+esc(x.kind)+'</span> <code>'+esc(x.command||'—')+'</code>'+
+      '<br><span class="mut">'+dec+' · trace '+esc((x.trace||'').slice(0,8))+' · '+t+'</span></div></div>';
+  }).join('');
 }
 
 // --- month view (A7) ---

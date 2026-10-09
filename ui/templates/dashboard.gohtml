@@ -32,6 +32,7 @@
     <button data-tab="policies">Policies</button>
     <button data-tab="budgets">Budgets</button>
     <button data-tab="eval">Eval</button>
+    <button data-tab="commands">Commands</button>
     <button data-tab="incidents">Incidents</button>
   </nav>
   <button id="themeToggle" class="switch" onclick="toggleTheme()" style="cursor:pointer">🌙 Dark</button>
@@ -125,6 +126,14 @@
     <div class="card">
       <strong>Agent activity</strong> <span class="mut">— what the agent did, newest first (from the tamper-evident log)</span>
       <div class="feed" id="feed"></div>
+    </div>
+  </section>
+
+  <section id="commands" class="hide">
+    <div class="card">
+      <strong>Commands</strong> <span class="mut">— the raw tool-call stream: every command the agent ran (exec argv or fetch URL), its allow/block decision, and the sandbox outcome, correlated by trace. Output is never logged — only whether it ran and its size. (Activity is the plain-language version of the same log.)</span>
+      <div style="margin-top:8px"><button class="ghost" onclick="loadCommands()">Refresh</button></div>
+      <div id="commandList" style="margin-top:8px"><span class="mut">loading…</span></div>
     </div>
   </section>
 

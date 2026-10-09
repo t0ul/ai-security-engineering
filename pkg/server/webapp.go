@@ -412,6 +412,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/incidents", op(s.incidents))
 	mux.HandleFunc("/api/incident", op(s.incident))
 	mux.HandleFunc("/api/activity", op(s.activity))
+	mux.HandleFunc("/api/commands", op(s.commands))
 	mux.HandleFunc("/api/safety", op(s.safetyState))
 	mux.HandleFunc("/api/events", consumer(s.events))
 	mux.HandleFunc("/api/items", consumer(s.items))
