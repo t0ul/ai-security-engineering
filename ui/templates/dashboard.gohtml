@@ -56,12 +56,14 @@
   </section>
   <section id="calendar">
     <div class="card">
-      <strong>Calendar</strong> <span class="mut">— your month at a glance; add your own events, delete any, or accept an extracted one</span>
+      <strong>Calendar</strong> <span class="mut">— your month at a glance; add your own events, delete any, or accept an extracted one. Download everything as one .ics to import into your family calendar.</span>
       <div style="margin-top:6px"><button class="go" onclick="openCreateModal()">➕ Add event</button>
+        <button class="go" onclick="downloadICS(this)" style="margin-left:8px">⬇ Download calendar (.ics)</button>
         <span class="viewtoggle" style="margin-left:10px">
           <button class="ghost" id="vMonth" onclick="setView('month')">Month</button>
           <button class="ghost" id="vList" onclick="setView('list')">List</button>
-        </span></div>
+        </span>
+        <span id="icsMsg" class="mut" style="margin-left:8px"></span></div>
       <div id="monthView"></div>
       <div id="events" class="hide"></div>
     </div>

@@ -232,6 +232,59 @@ func (s *Server) events(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, map[string]any{"events": out, "inbox": s.InboxPath})
 }
 
+// calendarExport serves ONE .ics with every extracted event and dated reminder (the deduped,
+// non-hidden set shown in Calendar + Tasks), so the household can import the whole thing into
+// their real family calendar in one click — the app's original payoff. Reminders (tasks /
+// heads-ups / actions) are written as all-day EVENTS prefixed "Reminder:" rather than VTODOs,
+// because Google Calendar ignores VTODO on import — this way everything actually shows up.
+// Consumer-scoped (the user's own derived calendar), downloaded as an attachment.
+func (s *Server) calendarExport(w http.ResponseWriter, _ *http.Request) {
+	var hidden map[string]bool
+	if s.HiddenEvents != nil {
+		hidden, _ = s.HiddenEvents.LoadHiddenEvents()
+	}
+	// The server's display timestamps are "YYYY-MM-DD HH:MM" (space, no seconds); the .ics
+	// writer wants RFC3339 "YYYY-MM-DDTHH:MM:SS". Bridge the two so a timed event exports.
+	norm := func(s string) string {
+		if len(s) >= 16 && s[10] == ' ' {
+			s = s[:10] + "T" + s[11:]
+		}
+		if len(s) == 16 {
+			s += ":00"
+		}
+		return s
+	}
+	var evs []schema.Event
+	for _, e := range s.allEvents() {
+		if hidden[eventKey(e)] {
+			continue
+		}
+		se := schema.Event{Title: e.Title, Start: norm(e.Start), End: norm(e.End), AllDay: e.AllDay, Location: e.Location, Kind: schema.KindEvent}
+		if e.Kind != "" && e.Kind != "event" {
+			day := e.Due
+			if day == "" {
+				day = e.Start
+			}
+			if len(day) >= 10 {
+				day = day[:10]
+			}
+			if day == "" {
+				continue // an undated reminder has no place on a calendar
+			}
+			se.AllDay, se.Start, se.End, se.Title = true, day, "", "Reminder: "+e.Title
+		}
+		evs = append(evs, se)
+	}
+	body, _, err := ics.Write(evs, "Family calendar")
+	if err != nil {
+		http.Error(w, "export failed: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/calendar; charset=utf-8")
+	w.Header().Set("Content-Disposition", `attachment; filename="family-calendar.ics"`)
+	_, _ = io.WriteString(w, body)
+}
+
 // HiddenEventStore is the delete overlay for calendar events (hide by fingerprint,
 // without mutating the source .ics). Nil = events cannot be deleted.
 type HiddenEventStore interface {

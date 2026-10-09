@@ -689,6 +689,20 @@ function openCreateModal(){
   };
 }
 async function postJSON(url,body){return fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});}
+// Download the whole calendar (events + dated reminders) as one .ics. Uses fetch (not a bare
+// link) so the capability header rides along, then triggers a client-side file download.
+async function downloadICS(btn){
+  const msg=$('#icsMsg');if(msg)msg.textContent='preparing…';
+  try{
+    const r=await fetch('/api/calendar.ics');
+    if(!r.ok){if(msg)msg.textContent='export failed';return;}
+    const blob=await r.blob();
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='family-calendar.ics';
+    document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+    if(msg)msg.textContent='downloaded — import it into Google/Apple Calendar';
+  }catch(e){if(msg)msg.textContent='export failed';}
+}
 async function rejectItem(file,index,btn){btn.disabled=true;const r=await postJSON('/api/reject',{file,index});btn.textContent=r.ok?'rejected ✓':'err';}
 async function accept(file,index,btn){
   const d=await (await postJSON('/api/accept',{file,index})).json(); // phase 1: evidence + nonce

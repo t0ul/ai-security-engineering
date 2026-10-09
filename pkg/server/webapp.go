@@ -415,6 +415,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/commands", op(s.commands))
 	mux.HandleFunc("/api/safety", op(s.safetyState))
 	mux.HandleFunc("/api/events", consumer(s.events))
+	mux.HandleFunc("/api/calendar.ics", consumer(s.calendarExport)) // one-click: the whole calendar as .ics
 	mux.HandleFunc("/api/items", consumer(s.items))
 	mux.HandleFunc("/api/summary", consumer(s.summary))
 	mux.HandleFunc("/api/review", consumer(s.review))
