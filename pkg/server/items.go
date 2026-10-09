@@ -589,14 +589,20 @@ func (s *Server) reject(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{"ok": true})
 }
 
-// flywheel reports the accept/reject tallies accumulated from real use.
+// flywheel reports the accept/reject tallies AND the recent raw feedback examples, so
+// Studio shows both the quality trend and the specific items/answers that were rated —
+// the signal the operator tunes prompts/retrieval/sampling against and harvests eval
+// cases from. (The feedback does NOT auto-fine-tune weights; see the Eval tab copy.)
 func (s *Server) flywheel(w http.ResponseWriter, _ *http.Request) {
 	accepts, rejects := s.Flywheel.Stats()
 	rate := 0.0
 	if total := accepts + rejects; total > 0 {
 		rate = float64(accepts) / float64(total)
 	}
-	writeJSON(w, map[string]any{"accepts": accepts, "rejects": rejects, "accept_rate": rate})
+	writeJSON(w, map[string]any{
+		"accepts": accepts, "rejects": rejects, "accept_rate": rate,
+		"recent": s.Flywheel.Recent(40),
+	})
 }
 
 func safeSidecar(n string) bool {

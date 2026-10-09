@@ -104,6 +104,38 @@ func (s *Store) FeedbackStats() (accepts, rejects int, err error) {
 	return accepts, rejects, err
 }
 
+// FeedbackRow is one recorded feedback signal: where it came from, what it was about,
+// the decision (accept/reject/neutral), and when — the raw ground truth the operator
+// reviews in Studio to drive tuning.
+type FeedbackRow struct {
+	Source   string
+	Label    string
+	Decision string
+	At       string
+}
+
+// RecentFeedback returns the most recent feedback signals, newest first — the actual
+// examples (not just counts) so the operator can see WHAT was rated and act on it.
+func (s *Store) RecentFeedback(limit int) ([]FeedbackRow, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	rows, err := s.db.Query(`SELECT source,title,decision,at FROM feedback ORDER BY at DESC, rowid DESC LIMIT ?`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []FeedbackRow
+	for rows.Next() {
+		var r FeedbackRow
+		if err := rows.Scan(&r.Source, &r.Label, &r.Decision, &r.At); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
 // RecordBudget stores a versioned, hashed budget config (JSON) for a name.
 func (s *Store) RecordBudget(name, version, hash, config string) error {
 	_, err := s.db.Exec(`INSERT INTO budgets(name,version,hash,config) VALUES(?,?,?,?)`, name, version, hash, config)

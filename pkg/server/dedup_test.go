@@ -27,6 +27,26 @@ func TestDedupKeepsDistinctSameDayEvents(t *testing.T) {
 	}
 }
 
+// TestDedupCollapsesNearDuplicateWording: the same holiday phrased differently across
+// emails collapses, but distinct same-day events with long shared prefixes do not.
+func TestDedupCollapsesNearDuplicateWording(t *testing.T) {
+	in := []Event{
+		{Title: "Italian Heritage/Indigenous Peoples' Day", Start: "2026-10-12", AllDay: true, Kind: "event"},
+		{Title: "Italian Heritage and Indigenous Peoples' Day, schools closed", Start: "2026-10-12", AllDay: true, Kind: "event"},
+	}
+	if got := dedupEvents(in); len(got) != 1 {
+		t.Fatalf("near-duplicate wording of the same event must collapse, got %d: %+v", len(got), got)
+	}
+	// Distinct conferences on the SAME day (shared prefix) must NOT merge.
+	in2 := []Event{
+		{Title: "Evening Parent-Teacher Conferences for middle schools and D75", Start: "2026-11-05", AllDay: true, Kind: "event"},
+		{Title: "Evening Parent-Teacher Conferences for high schools, K-12, and 6-12 schools", Start: "2026-11-05", AllDay: true, Kind: "event"},
+	}
+	if got := dedupEvents(in2); len(got) != 2 {
+		t.Fatalf("distinct same-day conferences must stay separate, got %d: %+v", len(got), got)
+	}
+}
+
 func TestDedupSeparatesEventFromTask(t *testing.T) {
 	in := []Event{
 		{Title: "Permission slip", Start: "2026-10-15", Kind: "event"},

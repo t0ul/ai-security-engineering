@@ -156,6 +156,15 @@ func (f flywheel) Stats() (int, int) {
 	return a, r
 }
 
+func (f flywheel) Recent(limit int) []server.FeedbackEntry {
+	rows, _ := f.inv.RecentFeedback(limit)
+	out := make([]server.FeedbackEntry, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, server.FeedbackEntry{Source: r.Source, Label: r.Label, Decision: r.Decision, At: r.At})
+	}
+	return out
+}
+
 // mcpRegistry is the concrete server.MCPRegistry over the gustoms tool gateway.
 type mcpRegistry struct {
 	gw     *gustoms.Gateway

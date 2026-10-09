@@ -20,7 +20,7 @@ func dedupEvents(in []Event) []Event {
 				continue
 			}
 			nk := normTitle(keep[j].Title)
-			if ne == "" || nk == "" || ne == nk || strings.Contains(nk, ne) || strings.Contains(ne, nk) {
+			if ne == "" || nk == "" || ne == nk || strings.Contains(nk, ne) || strings.Contains(ne, nk) || titleSubset(e.Title, keep[j].Title) {
 				keep[j] = betterEvent(e, keep[j])
 				merged = true
 				break
@@ -75,6 +75,45 @@ func betterEvent(a, b Event) Event {
 		return a
 	}
 	return b
+}
+
+// titleTokens is the set of significant word tokens in a title — lowercased, split on
+// non-alphanumerics, with filler and "schools closed"-style status words dropped — so two
+// phrasings of the same event compare by their meaningful words.
+func titleTokens(t string) map[string]bool {
+	stop := map[string]bool{"and": true, "the": true, "for": true, "of": true, "a": true,
+		"to": true, "in": true, "on": true, "schools": true, "school": true, "closed": true, "no": true}
+	out := map[string]bool{}
+	for _, w := range strings.FieldsFunc(strings.ToLower(t), func(r rune) bool {
+		return !((r >= 'a' && r <= 'z') || (r >= '0' && r <= '9'))
+	}) {
+		if len(w) >= 2 && !stop[w] {
+			out[w] = true
+		}
+	}
+	return out
+}
+
+// titleSubset reports whether one title's significant tokens are a subset of the other's
+// (both non-empty). Same-day events whose names are subset-related are the same event with
+// different wording ("Italian Heritage/Indigenous Peoples' Day" vs "Italian Heritage and
+// Indigenous Peoples' Day, schools closed"), but two distinct same-day events (e.g. middle-
+// vs high-school conferences) are NOT subset-related, so they stay separate.
+func titleSubset(a, b string) bool {
+	ta, tb := titleTokens(a), titleTokens(b)
+	if len(ta) == 0 || len(tb) == 0 {
+		return false
+	}
+	small, big := ta, tb
+	if len(tb) < len(ta) {
+		small, big = tb, ta
+	}
+	for w := range small {
+		if !big[w] {
+			return false
+		}
+	}
+	return true
 }
 
 // normTitle lowercases a title, strips leading articles and trailing linking words,

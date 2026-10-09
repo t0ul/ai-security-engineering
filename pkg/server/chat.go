@@ -51,6 +51,7 @@ func (s *Server) chatFeedback(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		TurnID int64  `json:"turn_id"`
 		Rating string `json:"rating"`
+		Label  string `json:"label"` // a short snippet of the rated answer, for Studio context
 	}
 	if json.NewDecoder(r.Body).Decode(&req) != nil || req.TurnID == 0 {
 		http.Error(w, "turn_id and rating required", http.StatusBadRequest)
@@ -69,11 +70,15 @@ func (s *Server) chatFeedback(w http.ResponseWriter, r *http.Request) {
 	// Make the thumbs actually COUNT: feed the data-flywheel so chat quality shows up in
 	// the accept/reject tally (previously the rating was stored but never aggregated).
 	if s.Flywheel != nil {
+		label := req.Label
+		if label == "" {
+			label = "chat answer"
+		}
 		switch req.Rating {
 		case "up":
-			s.Flywheel.Record("accept", "chat", "chat answer")
+			s.Flywheel.Record("accept", "chat", label)
 		case "down":
-			s.Flywheel.Record("reject", "chat", "chat answer")
+			s.Flywheel.Record("reject", "chat", label)
 		}
 	}
 	writeJSON(w, map[string]any{"ok": true})

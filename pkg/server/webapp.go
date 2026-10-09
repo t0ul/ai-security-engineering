@@ -282,10 +282,20 @@ type ChatTurnDTO struct {
 }
 
 // Flywheel captures operator accept/reject decisions as durable ground-truth and
-// reports the running tallies (the data-flywheel).
+// reports the running tallies (the data-flywheel). Recent returns the raw examples so
+// Studio can surface WHAT was rated (the signal the operator tunes against).
 type Flywheel interface {
 	Record(decision, source, title string)
 	Stats() (accepts, rejects int)
+	Recent(limit int) []FeedbackEntry
+}
+
+// FeedbackEntry is one recorded feedback signal surfaced to the operator in Studio.
+type FeedbackEntry struct {
+	Source   string `json:"source"`
+	Label    string `json:"label"`
+	Decision string `json:"decision"`
+	At       string `json:"at"`
 }
 
 // MCPRegistry lists the governed MCP servers with pin status and re-pins one on

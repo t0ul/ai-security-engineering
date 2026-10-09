@@ -22,7 +22,8 @@ func (f *recFlywheel) Record(decision, _, _ string) {
 		f.other++
 	}
 }
-func (f *recFlywheel) Stats() (int, int) { return f.accepts, f.rejects }
+func (f *recFlywheel) Stats() (int, int)          { return f.accepts, f.rejects }
+func (f *recFlywheel) Recent(int) []FeedbackEntry { return nil }
 
 // TestReviewLinkageAndFeedback locks the Review CRUD wiring + feedback: a needs-review
 // item is returned with its source file + matching Items index (so accept/edit work) and

@@ -118,7 +118,10 @@ async function loadChatHistory(){
 }
 async function rateChat(turnId,rating,btn){
   const wrap=btn.closest('.fb');
-  const r=await postJSON('/api/chat/feedback',{turn_id:turnId,rating:rating});
+  // Send a snippet of the rated answer so Studio shows WHAT was rated (the tuning signal).
+  const msg=btn.closest('.msg');
+  const label=msg?(msg.textContent||'').trim().slice(0,140):'';
+  const r=await postJSON('/api/chat/feedback',{turn_id:turnId,rating:rating,label:label});
   if(r.ok&&wrap){wrap.querySelectorAll('.thumb').forEach(b=>b.classList.remove('on'));btn.classList.add('on');}
 }
 async function clearChat(){
@@ -463,7 +466,16 @@ async function loadFlywheel(){
   const c=$('#flywheel');if(!c)return;const d=await getJSON('/api/flywheel');
   if(d.accepts===undefined){c.textContent='';return;}
   const total=(d.accepts||0)+(d.rejects||0);
-  c.innerHTML='<b>Data flywheel</b> — operator feedback: '+(d.accepts||0)+' accepted · '+(d.rejects||0)+' rejected'+(total?(' · accept rate '+Math.round((d.accept_rate||0)*100)+'%'):'')+' <span class="mut">(real-use ground truth feeding the eval set)</span>';
+  let h='<b>Data flywheel</b> — thumbs &amp; accept/reject from real use: '+(d.accepts||0)+' 👍 · '+(d.rejects||0)+' 👎'+(total?(' · '+Math.round((d.accept_rate||0)*100)+'% positive'):'')+
+    '<div class="mut" style="margin-top:4px">Signal, not auto-training: use the 👎 examples below to tune the governed <b>prompt / retrieval / sampling</b> knobs and promote failures into the eval set, then re-run eval. (Weight fine-tuning on this sparse household signal would overfit.)</div>';
+  const rec=d.recent||[];
+  if(rec.length){
+    h+='<div style="margin-top:8px">';
+    rec.slice(0,12).forEach(f=>{const ic=f.decision==='accept'?'👍':(f.decision==='reject'?'👎':'😐');
+      h+='<div class="ev" style="padding:6px 0"><div><span class="kind">'+esc(f.source)+'</span> '+ic+' <span class="mut">'+esc((f.label||'').slice(0,90))+'</span></div><div class="mut" style="font-size:12px">'+esc(f.at||'')+'</div></div>';});
+    h+='</div>';
+  }
+  c.innerHTML=h;
 }
 async function loadEval(){
   loadFlywheel();
