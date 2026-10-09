@@ -515,6 +515,7 @@ func (s *Server) Handler() http.Handler {
 	}
 	if s.Profile != nil {
 		mux.HandleFunc("/api/timeline", consumer(s.timeline))
+		mux.HandleFunc("/api/week", consumer(s.week))
 		mux.HandleFunc("/api/profile", consumer(s.profileGet))
 		mux.HandleFunc("POST /api/profile/save", csrf(s.authz(controlplane.ActionWrite, "profile", s.profileSave)))
 	}

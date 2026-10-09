@@ -20,6 +20,7 @@
   .ev:last-child{border-bottom:0} .ev b{font-size:15px} .bell{margin-right:4px} a.go{text-decoration:none;display:inline-block}
   .strip{display:flex;gap:10px;overflow-x:auto;padding:4px 0} .chip{flex:0 0 auto;border:1px solid var(--line);border-radius:10px;padding:8px 12px;font-size:13px;background:var(--card)}
   .chip b{display:block} .dz{border:2px dashed var(--line);border-radius:12px;padding:16px;margin:10px 0;transition:border-color .15s} .dz.over{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 7%,transparent)}
+  .chip.day{cursor:pointer;text-align:center;min-width:56px} .chip.day .mut{display:block;font-size:11px} .chip.day .cnt{display:block;margin-top:2px;font-weight:600;color:var(--accent)} .chip.day.sel{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,transparent)}
   .link{color:var(--accent);cursor:pointer} textarea{font:inherit;background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:8px;width:100%}
   .feed div{padding:7px 0;border-bottom:1px solid var(--line);font-size:14px} .feed time{color:var(--mut);font-size:12px;margin-right:8px}
   .warn{color:var(--warn)} .hide{display:none} code{font-family:ui-monospace,Menlo,monospace}

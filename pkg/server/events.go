@@ -164,7 +164,7 @@ func (s *Server) outboxFingerprint() string {
 // projectionVersion keys the events/items/summaries DB projections to the derivation
 // logic (dedup, cleaning, filtering). Bump it when that logic changes so the stored
 // projections rebuild from source instead of serving a stale result.
-const projectionVersion = "v5"
+const projectionVersion = "v6"
 
 // readAllEvents reads every .ics in the outbox into a sorted, de-duplicated event
 // list. allEvents caches the result.

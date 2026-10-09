@@ -19,7 +19,7 @@ document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
   if(t==='chat'){const q=$('#chatq');if(q)q.focus();loadMiniCal();loadChatHistory();}
   if(t==='calendar'){loadEvents();loadDeadlines();setView('month');}
   if(t==='adddata') loadAddData();
-  if(t==='week'){loadWeek('today');loadProfile();}
+  if(t==='week'){loadWeekStrip();loadProfile();}
   if(t==='tasks') loadTasks();
   if(t==='review') loadReview();
   if(t==='ask'){const q=$('#askq');if(q)q.focus();}
@@ -449,6 +449,31 @@ async function activatePolicy(name){
   await postJSON('/api/policies/activate',{name:name,items:items});loadPolicies();
 }
 async function resetPolicy(name){await postJSON('/api/policies/reset',{name:name});loadPolicies();}
+// 7-day strip (Mon–Sun): one chip per day with a count; click a day for its detail.
+let __WEEKSTART__=null;
+async function loadWeekStrip(start){
+  const c=$('#weekStrip');if(!c)return;
+  const d=await getJSON('/api/week'+(start?('?start='+encodeURIComponent(start)):''));
+  __WEEKSTART__=d.start;const days=d.days||[];
+  const rng=$('#weekRange');if(rng&&days.length)rng.textContent=days[0].date+' – '+days[6].date;
+  c.innerHTML=days.map(x=>{
+    const cnt=x.count?('<span class="cnt">'+x.count+'</span>'):'<span class="mut">–</span>';
+    const todayTag=x.today?' · today':'';
+    return '<div class="chip day" data-date="'+esc(x.date)+'" onclick="selectDay(\''+esc(x.date)+'\',this)">'+
+      '<b>'+esc(x.weekday)+'</b><span class="mut">'+esc(x.date.slice(5))+todayTag+'</span>'+cnt+'</div>';
+  }).join('');
+  const sel=days.find(x=>x.today)||days[0];
+  if(sel)selectDay(sel.date,c.querySelector('[data-date="'+sel.date+'"]'));
+}
+function selectDay(date,btn){
+  document.querySelectorAll('#weekStrip .chip.day').forEach(b=>b.classList.toggle('sel',b===btn));
+  loadWeek(date);
+}
+function shiftWeek(delta){
+  const base=__WEEKSTART__?new Date(__WEEKSTART__+'T00:00:00'):new Date();
+  base.setDate(base.getDate()+delta);
+  loadWeekStrip(base.toISOString().slice(0,10));
+}
 async function loadWeek(day){
   const c=$('#timeline');if(!c)return;const d=await getJSON('/api/timeline?day='+day);
   const w=$('#weekDay');if(w)w.innerHTML=esc((d.weekday||'')+' '+(d.day||''))+(d.half_day?' <span class="pill fail">half day</span>':'');

@@ -77,3 +77,45 @@ func (s *Server) timeline(w http.ResponseWriter, r *http.Request) {
 		"half_day": halfDay,
 	})
 }
+
+// week powers the My Week 7-day strip: Monday–Sunday of the week containing ?start=
+// (default today), each day with a count of the events/items landing on it, so a
+// parent sees the whole week at a glance and clicks a day for the detail (timeline).
+func (s *Server) week(w http.ResponseWriter, r *http.Request) {
+	now := time.Now()
+	base := now
+	if q := r.URL.Query().Get("start"); q != "" {
+		if d, err := time.Parse("2006-01-02", q); err == nil {
+			base = d
+		}
+	}
+	for base.Weekday() != time.Monday { // back up to the Monday of that week
+		base = base.AddDate(0, 0, -1)
+	}
+
+	counts := map[string]int{}
+	for _, e := range s.allEvents() {
+		d := e.Start
+		if d == "" {
+			d = e.Due
+		}
+		if len(d) >= 10 {
+			counts[d[:10]]++
+		}
+	}
+
+	type dayCell struct {
+		Date    string `json:"date"`
+		Weekday string `json:"weekday"`
+		Count   int    `json:"count"`
+		Today   bool   `json:"today"`
+	}
+	todayKey := now.Format("2006-01-02")
+	days := make([]dayCell, 0, 7)
+	for i := 0; i < 7; i++ {
+		d := base.AddDate(0, 0, i)
+		k := d.Format("2006-01-02")
+		days = append(days, dayCell{Date: k, Weekday: d.Weekday().String()[:3], Count: counts[k], Today: k == todayKey})
+	}
+	writeJSON(w, map[string]any{"days": days, "start": base.Format("2006-01-02")})
+}

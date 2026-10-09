@@ -145,3 +145,37 @@ func TestClassifyStripsExplicitYearFromTitle(t *testing.T) {
 		t.Errorf("date must still be correct, got %q", e.Start)
 	}
 }
+
+// TestClassifyDoesNotBorrowSiblingTime guards the time mis-attribution fix: in a daily
+// agenda (a date line over several bulleted items), a dated event must NOT borrow a time
+// from a sibling bullet that is its own event ("Safety Committee Meeting at 8:45 AM").
+// A fabricated precise time is worse than an all-day entry (M9).
+func TestClassifyDoesNotBorrowSiblingTime(t *testing.T) {
+	email := "Daily Bulletin\n\n" +
+		"Wednesday, October 7th\n\n" +
+		"3-407 visits the Columbus Branch of the NYPL\n\n" +
+		"Thursday, October 8th\n\n" +
+		"Safety Committee Meeting at 8:45 AM in the Art Room\n\n" +
+		"3-410 visits the Columbus Branch of the NYPL\n"
+	evs := items.Classify(email, 2026)
+	v, ok := find(evs, "columbus")
+	if !ok {
+		t.Fatalf("agenda event not extracted: %+v", evs)
+	}
+	if !v.AllDay || strings.Contains(v.Start, "08:45") {
+		t.Errorf("event must not borrow a sibling's 8:45 time (stay all-day): %+v", v)
+	}
+}
+
+// TestNearbyTimeStillBorrowedFromBareTimeLine locks the legitimate case the fix must keep:
+// a standalone date followed by a bare time range one line down is still assembled timed.
+func TestNearbyTimeStillBorrowedFromBareTimeLine(t *testing.T) {
+	email := "BACK TO SCHOOL NIGHT\n\nTuesday September 29th, 2026\n\nThe event will run from\n5:30pm to 8:00pm\nPlease select one session.\n"
+	evs := items.Classify(email, 2026)
+	if len(evs) == 0 {
+		t.Fatal("no event extracted")
+	}
+	if evs[0].Start != "2026-09-29T17:30:00" || evs[0].End != "2026-09-29T20:00:00" {
+		t.Errorf("bare time range must still be borrowed: %+v", evs[0])
+	}
+}

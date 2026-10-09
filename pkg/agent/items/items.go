@@ -201,9 +201,21 @@ func combineDT(dateISO string, hm dateparse.HM) string {
 	return fmt.Sprintf("%sT%02d:%02d:00", dateISO[:10], hm.Hour, hm.Minute)
 }
 
-// nearbyTimes returns the times from the closest date-less line around index i
-// (a time or range on its own line), so "Tuesday Sept 29" + "5:30pm to 8:00pm"
-// one line apart become a single timed event.
+// reClock matches a clock time ("8:45 AM", "5:30pm", "8 am") so a time-only line can
+// be told apart from an event line that merely mentions a time.
+var reClock = regexp.MustCompile(`(?i)\b\d{1,2}:\d{2}\s*(?:am|pm)?\b|\b\d{1,2}\s*(?:am|pm)\b`)
+
+// timeDominant reports whether a line is essentially JUST a time or time range ("5:30pm
+// to 8:00pm") rather than its own event that happens to carry a time ("Safety Committee
+// Meeting at 8:45 AM"). Only a time-dominant line's time may be borrowed by a nearby date.
+func timeDominant(line string) bool {
+	return !significant(reClock.ReplaceAllString(line, " "))
+}
+
+// nearbyTimes returns the times from the closest TIME-ONLY line around index i, so
+// "Tuesday Sept 29" + "5:30pm to 8:00pm" one line apart become a single timed event.
+// It refuses to borrow a time from a line that is its own event ("… Meeting at 8:45 AM"),
+// which would stamp a fabricated time on an unrelated date (a sibling in a daily agenda).
 func nearbyTimes(lines []string, i, year int) []dateparse.HM {
 	for _, j := range []int{i + 1, i + 2, i + 3, i - 1, i - 2} {
 		if j < 0 || j >= len(lines) || j == i || lines[j] == "" {
@@ -212,7 +224,7 @@ func nearbyTimes(lines []string, i, year int) []dateparse.HM {
 		if dateparse.ParseDatePhrase(lines[j], year) != nil {
 			continue // that line is itself dated; don't borrow its time
 		}
-		if hm := dateparse.ParseTimes(lines[j]); len(hm) > 0 {
+		if hm := dateparse.ParseTimes(lines[j]); len(hm) > 0 && timeDominant(lines[j]) {
 			return hm
 		}
 	}

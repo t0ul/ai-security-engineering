@@ -83,12 +83,15 @@
 
   <section id="week" class="hide">
     <div class="card">
-      <strong>My Week</strong> <span class="mut">— your kid's day from every processed email + the profile</span>
-      <div style="margin-top:8px">
-        <button class="ghost" onclick="loadWeek('today')">Today</button>
-        <button class="ghost" onclick="loadWeek('tomorrow')">Tomorrow</button>
-        <span id="weekDay" class="mut"></span>
+      <strong>My Week</strong> <span class="mut">— your kid's week from every processed email + the profile; click a day for the detail</span>
+      <div style="margin-top:8px;display:flex;gap:8px;align-items:center">
+        <button class="ghost" onclick="shiftWeek(-7)">‹</button>
+        <span id="weekRange" class="mut"></span>
+        <button class="ghost" onclick="shiftWeek(7)">›</button>
+        <button class="ghost" onclick="loadWeekStrip()">This week</button>
       </div>
+      <div id="weekStrip" class="strip" style="margin-top:8px"></div>
+      <div id="weekDay" class="mut" style="margin-top:10px"></div>
       <div id="timeline" style="margin-top:8px"><span class="mut">loading…</span></div>
     </div>
     <div class="card">
