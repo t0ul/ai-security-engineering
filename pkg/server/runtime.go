@@ -45,12 +45,16 @@ func (s *Server) runtimeStatus(w http.ResponseWriter, _ *http.Request) {
 		}
 	}
 	gwUp := s.GatewayUp != nil && s.GatewayUp()
-	writeJSON(w, map[string]any{
+	out := map[string]any{
 		"gateway":    map[string]any{"url": s.GatewayURL, "up": gwUp},
 		"assets_dir": s.AssetsDir,
 		"models":     rows,
 		"identity":   map[string]any{"ephemeral": s.IdentityEphemeral},
-	})
+	}
+	if s.VMURL != "" {
+		out["sandbox"] = map[string]any{"url": s.VMURL, "up": s.VMUp != nil && s.VMUp()}
+	}
+	writeJSON(w, out)
 }
 
 // dialable reports whether a TCP address answers within a short timeout.

@@ -17,6 +17,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -628,6 +629,7 @@ func main() {
 			MCP: mcpReg, Prompts: prompts, Policies: policies, Sampling: sampling, Budgets: budgets, Retrieval: retrieval, Grammars: grammars, Models: models,
 			Skills: skillsPlane, SkillCatalog: skillSupply, ModelCatalog: modelCatalogSvc, Events: eventsSvc, Summaries: summariesSvc, Items: itemsSvc, RAG: ragLabSvc,
 			AssetsDir: *assetsDir, GatewayURL: *gwFlag, GatewayUp: func() bool { return gw != nil && gw.Up() }, IdentityEphemeral: !persistentID,
+			VMURL: *vmURL, VMUp: func() bool { return vmReachable(*vmURL) },
 			Eval:    evalSvc,
 			Bundles: bundleSvc,
 			Profile: profileSvc,
@@ -686,6 +688,27 @@ func agentIdentity(path string) (signer *provenance.Signer, verifier *provenance
 		persistent = false
 	}
 	return signer, provenance.NewVerifier().Trust(keyID, pub), persistent, nil
+}
+
+// vmReachable reports whether the MicroVM fetch bridge answers a TCP dial. Used only for
+// the Runtime health panel so the operator sees the sandbox is down before enriching; the
+// webapp never auto-starts the VM (it is an out-of-band `launchvm`). A non-http URL or an
+// unparseable host is reported down rather than erroring.
+func vmReachable(rawURL string) bool {
+	u, err := url.Parse(rawURL)
+	if err != nil || u.Host == "" {
+		return false
+	}
+	host := u.Host
+	if u.Port() == "" {
+		host = net.JoinHostPort(u.Hostname(), "5000")
+	}
+	c, derr := net.DialTimeout("tcp", host, 400*time.Millisecond)
+	if derr != nil {
+		return false
+	}
+	_ = c.Close()
+	return true
 }
 
 // loadOrCreateSeed reads a 32-byte ed25519 seed from path, or generates and persists one

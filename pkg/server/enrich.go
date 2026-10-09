@@ -41,7 +41,18 @@ func (s *Server) enrich(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{"ok": false, "url": req.URL, "refused": "enrichment not configured"})
 		return
 	}
-	text, _ := s.Fetch(r.Context(), req.URL)
+	// The fetch EXECUTES inside the MicroVM. If the VM is not running the fetch fails
+	// (or returns nothing) — do NOT index an empty body and report success (the silent
+	// out-of-box failure). Degrade with a clear, actionable message instead. (F2.)
+	text, ferr := s.Fetch(r.Context(), req.URL)
+	if ferr != nil || strings.TrimSpace(text) == "" {
+		msg := "sandbox fetcher unavailable — the MicroVM is not running. Start it with `launchvm` (or set MICROVM_URL to a reachable bridge)."
+		if ferr != nil {
+			msg = "sandbox fetch failed: " + ferr.Error()
+		}
+		writeJSON(w, map[string]any{"ok": false, "url": req.URL, "refused": msg})
+		return
+	}
 	if err := s.Index("web:"+req.URL, text); err != nil {
 		writeJSON(w, map[string]any{"ok": false, "url": req.URL, "refused": "index failed: " + err.Error()})
 		return

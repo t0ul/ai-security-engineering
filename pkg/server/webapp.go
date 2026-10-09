@@ -153,6 +153,12 @@ type Config struct {
 	AssetsDir  string
 	GatewayURL string
 	GatewayUp  func() bool
+	// VMURL / VMUp report the MicroVM sandbox fetcher used by enrich (handbook links).
+	// The Runtime panel shows it so an operator sees the VM is down BEFORE trying to
+	// enrich — the webapp auto-starts the models but NOT the VM (it is launched out of
+	// band with `launchvm`), so enrich degrades with a clear message when it is absent.
+	VMURL string
+	VMUp  func() bool
 	// IdentityEphemeral is true when the agent is running on a throwaway in-memory
 	// signing key (the persistent seed could not be loaded/persisted). Surfaced red in
 	// the Runtime panel: previously signed .ics will not verify and the key dies on
