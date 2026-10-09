@@ -508,3 +508,23 @@ func (h chatHistoryStore) SetChatRating(id int64, rating string) error {
 }
 
 func (h chatHistoryStore) ClearChatTurns() error { return h.inv.ClearChatTurns() }
+
+// itemStatusStore adapts *datastore.Store to server.ItemStatusStore, converting the
+// stored status overlay to the server boundary type (C2).
+type itemStatusStore struct{ inv *datastore.Store }
+
+func (s itemStatusStore) SetItemStatus(key, status, snoozeUntil string) error {
+	return s.inv.SetItemStatus(key, status, snoozeUntil)
+}
+
+func (s itemStatusStore) LoadItemStatuses() (map[string]server.ItemStatus, error) {
+	raw, err := s.inv.LoadItemStatuses()
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]server.ItemStatus, len(raw))
+	for k, v := range raw {
+		out[k] = server.ItemStatus{Status: v.Status, SnoozeUntil: v.SnoozeUntil}
+	}
+	return out, nil
+}

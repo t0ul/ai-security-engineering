@@ -209,6 +209,32 @@ type PersistedItem struct {
 	JSON  string
 }
 
+// ItemStatusStore is the mutable status overlay for projected items (done/dismiss/
+// snooze). Keyed by a content fingerprint stable across projection rebuilds, so a
+// completed task stays completed when the derived items are rebuilt. Nil = the Tasks tab
+// is read-only (no complete/dismiss/snooze).
+type ItemStatusStore interface {
+	SetItemStatus(key, status, snoozeUntil string) error
+	LoadItemStatuses() (map[string]ItemStatus, error)
+}
+
+// ItemStatus mirrors datastore.ItemStatus at the server boundary.
+type ItemStatus struct {
+	Status      string
+	SnoozeUntil string
+}
+
+// itemKey is the stable content fingerprint for an item's status overlay: the same
+// identity the dedup collapses on (normalized title | day | resolved kind), so it
+// survives a projection rebuild where File/Index would shift.
+func itemKey(e schema.Event) string {
+	day := dateKey(e)
+	if len(day) >= 10 {
+		day = day[:10]
+	}
+	return normTitle(e.Title) + "|" + day + "|" + e.ResolvedKind()
+}
+
 // allItems returns the deduped items, served in three tiers (memory → DB projection →
 // rebuild). The rebuild flattens the summary items, removes duplicates ONCE, and
 // persists the result, so the dupes are gone from the store, not just hidden at read.
@@ -268,8 +294,18 @@ func decodeItems(rows []PersistedItem) []itemRow {
 	return out
 }
 
+// statusItemRow is an item annotated with its stable key and mutable status, so the
+// Tasks tab can complete/dismiss/snooze it (C2).
+type statusItemRow struct {
+	itemRow
+	Key         string `json:"key"`
+	Status      string `json:"status,omitempty"`
+	SnoozeUntil string `json:"snooze_until,omitempty"`
+}
+
 func (s *Server) items(w http.ResponseWriter, r *http.Request) {
 	kind := r.URL.Query().Get("kind")
+	showAll := r.URL.Query().Get("all") == "1" // include done/dismissed/snoozed
 	all := s.allItems()
 	if kind != "" {
 		filtered := make([]itemRow, 0, len(all))
@@ -287,7 +323,61 @@ func (s *Server) items(w http.ResponseWriter, r *http.Request) {
 		}
 		return di < dj
 	})
-	writeJSON(w, map[string]any{"items": all})
+	var statuses map[string]ItemStatus
+	if s.ItemStatus != nil {
+		statuses, _ = s.ItemStatus.LoadItemStatuses()
+	}
+	today := time.Now().Format("2006-01-02")
+	out := make([]statusItemRow, 0, len(all))
+	for _, it := range all {
+		key := itemKey(it.Event)
+		st := statuses[key]
+		// Default list hides completed/dismissed work and items snoozed to a future
+		// date; ?all=1 shows everything with its status so the UI can offer un-done.
+		if !showAll {
+			if st.Status == "done" || st.Status == "dismissed" {
+				continue
+			}
+			if st.Status == "snoozed" && st.SnoozeUntil > today {
+				continue
+			}
+		}
+		out = append(out, statusItemRow{itemRow: it, Key: key, Status: st.Status, SnoozeUntil: st.SnoozeUntil})
+	}
+	writeJSON(w, map[string]any{"items": out})
+}
+
+// itemStatus sets an item's mutable status (done/dismissed/snoozed/active). Body:
+// {"key":"…","status":"done"} or {"key":"…","status":"snoozed","snooze_until":"2026-10-20"}.
+// A consumer action (the App token holds write/calendar), gated + CSRF-protected.
+func (s *Server) itemStatus(w http.ResponseWriter, r *http.Request) {
+	if s.ItemStatus == nil {
+		http.Error(w, "item status not configured", http.StatusNotImplemented)
+		return
+	}
+	var req struct {
+		Key         string `json:"key"`
+		Status      string `json:"status"`
+		SnoozeUntil string `json:"snooze_until"`
+	}
+	if json.NewDecoder(r.Body).Decode(&req) != nil || strings.TrimSpace(req.Key) == "" {
+		http.Error(w, "key and status required", http.StatusBadRequest)
+		return
+	}
+	switch req.Status {
+	case "active", "done", "dismissed", "snoozed":
+	default:
+		http.Error(w, "status must be active|done|dismissed|snoozed", http.StatusBadRequest)
+		return
+	}
+	if req.Status != "snoozed" {
+		req.SnoozeUntil = ""
+	}
+	if err := s.ItemStatus.SetItemStatus(req.Key, req.Status, req.SnoozeUntil); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, map[string]any{"ok": true, "key": req.Key, "status": req.Status})
 }
 
 // review returns the needs-review queue (low-confidence / warned items).

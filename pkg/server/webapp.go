@@ -146,6 +146,11 @@ type Config struct {
 	// stored rather than re-deduped per request. Nil = dedup at read, not persisted.
 	Items ItemStore
 
+	// ItemStatus, when set, is the mutable status overlay for projected items
+	// (done/dismiss/snooze), keyed by a rebuild-stable content fingerprint. Nil = the
+	// Tasks tab shows items but cannot durably complete or dismiss them.
+	ItemStatus ItemStatusStore
+
 	// RAG, when set, is the retrieval experimentation surface (RAG tab): tune the
 	// ingestion config (mode/chunker/size/overlap/embedder) and reindex. Nil = no tab.
 	RAG RAGLab
@@ -460,6 +465,7 @@ func (s *Server) Handler() http.Handler {
 	if s.OutboxDir != "" {
 		mux.HandleFunc("POST /api/accept", csrf(s.authz(controlplane.ActionWrite, "calendar", s.accept)))
 		mux.HandleFunc("POST /api/reject", csrf(s.authz(controlplane.ActionWrite, "calendar", s.reject)))
+		mux.HandleFunc("POST /api/items/status", csrf(s.authz(controlplane.ActionWrite, "calendar", s.itemStatus)))
 		mux.HandleFunc("POST /api/action", csrf(s.authz(controlplane.ActionExport, "link", s.action))) // egress
 	}
 	if s.Fetch != nil && s.Index != nil {

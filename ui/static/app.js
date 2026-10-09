@@ -464,11 +464,26 @@ async function accept(file,index,btn){
 }
 function itemRow(i){
   const div=document.createElement('div');div.className='ev';
-  const right=(i.due||i.start)?'<a class="go" href="/ics/'+encodeURIComponent((i.file||'').replace(/\.summary\.json$/,'')+'.items.ics')+'" download>Accept .ics</a>':'';
-  const btn='<button class="ghost" onclick="accept(\''+esc(i.file)+'\','+i.index+',this)">Add this</button> '+
+  let btn='<button class="ghost" onclick="accept(\''+esc(i.file)+'\','+i.index+',this)">Add this</button> '+
     '<button class="ghost" onclick="rejectItem(\''+esc(i.file)+'\','+i.index+',this)">Not real</button>';
-  div.innerHTML='<div><span class="kind">'+esc(i.kind||'item')+'</span> <b>'+esc(i.title)+'</b><br><span class="mut">'+esc((i.due||i.start)?when(i):'no date')+'</span></div><div>'+btn+'</div>';
+  // Durable status (C2): complete / dismiss / snooze, keyed by the item's stable
+  // fingerprint so it survives a projection rebuild.
+  if(i.key){const k=esc(i.key);btn+=' <button class="ghost" title="mark done" onclick="setItemStatus(\''+k+'\',\'done\')">✓ Done</button>'+
+    ' <button class="ghost" title="not for me" onclick="setItemStatus(\''+k+'\',\'dismissed\')">Dismiss</button>'+
+    ' <button class="ghost" title="remind me later" onclick="snoozeItem(\''+k+'\')">Snooze</button>';}
+  const badge=i.status&&i.status!=='active'?' <span class="kind warn">'+esc(i.status)+(i.snooze_until?' → '+esc(i.snooze_until):'')+'</span>':'';
+  div.innerHTML='<div><span class="kind">'+esc(i.kind||'item')+'</span>'+badge+' <b>'+esc(i.title)+'</b><br><span class="mut">'+esc((i.due||i.start)?when(i):'no date')+'</span></div><div>'+btn+'</div>';
   return div;
+}
+async function setItemStatus(key,status,snooze){
+  await postJSON('/api/items/status',{key:key,status:status,snooze_until:snooze||''});
+  loadTasks();
+}
+function snoozeItem(key){
+  const d=new Date();d.setDate(d.getDate()+7);
+  const def=d.toISOString().slice(0,10);
+  const until=prompt('Snooze until (YYYY-MM-DD):',def);
+  if(until)setItemStatus(key,'snoozed',until);
 }
 async function loadTasks(){
   const d=await getJSON('/api/items');const items=d.items||[];

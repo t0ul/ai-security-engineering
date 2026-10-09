@@ -63,6 +63,13 @@ CREATE TABLE IF NOT EXISTS summaries(file TEXT PRIMARY KEY, json TEXT, at DATETI
 -- accept can still resolve the original item.
 CREATE TABLE IF NOT EXISTS items(file TEXT, idx INTEGER, json TEXT);
 
+-- item_status is the MUTABLE status overlay for projected items (done/dismissed/
+-- snoozed). The items projection itself is derived and rebuilt from the sidecars, so
+-- status cannot live there; it is keyed by a CONTENT fingerprint of the item
+-- (normalized title | day | kind) that is stable across rebuilds. Current-state,
+-- replaced in place. snooze_until is an ISO date the item stays hidden until.
+CREATE TABLE IF NOT EXISTS item_status(key TEXT PRIMARY KEY, status TEXT, snooze_until TEXT, at DATETIME DEFAULT CURRENT_TIMESTAMP);
+
 -- chat_turns is the persistent conversation: one row per user/assistant turn, so the
 -- chat survives a reload, is multi-turn (prior turns are replayed to the model), and
 -- carries observability (which model answered, token usage) + a per-answer rating

@@ -474,6 +474,45 @@ func (s *Store) ClearChatTurns() error {
 	return err
 }
 
+// ItemStatus is the mutable status overlay for one projected item, keyed by a content
+// fingerprint stable across projection rebuilds.
+type ItemStatus struct {
+	Status      string // active | done | dismissed | snoozed
+	SnoozeUntil string // ISO date the item stays hidden until (snoozed only)
+}
+
+// SetItemStatus upserts an item's status. status=="active" clears any override (the item
+// returns to the default list), so toggling done→active is a delete, not a dead row.
+func (s *Store) SetItemStatus(key, status, snoozeUntil string) error {
+	if status == "active" || status == "" {
+		_, err := s.db.Exec(`DELETE FROM item_status WHERE key=?`, key)
+		return err
+	}
+	_, err := s.db.Exec(
+		`INSERT INTO item_status(key,status,snooze_until,at) VALUES(?,?,?,CURRENT_TIMESTAMP)
+		 ON CONFLICT(key) DO UPDATE SET status=excluded.status, snooze_until=excluded.snooze_until, at=CURRENT_TIMESTAMP`,
+		key, status, snoozeUntil)
+	return err
+}
+
+// LoadItemStatuses returns the current status overlay keyed by item fingerprint.
+func (s *Store) LoadItemStatuses() (map[string]ItemStatus, error) {
+	rows, err := s.db.Query(`SELECT key,status,snooze_until FROM item_status`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]ItemStatus{}
+	for rows.Next() {
+		var k, st, su string
+		if err := rows.Scan(&k, &st, &su); err != nil {
+			return nil, err
+		}
+		out[k] = ItemStatus{Status: st, SnoozeUntil: su}
+	}
+	return out, rows.Err()
+}
+
 // PersistedItem is one row of the deduped item projection: the item's source file +
 // index (so an accept can resolve it) and the item itself as JSON.
 type PersistedItem struct {
