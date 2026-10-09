@@ -128,3 +128,20 @@ func TestItemExtractorWritesICS(t *testing.T) {
 		t.Fatalf("source email not stamped: %+v", res.Events)
 	}
 }
+
+// TestClassifyStripsExplicitYearFromTitle locks the title fix: a dated line carrying an
+// explicit year (needed for multi-year calendars) must not leak the year into the event
+// title — "…, 2026 — First day of school" yields "First day of school", not "2026 — …".
+func TestClassifyStripsExplicitYearFromTitle(t *testing.T) {
+	email := "Thursday, September 10, 2026 - First day of school.\n"
+	e, ok := find(items.Classify(email, 2026), "first day of school")
+	if !ok {
+		t.Fatal("expected a 'first day of school' event")
+	}
+	if strings.Contains(e.Title, "2026") || strings.HasPrefix(e.Title, "-") {
+		t.Errorf("title must not leak the year or separator, got %q", e.Title)
+	}
+	if e.Start[:10] != "2026-09-10" {
+		t.Errorf("date must still be correct, got %q", e.Start)
+	}
+}

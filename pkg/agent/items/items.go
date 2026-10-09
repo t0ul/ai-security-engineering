@@ -36,6 +36,7 @@ var (
 	reBullet   = regexp.MustCompile(`^\s*[-*•●\x{25cf}\x{25cb}\x{2022}]+\s*`)
 	reSpace    = regexp.MustCompile(`\s+`)
 	reSentence = regexp.MustCompile(`[.!?]+\s+`)
+	reYear     = regexp.MustCompile(`^(?:19|20)\d\d$`) // a standalone 4-digit year token
 	// reOrgPrefix strips leading org/sender tags from a subject/header so the
 	// event name is left ("PS 51 PTA Multicultural Potluck" -> "Multicultural
 	// Potluck"; "Upcoming Evacuation Drills" -> "Evacuation Drills").
@@ -110,17 +111,22 @@ func significant(frag string) bool {
 }
 
 func trimEnds(c string) string {
-	strip := func(w string) bool { return trailWords[w] || weekdaySet[w] }
+	// Strip, from either end: a trailing connector/weekday word, a standalone 4-digit
+	// year (e.g. "2026") left behind when a date phrase carried an explicit year the
+	// month-day match didn't cover, and a bare separator token (-, –, — after punctuation
+	// trimming). So "…, 2026 — First day of school" yields "First day of school".
+	clean := func(w string) string { return strings.ToLower(strings.Trim(w, ",.-–—:")) }
+	strip := func(w string) bool { return w == "" || trailWords[w] || weekdaySet[w] || reYear.MatchString(w) }
 	words := strings.Fields(c)
 	for len(words) > 0 {
-		if strip(strings.ToLower(strings.Trim(words[len(words)-1], ",.-"))) {
+		if strip(clean(words[len(words)-1])) {
 			words = words[:len(words)-1]
 			continue
 		}
 		break
 	}
 	for len(words) > 0 {
-		if strip(strings.ToLower(strings.Trim(words[0], ",.-"))) {
+		if strip(clean(words[0])) {
 			words = words[1:]
 			continue
 		}
