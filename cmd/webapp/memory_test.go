@@ -1,0 +1,51 @@
+package main
+
+import (
+	"strings"
+	"testing"
+
+	"github.com/t0ul/ai-security-engineering/pkg/memory"
+)
+
+// TestMemoryCommands locks A3: the chat's durable memory is actually wired — a
+// "remember:" command stores a trusted fact, recall returns it, a restatement updates in
+// place, and "forget" erases the scope (DSAR). Real memory.Store, no model.
+func TestMemoryCommands(t *testing.T) {
+	c := &chatService{memory: memory.New()}
+
+	// remember: stores and confirms.
+	r, ok := c.memoryCommand("remember: pickup is 3pm on Fridays")
+	if !ok || !strings.Contains(r.Answer, "pickup is 3pm") {
+		t.Fatalf("remember should store + confirm, got ok=%v %q", ok, r.Answer)
+	}
+	if got := c.memory.Recall(memoryScope); len(got) != 1 || !strings.Contains(got[0].Value, "pickup is 3pm") {
+		t.Fatalf("fact not recalled, got %v", got)
+	}
+
+	// "remember that X" form also works and keys the same so a restatement updates.
+	if _, ok := c.memoryCommand("remember that pickup is 3pm on Fridays"); !ok {
+		t.Fatal("remember-that form should be handled")
+	}
+	if got := c.memory.Recall(memoryScope); len(got) != 1 {
+		t.Fatalf("restating the same fact must update in place, got %d entries", len(got))
+	}
+
+	// A normal question is NOT a memory command.
+	if _, ok := c.memoryCommand("what time is pickup?"); ok {
+		t.Error("a question must not be treated as a memory command")
+	}
+
+	// forget erases the scope (right-to-erasure).
+	r, ok = c.memoryCommand("forget")
+	if !ok || !strings.Contains(r.Answer, "Erased 1") {
+		t.Fatalf("forget should erase + report, got ok=%v %q", ok, r.Answer)
+	}
+	if got := c.memory.Recall(memoryScope); len(got) != 0 {
+		t.Fatalf("scope must be empty after forget, got %v", got)
+	}
+
+	// No memory store configured → not handled (chat falls through to the model).
+	if _, ok := (&chatService{}).memoryCommand("remember: x"); ok {
+		t.Error("nil memory store must not handle commands")
+	}
+}

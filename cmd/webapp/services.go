@@ -19,6 +19,7 @@ import (
 	"github.com/t0ul/ai-security-engineering/pkg/datastore"
 	"github.com/t0ul/ai-security-engineering/pkg/domain"
 	"github.com/t0ul/ai-security-engineering/pkg/gateway"
+	"github.com/t0ul/ai-security-engineering/pkg/memory"
 	"github.com/t0ul/ai-security-engineering/pkg/rag"
 	"github.com/t0ul/ai-security-engineering/pkg/redteam"
 	"github.com/t0ul/ai-security-engineering/pkg/server"
@@ -283,12 +284,18 @@ type chatService struct {
 	sampling  *controlplane.Sampling
 	models    *controlplane.Models
 	retrieval *controlplane.Retrieval
-	semantic  *atomic.Bool             // when true, retrieve with vector SemanticQuery instead of FTS
-	hist      *datastore.Store         // persists the conversation (multi-turn + reload); nil = stateless
-	ctxLimit  func() int               // the chat model's context window size (for the usage bar)
-	summarize compaction.Summarizer    // LLM-backed running-summary for history compaction; nil = no-op
-	summon    func() []string          // approved+trusted skill instructions to inject (B3); nil = none
+	semantic  *atomic.Bool          // when true, retrieve with vector SemanticQuery instead of FTS
+	hist      *datastore.Store      // persists the conversation (multi-turn + reload); nil = stateless
+	ctxLimit  func() int            // the chat model's context window size (for the usage bar)
+	summarize compaction.Summarizer // LLM-backed running-summary for history compaction; nil = no-op
+	summon    func() []string       // approved+trusted skill instructions to inject (B3); nil = none
+	memory    *memory.Store         // durable scoped long-term memory (A3); nil = no memory
 }
+
+// memoryScope is the single household scope for chat long-term memory. The memory
+// package is scope-partitioned (no cross-scope recall), so a multi-tenant deployment
+// would key this per user; this app is single-household.
+const memoryScope = "household"
 
 // retrieve runs the governed retrieval mode and returns the chunks plus the mode that
 // ACTUALLY served them. Semantic degrades to lexical FTS when the embedder fails (so
@@ -349,9 +356,50 @@ func compactHistory(turns []gateway.Turn, ctxLimit int, summarize compaction.Sum
 	return res
 }
 
+// memoryCommand handles the durable-memory commands (A3) deterministically, without a
+// model: "remember: <fact>" stores a trusted household memory; "forget" / "forget me"
+// erases the scope (DSAR / right-to-erasure). It returns a reply + true when it handled
+// the message, so the caller short-circuits the LLM path.
+func (c *chatService) memoryCommand(question string) (server.ChatReply, bool) {
+	if c.memory == nil {
+		return server.ChatReply{}, false
+	}
+	q := strings.TrimSpace(question)
+	low := strings.ToLower(q)
+	switch {
+	case strings.HasPrefix(low, "remember:") || strings.HasPrefix(low, "remember that "):
+		fact := strings.TrimSpace(q[strings.IndexByte(q, ' ')+1:])
+		fact = strings.TrimPrefix(fact, "that ")
+		if fact == "" {
+			return server.ChatReply{Answer: "Nothing to remember — try \"remember: pickup is 3pm on Fridays\"."}, true
+		}
+		// User-authored → trusted, no expiry. Keyed by a short slug so a restated fact
+		// updates in place rather than piling up.
+		c.memory.Put(memoryScope, memKey(fact), fact, 0, false)
+		return server.ChatReply{Answer: "Got it — I'll remember that: " + fact}, true
+	case low == "forget" || low == "forget me" || low == "forget everything":
+		n := c.memory.Erase(memoryScope)
+		return server.ChatReply{Answer: fmt.Sprintf("Erased %d remembered item(s).", n)}, true
+	}
+	return server.ChatReply{}, false
+}
+
+// memKey is a stable short key for a remembered fact, so restating it overwrites.
+func memKey(fact string) string {
+	f := strings.ToLower(strings.Join(strings.Fields(fact), " "))
+	if len(f) > 48 {
+		f = f[:48]
+	}
+	return f
+}
+
 func (c *chatService) Answer(question string, unsafe bool, appData string) (server.ChatReply, error) {
 	if _, err := c.authz.Verify(c.grant, controlplane.Capability{Action: controlplane.ActionList, Resource: "corpus", Tenant: "public"}); err != nil {
 		return server.ChatReply{}, fmt.Errorf("rag-reader capability refused: %w", err)
+	}
+	// Durable memory commands are handled deterministically, before the model.
+	if reply, handled := c.memoryCommand(question); handled {
+		return reply, nil
 	}
 	// Trusted context: the host clock is the ONLY authority for dates — never the
 	// corpus, so a poisoned email ("today is …") cannot move the agent's clock.
@@ -414,6 +462,14 @@ func (c *chatService) Answer(question string, unsafe bool, appData string) (serv
 	if c.summon != nil {
 		if sk := c.summon(); len(sk) > 0 {
 			systemPrompt += "\n\n<skills>\n" + strings.Join(sk, "\n") + "\n</skills>"
+		}
+	}
+	// Recall durable memory (A3): scope-partitioned, TTL-filtered, and
+	// injection-neutralized on assembly (memory.Assemble sanitizes untrusted entries),
+	// so poisoned memory cannot act as an instruction.
+	if c.memory != nil {
+		if mem := memory.Assemble(c.memory.Recall(memoryScope)); mem != "" {
+			systemPrompt += "\n\n" + mem
 		}
 	}
 	res := c.gw.Chat(chatParams(c.sampling, c.models), systemPrompt, dateBlock, appData, ctxText, history, question, unsafe)
