@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -574,6 +575,120 @@ func (h chatHistoryStore) SetChatRating(id int64, rating string) error {
 }
 
 func (h chatHistoryStore) ClearChatTurns() error { return h.inv.ClearChatTurns() }
+
+// frontierSet is the live set of frontier-bound subjects the residency policy consults
+// at issuance (C1). Guarded for concurrent reads (issuance) and writes (CRUD).
+type frontierSet struct {
+	mu   sync.RWMutex
+	subs map[string]bool
+}
+
+func newFrontierSet() *frontierSet { return &frontierSet{subs: map[string]bool{}} }
+
+func (f *frontierSet) has(subject string) bool {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	return f.subs[subject]
+}
+
+func (f *frontierSet) replace(subs map[string]bool) {
+	f.mu.Lock()
+	f.subs = subs
+	f.mu.Unlock()
+}
+
+// frontierRecord is the persisted shape (secret-by-pointer: KeyRef is an env-var name).
+type frontierRecord struct {
+	Subject  string `json:"subject"`
+	Endpoint string `json:"endpoint"`
+	KeyRef   string `json:"key_ref"`
+}
+
+const frontierConfigKey = "frontier_endpoints"
+
+// frontierStore is the concrete server.FrontierStore: persists bindings as JSON in the
+// config table and keeps the live frontierSet (for residency) in sync. It never stores or
+// returns a token value — only the KeyRef pointer and whether that env var resolves.
+type frontierStore struct {
+	inv *datastore.Store
+	set *frontierSet
+}
+
+func (f frontierStore) load() ([]frontierRecord, error) {
+	raw, ok, err := f.inv.GetConfig(frontierConfigKey)
+	if err != nil || !ok || raw == "" {
+		return nil, err
+	}
+	var recs []frontierRecord
+	if err := json.Unmarshal([]byte(raw), &recs); err != nil {
+		return nil, err
+	}
+	return recs, nil
+}
+
+func (f frontierStore) save(recs []frontierRecord) error {
+	b, err := json.Marshal(recs)
+	if err != nil {
+		return err
+	}
+	if err := f.inv.SetConfig(frontierConfigKey, string(b)); err != nil {
+		return err
+	}
+	f.refresh(recs)
+	return nil
+}
+
+// refresh rebuilds the live frontier-subject set from the records, so a CRUD change takes
+// effect on the next issuance without a restart.
+func (f frontierStore) refresh(recs []frontierRecord) {
+	subs := make(map[string]bool, len(recs))
+	for _, r := range recs {
+		subs[r.Subject] = true
+	}
+	f.set.replace(subs)
+}
+
+func (f frontierStore) ListFrontier() ([]server.FrontierEndpoint, error) {
+	recs, err := f.load()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]server.FrontierEndpoint, 0, len(recs))
+	for _, r := range recs {
+		out = append(out, server.FrontierEndpoint{
+			Subject: r.Subject, Endpoint: r.Endpoint, KeyRef: r.KeyRef,
+			KeySet: r.KeyRef != "" && os.Getenv(r.KeyRef) != "",
+		})
+	}
+	return out, nil
+}
+
+func (f frontierStore) UpsertFrontier(subject, endpoint, keyRef string) error {
+	recs, _ := f.load()
+	found := false
+	for i := range recs {
+		if recs[i].Subject == subject {
+			recs[i] = frontierRecord{Subject: subject, Endpoint: endpoint, KeyRef: keyRef}
+			found = true
+			break
+		}
+	}
+	if !found {
+		recs = append(recs, frontierRecord{Subject: subject, Endpoint: endpoint, KeyRef: keyRef})
+	}
+	return f.save(recs)
+}
+
+func (f frontierStore) DeleteFrontier(subject string) error {
+	recs, _ := f.load()
+	out := recs[:0]
+	for _, r := range recs {
+		if r.Subject != subject {
+			out = append(out, r)
+		}
+	}
+	return f.save(out)
+}
 
 // itemStatusStore adapts *datastore.Store to server.ItemStatusStore, converting the
 // stored status overlay to the server boundary type (C2).

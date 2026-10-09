@@ -21,7 +21,7 @@ document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
   if(t==='security'){loadKill();loadMCP();loadBundles();}
   if(t==='prompts') loadPrompts();
   if(t==='sampling') loadSampling();
-  if(t==='models'){loadModels();loadModelCatalog();}
+  if(t==='models'){loadModels();loadModelCatalog();loadFrontier();}
   if(t==='runtime') loadRuntime();
   if(t==='rag') loadRAG();
   if(t==='skills') loadSkills();
@@ -266,6 +266,28 @@ async function delModel(name){
   const r=await postJSON('/api/modelcatalog/delete',{name:name});
   if(r.ok){loadModelCatalog();loadModels();}
   else{alert(await r.text());}
+}
+async function loadFrontier(){
+  const c=$('#frontierList');if(!c)return;const d=await getJSON('/api/frontier');const fs=d.frontier||[];
+  if(!fs.length){c.innerHTML='<p class="mut">no frontier bindings — all subjects are on-host</p>';return;}
+  c.innerHTML=fs.map(f=>{
+    const key=f.key_ref?('key <code>'+esc(f.key_ref)+'</code> <span class="pill '+(f.key_set?'pass':'fail')+'">'+(f.key_set?'set':'unset')+'</span>'):'<span class="pill">no key</span>';
+    return '<div class="ev"><div><b>'+esc(f.subject)+'</b> <span class="pill warn">frontier-bound</span> '+key+
+      '<div class="mut" style="margin-top:2px;word-break:break-all">'+esc(f.endpoint)+'</div></div>'+
+      '<div><button class="ghost" onclick="delFrontier(\''+esc(f.subject)+'\')">Delete</button></div></div>';
+  }).join('');
+}
+async function saveFrontier(){
+  const body={subject:$('#fr_subject').value.trim(),endpoint:$('#fr_endpoint').value.trim(),key_ref:$('#fr_keyref').value.trim()};
+  if(!body.subject||!body.endpoint){$('#frMsg').textContent='subject and endpoint are required';return;}
+  const r=await postJSON('/api/frontier/upsert',body);
+  if(r.ok){$('#frMsg').textContent='saved ✓';['fr_subject','fr_endpoint','fr_keyref'].forEach(id=>$('#'+id).value='');loadFrontier();}
+  else{$('#frMsg').textContent='error: '+(await r.text());}
+}
+async function delFrontier(subject){
+  if(!confirm('Remove frontier binding for "'+subject+'"?'))return;
+  const r=await postJSON('/api/frontier/delete',{subject:subject});
+  if(r.ok)loadFrontier();else alert(await r.text());
 }
 function ragStatsText(s){return s?('corpus: '+s.docs+' docs → '+s.chunks+' chunks · mode '+esc(s.mode)):'';}
 async function loadRAG(){

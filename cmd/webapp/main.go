@@ -136,16 +136,20 @@ func main() {
 	// drops paused. Tools/agent get narrower grants as those paths are wired (C4d/e).
 	authz := controlplane.NewAuthority(signer, verifier)
 	authz.Halted = func() bool { return safety.Level() >= controlplane.LevelHalt }
-	// Data-residency policy (C4e): a subject bound to an off-host (frontier) model
-	// may not be granted list/export of confidential data. Today every subject is
-	// on-host (frontier set empty), so nothing is refused — but the rule is live
-	// and swap-ready: binding a subject to a frontier model (a governed C5 swap)
-	// refuses its next issuance. The corpus is NOT confidential here because
-	// goflage scrubs it on ingest (declassified); contacts/email bodies are.
-	authz.IssuePolicy = controlplane.ResidencyPolicy(
-		map[string]bool{}, // frontier-bound subjects (none yet)
-		map[string]bool{"contacts": true, "email-bodies": true},
-	)
+	// Data-residency policy (C4e): a subject bound to an off-host (frontier) model may
+	// not be granted list/export of confidential data. The frontier-bound set is LIVE
+	// (C1): binding a subject to a frontier endpoint in the Studio refuses its next
+	// issuance of confidential list/export, with no restart. The corpus is NOT
+	// confidential here because goflage scrubs it on ingest (declassified); contacts/
+	// email bodies are.
+	fset := newFrontierSet()
+	confidential := map[string]bool{"contacts": true, "email-bodies": true}
+	authz.IssuePolicy = func(c controlplane.Capability) error {
+		if fset.has(c.Subject) && confidential[c.Resource] && (c.Action == controlplane.ActionList || c.Action == controlplane.ActionExport) {
+			return fmt.Errorf("residency: %q is frontier-bound and may not %s confidential %q", c.Subject, c.Action, c.Resource)
+		}
+		return nil
+	}
 	var opToken string
 	if g, gerr := authz.Issue(controlplane.Capability{Subject: "operator", Action: controlplane.Scope, Resource: controlplane.Scope, Tenant: controlplane.Scope}, 30*24*time.Hour); gerr == nil {
 		opToken = server.EncodeToken(g)
@@ -470,6 +474,7 @@ func main() {
 	var summariesSvc server.SummaryStore
 	var itemsSvc server.ItemStore
 	var itemStatusSvc server.ItemStatusStore
+	var frontierSvc server.FrontierStore
 	var ragLabSvc server.RAGLab
 	if inv != nil {
 		for _, n := range []string{"planner", "coder", "extractor", "chat_system"} {
@@ -518,6 +523,13 @@ func main() {
 		summariesSvc = summaryProjection{inv: inv} // DB-backed tasks/digest/directory projection
 		itemsSvc = itemProjection{inv: inv}        // DB-backed DEDUPED item projection
 		itemStatusSvc = itemStatusStore{inv: inv}  // mutable done/dismiss/snooze overlay (C2)
+		// Frontier endpoint bindings (C1): persist to the DB and load the frontier-bound
+		// subjects into the LIVE residency set so the policy enforces them from boot.
+		fstore := frontierStore{inv: inv, set: fset}
+		if recs, lerr := fstore.load(); lerr == nil {
+			fstore.refresh(recs)
+		}
+		frontierSvc = fstore
 		// Kill switch must survive a restart: rehydrate the persisted level on boot and
 		// persist every change. An engaged halt that resets on restart is not a halt.
 		if v, ok, _ := inv.GetConfig("kill_level"); ok {
@@ -676,7 +688,7 @@ func main() {
 			Flywheel: flywheelSvc, Chat: chatSvc, ChatHistory: chatHistorySvc,
 			Authz: authz, OperatorToken: opToken, AppToken: appToken, Audit: audit, Detect: aidrDetect,
 			MCP: mcpReg, Prompts: prompts, Policies: policies, Sampling: sampling, Budgets: budgets, Retrieval: retrieval, Grammars: grammars, Models: models,
-			Skills: skillsPlane, SkillCatalog: skillSupply, ModelCatalog: modelCatalogSvc, Events: eventsSvc, Summaries: summariesSvc, Items: itemsSvc, ItemStatus: itemStatusSvc, RAG: ragLabSvc,
+			Skills: skillsPlane, SkillCatalog: skillSupply, ModelCatalog: modelCatalogSvc, Events: eventsSvc, Summaries: summariesSvc, Items: itemsSvc, ItemStatus: itemStatusSvc, Frontier: frontierSvc, RAG: ragLabSvc,
 			AssetsDir: *assetsDir, GatewayURL: *gwFlag, GatewayUp: func() bool { return gw != nil && gw.Up() }, IdentityEphemeral: !persistentID,
 			VMURL: *vmURL, VMUp: func() bool { return vmReachable(*vmURL) },
 			Eval:    evalSvc,

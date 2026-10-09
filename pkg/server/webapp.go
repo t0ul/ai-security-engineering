@@ -161,6 +161,11 @@ type Config struct {
 	// Tasks tab shows items but cannot durably complete or dismiss them.
 	ItemStatus ItemStatusStore
 
+	// Frontier, when set, is the frontier endpoint binding store (C1): point a subject
+	// at an off-host model with a secret-by-pointer KeyRef. Binding a subject here marks
+	// it frontier-bound for the residency policy. Nil = no Frontier card.
+	Frontier FrontierStore
+
 	// RAG, when set, is the retrieval experimentation surface (RAG tab): tune the
 	// ingestion config (mode/chunker/size/overlap/embedder) and reindex. Nil = no tab.
 	RAG RAGLab
@@ -439,6 +444,11 @@ func (s *Server) Handler() http.Handler {
 		mux.HandleFunc("POST /api/modelcatalog/upsert", csrf(s.authz(controlplane.ActionWrite, "model", s.modelCatalogUpsert)))
 		mux.HandleFunc("POST /api/modelcatalog/delete", csrf(s.authz(controlplane.ActionWrite, "model", s.modelCatalogDelete)))
 		mux.HandleFunc("POST /api/modelcatalog/download", csrf(s.authz(controlplane.ActionWrite, "model", s.modelCatalogDownload)))
+		if s.Frontier != nil {
+			mux.HandleFunc("/api/frontier", op(s.frontierList))
+			mux.HandleFunc("POST /api/frontier/upsert", csrf(s.authz(controlplane.ActionWrite, "model", s.frontierUpsert)))
+			mux.HandleFunc("POST /api/frontier/delete", csrf(s.authz(controlplane.ActionWrite, "model", s.frontierDelete)))
+		}
 		mux.HandleFunc("/api/runtime", op(s.runtimeStatus))
 	}
 	if s.RAG != nil {

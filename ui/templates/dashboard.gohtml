@@ -194,6 +194,18 @@
         <div style="margin-top:8px"><button class="go" onclick="saveModel()">Save model</button> <span id="mcMsg" class="mut"></span></div>
       </div>
     </div>
+    <div class="card">
+      <strong>Frontier endpoints</strong> <span class="mut">— point a subject (NHI role) at an off-host frontier model: endpoint + a secret-by-pointer <code>KeyRef</code> (the env-var NAME holding the token, never the token). Binding a subject marks it frontier-bound, so the residency policy refuses it confidential list/export (data must not leave the host).</span>
+      <div id="frontierList" style="margin-top:8px"><span class="mut">loading…</span></div>
+      <div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px">
+        <div class="mgrid">
+          <input id="fr_subject" placeholder="subject (e.g. summarizer)">
+          <input id="fr_keyref" placeholder="KeyRef env-var NAME (e.g. OPENAI_API_KEY)">
+          <input id="fr_endpoint" placeholder="endpoint URL" style="grid-column:1/3">
+        </div>
+        <div style="margin-top:8px"><button class="go" onclick="saveFrontier()">Save binding</button> <span id="frMsg" class="mut"></span></div>
+      </div>
+    </div>
   </section>
   <section id="runtime" class="hide">
     <div class="card">
