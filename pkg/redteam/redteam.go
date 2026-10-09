@@ -187,6 +187,7 @@ func Cases() []Case {
 		DuplicateSideEffect(), ResumeIntoTamperedState(),
 		SummarizationInjection(), JudgeManipulation(),
 		ChatRAGInjection(), SkillSupplyChain(),
+		UnauthzedKillSwitch(),
 	}
 }
 
@@ -211,6 +212,7 @@ var riskByName = map[string]string{
 	"mcp-rug-pull":              "ASI04",
 	"a2a-spoof":                 "ASI07",
 	"killswitch-bypass":         "ASI10",
+	"unauthz-killswitch":        "ASI10",
 	"rag-poisoning":             "LLM08",
 	"rag-tenant-leak":           "ASI06",
 	"memory-poisoning":          "LLM08",
