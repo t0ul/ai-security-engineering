@@ -581,12 +581,12 @@ func (s *Server) authz(action, resource string, h http.HandlerFunc) http.Handler
 		}
 		g, ok := bearerGrant(r)
 		if !ok {
-			s.denyAudit(action, resource, "missing capability")
+			s.capabilityRefused(action, resource, "missing capability")
 			http.Error(w, "missing capability", http.StatusUnauthorized)
 			return
 		}
 		if _, err := s.Authz.Verify(g, controlplane.Capability{Action: action, Resource: resource, Tenant: "public"}); err != nil {
-			s.denyAudit(action, resource, err.Error())
+			s.capabilityRefused(action, resource, err.Error())
 			http.Error(w, "capability refused: "+err.Error(), http.StatusForbidden)
 			return
 		}
@@ -618,12 +618,12 @@ func (s *Server) authzGlass(action, resource string, h http.HandlerFunc) http.Ha
 		}
 		g, ok := bearerGrant(r)
 		if !ok {
-			s.denyAudit(action, resource, "missing capability")
+			s.capabilityRefused(action, resource, "missing capability")
 			http.Error(w, "missing capability", http.StatusUnauthorized)
 			return
 		}
 		if _, err := s.Authz.VerifyGlass(g, controlplane.Capability{Action: action, Resource: resource, Tenant: "public"}); err != nil {
-			s.denyAudit(action, resource, err.Error())
+			s.capabilityRefused(action, resource, err.Error())
 			http.Error(w, "capability refused: "+err.Error(), http.StatusForbidden)
 			return
 		}
@@ -636,13 +636,22 @@ func (s *Server) authzGlass(action, resource string, h http.HandlerFunc) http.Ha
 // most a handful of times legitimately; a burst is an attack signal.
 const denyStormThreshold = 10
 
+// denyAudit records a refused/throttled request to the admin trail. It does NOT feed the
+// AIDR deny-storm detector — only genuine capability refusals do (capabilityRefused), so
+// normal rate/concurrency backpressure (429) can never auto-escalate the kill switch.
 func (s *Server) denyAudit(action, resource, reason string) {
 	if s.Audit != nil {
 		s.Audit.Emit(gledger.NewTraceID(), "authz", "deny", gledger.F{"action": action, "resource": resource, "reason": reason})
 	}
-	// AIDR (A7): a BURST of denials is a capability-probing signal. On crossing the
-	// threshold in a one-minute window, raise a capability_violation once so the aidr
-	// engine can auto-contain (escalate the kill switch) — detection → response.
+}
+
+// capabilityRefused records a CAPABILITY refusal (missing / scope-refused grant) — a
+// probing signal, distinct from budget throttling — and feeds the AIDR deny-storm
+// detector (A7). On crossing the threshold in a one-minute window it raises a
+// capability_violation once so the aidr engine can auto-contain. Rate/concurrency 429s
+// call denyAudit instead, so legitimate backpressure never trips containment.
+func (s *Server) capabilityRefused(action, resource, reason string) {
+	s.denyAudit(action, resource, reason)
 	if s.Detect == nil {
 		return
 	}
