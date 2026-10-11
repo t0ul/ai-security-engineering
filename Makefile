@@ -1,7 +1,7 @@
 # Book tooling. Every lesson lives in posts/<id>-<slug>/ as its own Go module.
 #
 #   make status                  what exists, what has code, what has a receipt
-#   make new POST=03.1-gledger   scaffold a lesson from _TEMPLATE + its manifest row
+#   make new POST=03.1-gledger   scaffold a lesson (prose-only or control, per its manifest spec)
 #   make check [POST=...]        the gate: prose lint + vet + every contract test (all, or one)
 #   make board                   the whole book's attack board: every lesson re-attacked, red/green
 #   make capture POST=...        run the lesson and save its real output to receipt.txt
