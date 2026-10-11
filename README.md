@@ -23,9 +23,11 @@ See `posts/README.md` for the folder contract, and start with
 
 ## The product
 
-The finished tool this book builds toward is being split into its own repo,
-`t0ul/emaildrop`. This repo stays the teaching companion: small, self-contained
-lessons rather than the integrated app.
+The finished tool this book builds toward lives in its own repo,
+[t0ul/emaildrop](https://github.com/t0ul/emaildrop). This repo is the teaching
+companion: small, self-contained lessons rather than the integrated app. To run
+the full agent, clone emaildrop; to follow the lessons, work through `posts/`
+here. The anonymized sample emails the lessons use stay in `testdata/`.
 
 ## Ground rules
 
