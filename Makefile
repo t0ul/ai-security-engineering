@@ -2,15 +2,21 @@
 #
 #   make status                  what exists, what has code, what has a receipt
 #   make new POST=03.1-gledger   scaffold a lesson from _TEMPLATE + its manifest row
-#   make check [POST=...]        prose lint + vet + contract tests (all, or one)
+#   make check [POST=...]        the gate: prose lint + vet + every contract test (all, or one)
+#   make board                   the whole book's attack board: every lesson re-attacked, red/green
 #   make capture POST=...        run the lesson and save its real output to receipt.txt
 #   make lint                    prose lint only
+#   make hooks                   install the pre-push hook so `make check` runs before every push
 #   make pr POST=...             branch, check, commit only that folder, push, open PR
+#
+# The gate tests reality. Lessons that involve the model talk to the local model
+# server (planner on 127.0.0.1:11435, see post 00.2); a contract test must fail
+# loudly if the model is down, never skip. Nothing in the gate is stubbed.
 
 SHELL := /bin/bash
 MODS  := $(shell ls posts/[0-9]*/go.mod 2>/dev/null | xargs -n1 dirname)
 
-.PHONY: status new check capture lint pr
+.PHONY: status new check board capture lint hooks pr
 
 status:
 	@scripts/status.sh
@@ -22,8 +28,11 @@ new:
 check: lint
 	@set -e; for d in $(if $(POST),posts/$(POST),$(MODS)); do \
 	  test -f "$$d/go.mod" || continue; \
-	  echo "== $$d"; (cd "$$d" && go vet ./... && go test ./...); \
+	  echo "== $$d"; (cd "$$d" && go vet ./... && go test -count=1 ./...); \
 	done
+
+board:
+	@scripts/board.sh
 
 capture:
 	@test -n "$(POST)" || { echo "usage: make capture POST=<id>-<slug>"; exit 2; }
@@ -31,6 +40,9 @@ capture:
 
 lint:
 	@scripts/lint-prose.sh
+
+hooks:
+	@git config core.hooksPath .githooks && echo "pre-push hook installed: make check runs before every push"
 
 pr:
 	@test -n "$(POST)" || { echo "usage: make pr POST=<id>-<slug>"; exit 2; }
