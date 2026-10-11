@@ -39,6 +39,22 @@ backstop.) The gate tests reality: lessons that involve the model run against th
 local model server from post 00.2, and a contract test that cannot reach it fails
 rather than skips.
 
+### Two kinds of lesson
+
+`make new` reads the manifest spec and scaffolds the right shape:
+
+- **Prose-only** (spec says "prose only" or "no attack"): front-matter and
+  foundation posts with nothing to attack. The folder is just `index.md` (plus
+  `SPEC.md`), no code module; `make board` shows it as `prose`.
+- **Control**: a runnable before/after (full `_TEMPLATE`); `make board` runs its
+  tests and shows `green` or `RED`.
+
+The front-matter posts 00.1 (the-plan), 00.2 (setting-up-the-lab), 00.3
+(attack-driven-design-shown-once) already exist as drafts on the t0ul.com site;
+bringing them into `posts/` is a migration of that prose, not a rewrite, and
+their "run the agent" steps should point at `t0ul/emaildrop` (the product moved
+there).
+
 ## The before/after contract
 
 Every control post's folder must do two things when you run it:
