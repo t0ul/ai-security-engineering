@@ -1,21 +1,37 @@
 # posts/
 
 One folder per post in the AI Security Engineering series. Each folder is a
-self-contained lesson you can read and run on its own.
+self-contained lesson you can read and run on its own. `MANIFEST.md` is the book's
+order and each lesson's one-line brief.
 
 ## Folder layout
 
 ```
 posts/<id>-<slug>/
-  index.md      the post prose (the source of truth for the writing)
-  go.mod        its own tiny module; dependencies are only the library this post needs
-  main.go       a runnable demo: the undefended path, then the defended path
-  attack/       the attack input(s) or seeds this post runs
-  README.md     one line on what to run and what you should see
+  index.md           the post prose (the source of truth for the writing)
+  SPEC.md            the brief this lesson was built to (copied from MANIFEST.md)
+  go.mod             its own tiny module; dependencies are only the library this post needs
+  main.go            a runnable demo: the undefended path, then the defended path
+  contract_test.go   the same two paths as tests, so CI agrees with the post
+  attack/            the attack input(s) or seeds this post runs
+  receipt.txt        the real output of `go run .`, which the prose quotes
+  README.md          one line on what to run and what you should see
 ```
 
-Copy `_TEMPLATE/` to start a new one. (`_TEMPLATE/` begins with an underscore, so
-the Go tool ignores it.)
+Ids are zero-padded chapter.post (`03.1`, `10.2`) so folders sort in book order.
+`_TEMPLATE/` starts with an underscore, so the Go tool ignores it.
+
+## Working on a lesson
+
+```bash
+make status                       # what exists, what has code, what has a receipt
+make new POST=03.1-a-log-you-can-trust   # scaffold from _TEMPLATE + its manifest row
+make check POST=03.1-a-log-you-can-trust # prose lint + vet + contract tests
+make capture POST=03.1-a-log-you-can-trust  # run it, save the real output to receipt.txt
+make pr POST=03.1-a-log-you-can-trust    # branch, check, commit only that folder, open the PR
+```
+
+One folder per pull request. CI runs `make check` on every pull request.
 
 ## The before/after contract
 
@@ -27,22 +43,24 @@ Every control post's folder must do two things when you run it:
 2. Run the same attack against the fixed code. It is blocked, and the demo prints
    the refusal (the 400, the dropped item, `chain_ok=false` caught).
 
-The post pastes that real output as its receipt. The undefended path is genuinely
-undefended; it omits the control, rather than faking the result with a stub.
+`contract_test.go` asserts both. The post pastes the real output from
+`receipt.txt` as its receipt. The undefended path is genuinely undefended; it omits
+the control, rather than faking the result with a stub.
 
 ## Rules
 
 - Self-contained: `cd posts/<id>-<slug> && go run .` works with nothing else set up
-  (beyond the lab from post 0.2 when a model is involved).
+  (beyond the lab from post 00.2 when a model is involved).
 - Imports the real library (for example `github.com/t0ul/gledger`), never a copy, so
   a library change breaks the build and CI catches the drift.
 - Minimal: only the code this one lesson needs, not a full working app at every
   step.
 - Introduce each library plainly in the prose: what it is, why it is here, and the
   security problem it solves, woven into sentences.
+- Prose style is checked by `make lint` (no em dashes, no scaffolding labels, no
+  banned phrases, front matter present). Match the voice of the existing posts.
 
 ## Publishing
 
 `index.md` is the source of truth. It is published to t0ul.com
-`content/blog/<slug>/` when the post is approved. Front-matter and voice rules live
-in the project's `docs/VOICE-GUIDE.md`.
+`content/blog/<slug>/` when the post is approved.
