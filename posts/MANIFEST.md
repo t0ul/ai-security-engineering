@@ -8,7 +8,7 @@ folders sort in book order. Keep specs on one line and never use `|` inside one.
 | id | slug | part | title | spec |
 |----|------|------|-------|------|
 | 00.0 | introduction | P0 front matter | Start here: how to use this handbook | prose only -> no attack -> intro + repo orientation |
-| 00.1 | the-plan | P0 front matter | The plan: a local email-to-calendar agent, built to be attacked | prose only -> the product, why security, the loop, full roadmap |
+| 00.1 | the-plan | P0 front matter | The plan: a local email-to-calendar agent, built to be attacked | prose only -> the product, why security, the loop, full roadmap -> the position: continuous red-teaming as a gate inside the SSDLC, live model included, so most security work is done before the app ships; ADD is the method, the libraries are the parts |
 | 00.2 | setting-up-the-lab | P0 front matter | Set up your lab: from a bare Mac to a running agent | prose only -> brew go + llama.cpp, clone emaildrop, build, regex run, eval f1=1.00, modeld |
 | 00.3 | attack-driven-design-shown-once | P0 front matter | Attack-Driven Design, shown once | one loop turn -> model invents Dec 25 gala not in email -> ensemble.Reconcile drops off-text dates -> receipt: hallucination 100% to 0% |
 | 01.1 | one-shape-for-everything | P1 ch1 parser | One shape for everything | schema.Event typed contract -> no attack (foundation) -> show the one struct every stage agrees on |
@@ -16,7 +16,7 @@ folders sort in book order. Keep specs on one line and never use `|` inside one.
 | 01.3 | inert-output-and-the-human-accept | P1 ch1 parser | Inert output and the human accept | ics writes a file -> auto-add would push a bad extraction onto a real calendar -> inert .ics + accept gate |
 | 01.4 | the-watched-folder | P1 ch1 parser | The watched folder | watcher -> oversized file + half-written read -> size cap + settle delay + per-cycle cap |
 | 02.1 | the-eval-harness | P1 ch2 prove it | The eval harness: F1 as a receipt | eval over labeled samples -> no attack -> f1=1.00 on clean mail is the baseline receipt |
-| 02.2 | attacking-the-baseline | P1 ch2 prove it | Attacking the baseline, all red | whole undefended agent -> run every attack -> injection, leak, PII, exfil all land at 100% -> this red board is the TOC |
+| 02.2 | attacking-the-baseline | P1 ch2 prove it | Attacking the baseline, all red | whole undefended agent -> run every attack, live model included -> injection, leak, PII, exfil all land at 100% -> paste make board, all red -> this red board is the TOC |
 | 03.1 | a-log-you-can-trust | P2 ch3 observability | A log you can trust | gledger -> forge a plain log + the 0-events blindness -> hash chain + redact + defang -> chain_ok=false, trace explains |
 | 03.2 | a-gateway-you-cannot-route-around | P2 ch3 observability | A gateway you cannot route around | gouncer -> SSRF to any host + flood -> model allowlist + body, rate, concurrency caps -> 400 and 429 |
 | 03.3 | one-trace-id | P2 ch3 observability | One trace id, and the command stream | correlation id across stages -> no attack -> the operator window for free |
@@ -29,7 +29,7 @@ folders sort in book order. Keep specs on one line and never use `|` inside one.
 | 05.4 | a-search-tool-hits-a-local-server | P3 ch5 secrets and output | A web-search tool that hits a local server | SSRF teaser -> tool reaches 127.0.0.1 -> host policy -> sets up Part 4 |
 | 06.1 | least-privilege | P3 ch6 agency | Least privilege | per-tool capability scoping -> read-only tool tries to write and reach the net -> physically cannot |
 | 06.2 | the-human-gate | P3 ch6 agency | The human gate | HITL deny by default -> approval-forgery: persuasive text drives a one-click Accept -> gate holds |
-| 06.3 | circuit-breakers | P3 ch6 agency | Circuit breakers and runaway loops | gonductor cap -> sponge-dos runaway loop -> breaker trips -> LLM10 0% |
+| 06.3 | circuit-breakers | P3 ch6 agency | Circuit breakers and runaway loops | gonductor cap -> sponge-dos runaway loop -> breaker trips -> LLM10 0% -> Part closer: paste make board |
 | 07.1 | the-problem-with-running-code | P4 ch7 isolation | The problem | naive agent runs a model-suggested shell command -> owns the Mac -> motivates the chamber |
 | 07.2 | the-detonation-chamber | P4 ch7 isolation | The detonation chamber | Apple VM, vsock only, no NIC -> code runs with no path to host -> live VM smoke |
 | 07.3 | egress-deny-and-the-broker | P4 ch7 isolation | Egress-deny and the one way out | egress denied by default -> allowlist broker is the one audited exit |
@@ -38,17 +38,17 @@ folders sort in book order. Keep specs on one line and never use `|` inside one.
 | 08.2 | agent-to-agent-hand-off | P4 ch8 dual-LLM | Agent-to-agent hand-off | authenticate planner to executor -> a2a-spoof -> 0% |
 | 09.1 | pin-the-tools | P4 ch9 protocol and supply chain | A pinned tool catalog (MCP) | gustoms -> mcp-rug-pull swaps the catalog -> pin -> 0% |
 | 09.2 | model-artifacts | P4 ch9 protocol and supply chain | Model artifacts | malicious .pkl vs verified .gguf -> magic + hash check -> pickle 0% |
-| 09.3 | defeating-the-lethal-trifecta | P4 ch9 protocol and supply chain | Defeating the lethal trifecta | netpolicy + captoken + argcheck together -> ssrf-imds -> 0% |
+| 09.3 | defeating-the-lethal-trifecta | P4 ch9 protocol and supply chain | Defeating the lethal trifecta | netpolicy + captoken + argcheck together -> ssrf-imds -> 0% -> Part closer: paste make board |
 | 10.1 | answering-whats-on-this-month | P5 ch10 RAG and memory | Answering what is on this month | build retrieval (GoRag) -> no attack -> the thing Part 5 then attacks |
 | 10.2 | index-poisoning | P5 ch10 RAG and memory | Index poisoning | rag-poisoning planted doc steers answers -> XML-encapsulated chunks -> 0% |
 | 10.3 | cross-tenant-leak | P5 ch10 RAG and memory | Cross-tenant leak | rag-tenant-leak -> authz-first retrieval, ACL in the query -> 0% |
 | 10.4 | memory-poisoning | P5 ch10 RAG and memory | Memory poisoning and lifecycle | memory-poisoning -> TTL, scope, sanitized recall -> 0% |
 | 11.1 | conflicts-and-mangled-data | P5 ch11 integrity | Conflicts and mangled data | Tue vs Thu, borrowed time, negation inversion, dup collapse -> deterministic checks -> caught |
-| 11.2 | hallucinated-dates | P5 ch11 integrity | Hallucinated dates | ensemble.Reconcile drops off-text dates -> hallucination-reconcile -> 0% (full treatment of 00.3) |
-| 12.1 | the-one-command-scorecard | P6 ch12 flywheel | The one-command scorecard, all green | run the whole board -> every row 100% to 0% -> reproducible in one command |
+| 11.2 | hallucinated-dates | P5 ch11 integrity | Hallucinated dates | ensemble.Reconcile drops off-text dates -> hallucination-reconcile -> 0% (full treatment of 00.3) -> Part closer: paste make board |
+| 12.1 | the-one-command-scorecard | P6 ch12 flywheel | The one-command scorecard, all green | run the product's full gate: deterministic scorecard + live suite + tests -> every row 100% to 0% -> paste make board, all green -> reproducible in one command, and it runs before every push |
 | 12.2 | from-pattern-to-library | P6 ch12 flywheel | From pattern to library | extract the loop into the ADD go-test library -> no attack -> the method as code |
 | 12.3 | eval-methodology | P6 ch12 flywheel | Honest eval methodology | pass@k and model-as-judge -> judge-manipulation -> hardened judge |
-| 12.4 | live-red-team | P6 ch12 flywheel | A live red-team against the real model | -tags live -> same attacks against the model itself -> live receipt |
+| 12.4 | live-red-team | P6 ch12 flywheel | A live red-team against the real model | the live suite is in the gate from day one (local model, seconds to start, never skipped) -> why a suite that stubs the model is not a test suite -> the same attacks against the model itself -> live receipt |
 | 13.1 | full-chain-attack-contained | P6 ch13 capstone | A full-chain attack, contained | one poisoned email tries everything -> replay by trace id -> every layer holds |
 | 13.2 | tasks-and-reminders | P6 ch13 capstone | Tasks and reminders | feature -> its attack -> its fix (one unit) |
 | 13.3 | my-week | P6 ch13 capstone | My week at a glance | feature -> its attack -> its fix (one unit) |

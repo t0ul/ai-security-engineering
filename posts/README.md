@@ -26,12 +26,18 @@ Ids are zero-padded chapter.post (`03.1`, `10.2`) so folders sort in book order.
 ```bash
 make status                       # what exists, what has code, what has a receipt
 make new POST=03.1-a-log-you-can-trust   # scaffold from _TEMPLATE + its manifest row
-make check POST=03.1-a-log-you-can-trust # prose lint + vet + contract tests
+make check POST=03.1-a-log-you-can-trust # the gate: prose lint + vet + contract tests
 make capture POST=03.1-a-log-you-can-trust  # run it, save the real output to receipt.txt
+make board                        # re-attack every lesson so far; one row each, green or RED
 make pr POST=03.1-a-log-you-can-trust    # branch, check, commit only that folder, open the PR
 ```
 
-One folder per pull request. CI runs `make check` on every pull request.
+One folder per pull request. `make hooks` installs a pre-push hook that runs
+`make check`, so a regression cannot leave your machine; that local gate is the
+point of the book. (GitHub Actions runs the same check on pull requests as a
+backstop.) The gate tests reality: lessons that involve the model run against the
+local model server from post 00.2, and a contract test that cannot reach it fails
+rather than skips.
 
 ## The before/after contract
 
