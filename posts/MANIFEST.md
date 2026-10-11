@@ -49,6 +49,7 @@ folders sort in book order. Keep specs on one line and never use `|` inside one.
 | 12.2 | from-pattern-to-library | P6 ch12 flywheel | From pattern to library | extract the loop into the ADD go-test library -> no attack -> the method as code |
 | 12.3 | eval-methodology | P6 ch12 flywheel | Honest eval methodology | pass@k and model-as-judge -> judge-manipulation -> hardened judge |
 | 12.4 | live-red-team | P6 ch12 flywheel | A live red-team against the real model | the live suite is in the gate from day one (local model, seconds to start, never skipped) -> why a suite that stubs the model is not a test suite -> the same attacks against the model itself -> live receipt |
+| 12.5 | add-on-an-app-that-is-not-this-one | P6 ch12 flywheel | ADD on an app that is not this one | a fresh toy LLM app -> gorauder catalog + one Technique + add init -> make check green with live under a minute -> the transfer proof: this is how you build any AI app |
 | 13.1 | full-chain-attack-contained | P6 ch13 capstone | A full-chain attack, contained | one poisoned email tries everything -> replay by trace id -> every layer holds |
 | 13.2 | tasks-and-reminders | P6 ch13 capstone | Tasks and reminders | feature -> its attack -> its fix (one unit) |
 | 13.3 | my-week | P6 ch13 capstone | My week at a glance | feature -> its attack -> its fix (one unit) |
@@ -67,3 +68,4 @@ folders sort in book order. Keep specs on one line and never use `|` inside one.
 | 15.3 | context-compaction | P7 ch15 reliability | Context compaction and summarization injection | summarization-injection -> trusted-summary rules -> 0% |
 | 15.4 | agent-memory-architecture | P7 ch15 reliability | Agent memory architecture | registry and blackboard -> memory lifecycle -> scoped recall |
 | 16.1 | make-it-idiomatic | P7 ch16 idiomatic | Make it idiomatic: the repo refactor | the refactor -> no attack -> the product as Go you are not embarrassed by |
+| 16.2 | the-app-layer-red-team | P7 ch16 idiomatic | The app-layer red team: GORED | model as weapon against the app -> planted flags captured by an OSS-model agent -> fixed, flags no longer captured -> live by nature, its own lesson, not a CI gate |
