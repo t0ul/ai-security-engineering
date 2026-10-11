@@ -1,0 +1,23 @@
+== before: no defense ==
+attack/back-to-school-night.txt
+  email says:  Thursday, September 29th from 5:30PM-8PM
+  calendared:  DTSTART:20260929T173000  (2026-09-29 is a Tuesday; warnings: 0)
+attack/february-30.txt
+  email says:  February 30th at 9:00AM
+  calendared:  DTSTART:20260302T090000  (2026-03-02 is a Monday; warnings: 0)
+attack landed (this is the problem the post fixes)
+
+== after: with the control ==
+attack/back-to-school-night.txt
+  email says:  Thursday, September 29th from 5:30PM-8PM
+  parsed:      2026-09-29T17:30:00
+  warnings:    weekday_mismatch: stated Thursday, but 2026-09-29 is Tuesday
+  held for review, not calendared
+attack/february-30.txt
+  email says:  February 30th at 9:00AM
+  rejected: no such date, nothing to calendar
+attack blocked (the receipt)
+
+== still works: a clean date ==
+  email says:  Tuesday, September 29th 5:30PM - 8:00PM
+  calendared:  DTSTART:20260929T173000  (2026-09-29 is a Tuesday)
