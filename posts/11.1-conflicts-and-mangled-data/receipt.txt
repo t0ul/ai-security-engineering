@@ -1,0 +1,15 @@
+== before: the extraction is trusted as-is ==
+  weekday:   'Thursday, September 29th' accepted as Thursday (it is a Tuesday)
+  time:      'PTA Meeting following drop-off' accepted at 22:27 (no time in the text)
+  negation:  'We do not accept late permission forms' cleaned to "accept late permission forms" (meaning inverted)
+  duplicate: 'Picture Day' kept on both Sep 24 and Oct 2
+  integrity problems caught: 0/4
+
+== after: deterministic integrity checks ==
+  weekday  caught=true: weekday_mismatch: stated Thursday, but 2026-09-29 is Tuesday
+  time     caught=true: 22:27 is not supported by the event text (borrowed); 25:99 rejected as impossible (parsed times: [])
+  negation caught=true: the title normalizer keeps the negation -> "do not accept late permission forms"
+  duplicate caught=true: conflict: "picture day" announced on 2026-09-24, 2026-10-02
+  integrity problems caught: 4/4
+
+attack blocked (the receipt): a naive pipeline passes every mangled record through; the deterministic checks catch the wrong weekday, the borrowed time, the inverted negation, and the self-conflicting date
