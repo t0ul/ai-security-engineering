@@ -1,0 +1,5 @@
+== the same poisoned corpus, two ways to answer the chat ==
+  raw retrieved notes concatenated in:          100%
+  encapsulated untrusted <retrieved_context>:   0%
+
+attack blocked (the receipt): a poisoned note hijacks the chat reply until each retrieved chunk is bounded, untrusted, neutralized context the assistant reads but never obeys
