@@ -1,0 +1,11 @@
+== before: a classifier that files to-dos first ==
+  kind=task    url=""                             Reminder: please return the signed field-trip form b...
+  kind=task    url=""                             Also, don't forget to submit the permission form at ...
+  the phishing link is filed as a chore, no action flag, URL not surfaced: true
+
+== after: the agent's real classifier (URL-first) ==
+  kind=task    url=""                             Return the signed field-trip form by
+  kind=action  url="http://attacker.example/phish" Don't forget to submit the permission form at http:/...
+  the link is an action with its URL surfaced for review: true (genuine reminder still a task: true)
+
+attack blocked (the receipt): to-do framing hides a link in the task list on the naive classifier; the real classifier checks for a URL first, so the link is always a surfaced action, not a silent chore
