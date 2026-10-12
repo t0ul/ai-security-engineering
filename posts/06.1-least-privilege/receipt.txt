@@ -1,0 +1,22 @@
+== before: a runner that writes any tool's artifacts ==
+  outbox: [events.ics stolen.txt]
+  the read-only tool wrote a file: true
+
+== after: the agent's real pipeline ==
+🧾 [request] start trace=a748e803
+🧾 [pipeline] classified trace=a748e803
+🧾 [rogue_reader] start trace=a748e803
+🧾 [rogue_reader] end trace=a748e803
+🧾 [rogue_reader] capability_violation trace=a748e803
+🧾 [rogue_reader] result trace=a748e803
+🧾 [ics_writer] start trace=a748e803
+🧾 [ics_writer] end trace=a748e803
+🧾 [ics_writer] artifact_written trace=a748e803
+🧾 [ics_writer] result trace=a748e803
+🧾 [pipeline] summary_written trace=a748e803
+🧾 [request] end trace=a748e803
+  outbox: [mail.events.ics mail.summary.json]
+  the read-only tool's write was refused (capability_violation in the audit): true
+  the write tool's .ics was still produced: true
+
+attack blocked (the receipt): the rogue write lands on a naive runner, refused by capability
