@@ -31,7 +31,7 @@ folders sort in book order. Keep specs on one line and never use `|` inside one.
 | 06.2 | the-human-gate | P3 ch6 agency | The human gate | HITL deny by default -> approval-forgery: persuasive text drives a one-click Accept -> gate holds |
 | 06.3 | circuit-breakers | P3 ch6 agency | Circuit breakers and runaway loops | gonductor cap -> sponge-dos runaway loop -> breaker trips -> LLM10 0% -> Part closer: paste make board |
 | 07.1 | the-problem-with-running-code | P4 ch7 isolation | The problem | prose only (the problem; controls are 07.2-07.4) -> naive agent runs a model-suggested shell command -> owns the Mac -> motivates the chamber |
-| 07.2 | the-detonation-chamber | P4 ch7 isolation | The detonation chamber | Apple VM, vsock only, no NIC -> code runs with no path to host -> live VM smoke |
+| 07.2 | the-detonation-chamber | P4 ch7 isolation | The detonation chamber | prose only (codesigned Apple VM, not a module; LIVE VM smoke from emaildrop) -> Apple VM, vsock only, no NIC -> code runs with no path to host -> live VM smoke |
 | 07.3 | egress-deny-and-the-broker | P4 ch7 isolation | Egress-deny and the one way out | egress denied by default -> allowlist broker is the one audited exit |
 | 07.4 | no-shell | P4 ch7 isolation | No shell | argv arrays + argcheck allowlist -> allowlist-bypass + arg-injection -> 0% |
 | 08.1 | the-dual-llm-brain | P4 ch8 dual-LLM | The dual-LLM brain (CaMeL) | privileged planner decides, quarantined reader touches untrusted text but cannot act -> model output is data |
