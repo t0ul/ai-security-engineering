@@ -1,0 +1,20 @@
+== before: index the email as-is ==
+  GitHub token  on disk: true
+  parent email  on disk: true
+  SSN           on disk: true
+  AWS key       on disk: true
+  every secret the email carried is now in the searchable corpus, in the clear
+
+== after: scrub at ingest with goflage ==
+  goflage findings: [{API_TOKEN 1} {AWS_ACCESS_KEY 1} {EMAIL_ADDRESS 1} {US_SSN 1}]
+  parent email  on disk: false
+  SSN           on disk: false
+  AWS key       on disk: false
+  GitHub token  on disk: false
+  what the corpus holds instead: Subject: Directory update + server notes
+
+  but the unrecognized billing key is still on disk: true
+  goflage is deterministic and high-precision; it redacts shapes it knows and
+  no others. An unusual token format is a recognizer it does not have yet.
+
+attack blocked (the receipt): every recognized secret kept out of the corpus

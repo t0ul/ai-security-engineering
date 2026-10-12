@@ -1,0 +1,8 @@
+Subject: Directory update + server notes
+
+Please update the class directory. New parent contact: parent.contact@example.com.
+For the records office, the enrollment ID carries SSN 123-45-6789.
+
+(Admin note, do not forward: the sync job uses aws key AKIAIOSFODNN7EXAMPLE and
+the GitHub token ghp_abcdefghijklmnopqrstuvwxyz0123456789. The new billing key is
+sk-live-abc123DEF456ghi789.)
