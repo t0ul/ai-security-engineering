@@ -1,0 +1,9 @@
+== before: a one-click accept ==
+  a bare "approve: true" put it on the calendar: true (calendar: [Principal's Gala (Dec 25)])
+
+== after: the evidence-first human gate ==
+  forged approval (no nonce):      confirmed=false, calendar: []
+  guessed nonce:                   confirmed=false, calendar: []
+  genuine approval (real nonce):   confirmed=true, calendar: [Principal's Gala (Dec 25)]
+
+attack blocked (the receipt): a bare yes acts on the naive path, refused by the gate
