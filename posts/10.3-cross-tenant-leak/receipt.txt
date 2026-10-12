@@ -1,0 +1,12 @@
+== before: retrieval that searches the whole index ==
+  Bob asks "what appointments do I have?" -> 3 hits
+  Alice's private line is in Bob's results: true
+  rag-tenant-leak ASR: 100% (1/1)
+
+== after: the agent's Query, with the tenant ACL in the search ==
+  Bob's query -> 2 hits; Alice's private line present: false
+  Bob still sees his own + public: own=true public=true
+  rag-tenant-leak ASR: 0% (0/1)
+  Alice's own query still returns her private line: true
+
+attack blocked (the receipt): an unscoped search hands Bob another household's private email; the agent's Query scopes to the asker, so Bob gets only his own and public documents while Alice still gets hers
