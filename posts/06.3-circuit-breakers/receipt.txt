@@ -1,0 +1,10 @@
+== before: a loop with no cap ==
+  the loop ran 100000 steps and still had not finished (stopped only by the demo's ceiling): true
+  in the real agent each step is a paid model call, so this is denial of wallet
+
+== after: the loop engine's circuit breaker ==
+  the same cycle, run with a hard cap of 8 steps:
+  it stopped after 8 steps with: gonductor: circuit breaker tripped (max steps exceeded)
+  circuit breaker tripped: true
+
+attack blocked (the receipt): the naive loop never stops itself; the breaker stops it at the cap
