@@ -1,0 +1,10 @@
+== the model extracts events from a one-date email ==
+  trust the model's dates (keep every proposal):   100%
+  reconcile against dates found in the text:        0%
+
+  model proposed:   Picture Day(2026-10-02), Winter Gala(2026-12-31)
+  off-text dates:   [Winter Gala@2026-12-31]
+  after reconcile:  Upcoming events(2026-10-02), Picture Day(2026-10-02)
+  off-text dates:   []
+
+attack blocked (the receipt): the model invents a date for the undated event; reconciling against the email's own dates drops it, every run
