@@ -1,0 +1,9 @@
+== before: a broker with no policy ==
+  the guest asked the broker for internal.example:64094
+  it got back: "INTERNAL-SECRET: db credentials" (internal service hit 1 time(s))
+
+== after: the agent's real broker ==
+  internal.example: refused (internal service hit 0 time(s))
+  weather.example:  tunneled, got: ALLOWED: this week's weather
+
+attack blocked (the receipt): the naive broker dials anything; the real one dials only the allowlist
