@@ -1,0 +1,21 @@
+product limits: size cap 262144 bytes, settle delay 1s, per-cycle cap 20
+
+== before: a naive scan (no limits) ==
+  clean.txt    processed                    read 43 bytes
+  huge.txt     processed                    read 263168 bytes
+  partial.txt  processed                    read 8 bytes
+  the naive scan read a too-big file whole and read a half-written one
+
+== after: the product's size cap + settle delay ==
+  clean.txt    processed                    read 43 bytes
+  huge.txt     rejected: oversized          read 0 bytes
+  partial.txt  skipped: not settled         read 0 bytes
+  oversized refused unread, half-written skipped until it settles, clean one processed
+
+== before: a naive scan of 25 files at once ==
+  processed 25 files in one pass (unbounded)
+
+== after: the product's per-cycle cap of 20 ==
+  processed 20 this pass, deferred 5 to the next (work per cycle is bounded)
+
+attack blocked (the receipt)
