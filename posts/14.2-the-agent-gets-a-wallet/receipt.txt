@@ -1,0 +1,9 @@
+== before: a token checked only for expiry ==
+  after revocation, the naive check still honors the token: true
+
+== after: the authority consults revocation ==
+  revoked token verifies: controlplane: grant revoked
+  a fresh, un-revoked grant still works:  true
+  kill switch: same grant before=<nil>, after engage=controlplane: grant revoked
+
+attack blocked (the receipt): an expiry-only check honors a revoked token until it times out; the agent's authority refuses a revoked grant the instant it is revoked, still honors a fresh one, and the kill switch revokes the whole wallet at once
