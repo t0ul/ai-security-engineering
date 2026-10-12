@@ -1,0 +1,13 @@
+== SSRF: a model call aimed at an internal service ==
+  naive proxy:  HTTP 200, internal service hit 1 time(s)  <- SSRF: reached the internal host and leaked its secret
+  gouncer:      HTTP 400 (model not allowed), internal service hit 0 time(s)
+
+== flood: a bounded burst of 10 requests ==
+  naive proxy:  10/10 served, 0 refused (nothing says stop)
+  gouncer:      3 served, 7 refused with 429 once past the rate cap
+
+== oversized body ==
+  naive proxy:  HTTP 200 (a 4 KB body sailed through)
+  gouncer:      HTTP 413 (request body too large) (cap is 512 bytes)
+
+attack blocked (the receipt)
