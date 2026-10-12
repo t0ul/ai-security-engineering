@@ -1,0 +1,5 @@
+== grading a wrong answer that carries a directive to the judge ==
+  naive judge (answer spliced into instructions):   100% gamed
+  hardened judge (answer fenced as untrusted data):  0% gamed
+
+attack blocked (the receipt): the directive flips the naive judge's score until the candidate answer is fenced as data the judge grades but never obeys
