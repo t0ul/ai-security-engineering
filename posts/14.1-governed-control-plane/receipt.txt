@@ -1,0 +1,13 @@
+== before: an ungoverned prompt plane ==
+  attacker swapped the chat prompt; the never-obey rule is gone: true
+
+== after: RBAC-governed prompt changes ==
+  app role (list/corpus) tries to swap:  refused: controlplane: grant does not cover requested scope
+  the live prompt still has the rule:    true
+  operator (write/prompts) changes it:   applied=true, version=1
+  audit (who did what):
+    prompt_change_denied   map[by:app reason:controlplane: grant does not cover requested scope]
+    prompt_changed         map[by:alice-operator hash:a17c35cc386c name:chat version:1]
+  audit chain verified: true
+
+attack blocked (the receipt): an ungoverned plane lets anyone own the agent by swapping its prompt; the governed plane applies a change only for a signed operator capability that covers it, refuses the app role, and records who changed what
