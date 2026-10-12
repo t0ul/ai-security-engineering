@@ -1,0 +1,19 @@
+== before: a plain log ==
+  after the edit, the log reads:
+    {"trace":"4a4778fc","span":"injection_guard","event":"allowed","detail":"dropped injected event: Principal's Gala"}
+  re-reading a plain log just believes the file. the forgery is invisible.
+
+== after: gledger's hash-chained log ==
+🧾 [request] start trace=4a4778fc
+🧾 [injection_guard] blocked trace=4a4778fc
+🧾 [event_extractor] written trace=4a4778fc
+  before the edit: chain_ok=true over 3 records
+  after the edit:  chain_ok=false (the chain breaks at the tampered record)
+
+== also: a secret in the record ==
+  plain log:   {"trace":"9f12","span":"config","event":"loaded","detail":"token=ghp_s3cr3tLiveKey99"}
+🧾 [config] loaded trace=9f12
+  gledger:     {"event":"loaded","fields":{"detail":"<SECRET=redacted>"},"hash":"ef86874609342a591a2747ccdae5d2544493d9f6e20a1930e546163ab56d0130","prev":"","service":"agent","span":"config","trace_id":"9f12","ts":"2026-10-12T03:58:44.341164Z"}
+  plain log leaked the token: true    gledger redacted it: true
+
+attack blocked (the receipt)
