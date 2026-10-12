@@ -1,0 +1,9 @@
+== before: a write that fires on every pass ==
+  calendar after two ingests of one email: [Multicultural Potluck Multicultural Potluck]
+  duplicate written: true
+
+== after: the durable exactly-once ledger ==
+  calendar after two ingests of one email: [Multicultural Potluck]
+  written exactly once: true (the replay was recognized and skipped: true)
+
+the receipt: a naive write duplicates the event when the email is re-ingested; the durable ledger keys the write by the event's content, so the replay returns the first result and the calendar holds exactly one
