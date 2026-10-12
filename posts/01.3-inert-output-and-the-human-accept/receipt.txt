@@ -1,0 +1,21 @@
+== before: no defense ==
+  calendar += Multicultural Potluck @ 2026-10-23T17:30:00
+  calendar += Open House @ 2026-09-29T17:30:00  <- flagged for review, added anyway
+attack landed (this is the problem the post fixes)
+
+== after: with the control ==
+  wrote an inert .ics (833 bytes); calendar entries now: 0
+  the file is just text until a person imports it, e.g.:
+    BEGIN:VCALENDAR
+    VERSION:2.0
+    PRODID:-//ai-security-engineering//email-to-calendar//EN
+    X-WR-CALNAME:email-to-calendar
+    BEGIN:VEVENT
+    UID:f5ed71d77c293f61635e2f3e14046697@email-to-calendar
+  [accept] Multicultural Potluck @ 2026-10-23T17:30:00
+  [hold: weekday_mismatch: stated Thursday, but 2026-09-29 is Tuesday] Open House @ 2026-09-29T17:30:00
+  calendar after accept: [Multicultural Potluck @ 2026-10-23T17:30:00]
+attack blocked (the receipt)
+
+== still works: a human accepts the clean event ==
+  calendar: [Multicultural Potluck @ 2026-10-23T17:30:00]
