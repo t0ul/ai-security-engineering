@@ -51,18 +51,18 @@ This post closes the part, so it is time to look at the scorecard the whole book
 
 ```
 id     slug                               part                     result
-00.1   the-plan                           P0 front matter          prose
-00.2   setting-up-the-lab                 P0 front matter          prose
-00.3   attack-driven-design-shown-once    P0 front matter          prose
-01.1   one-shape-for-everything           P1 ch1 parser            prose
+00.1   the-plan                           P0 front matter          intro
+00.2   setting-up-the-lab                 P0 front matter          intro
+00.3   attack-driven-design-shown-once    P0 front matter          method
+01.1   one-shape-for-everything           P1 ch1 parser            feature
 01.2   dates-the-model-never-decides      P1 ch1 parser            green
 01.3   inert-output-and-the-human-accept  P1 ch1 parser            green
 01.4   the-watched-folder                 P1 ch1 parser            green
-02.1   the-eval-harness                   P1 ch2 prove it          prose
-02.2   attacking-the-baseline             P1 ch2 prove it          prose
+02.1   the-eval-harness                   P1 ch2 prove it          method
+02.2   attacking-the-baseline             P1 ch2 prove it          problem
 03.1   a-log-you-can-trust                P2 ch3 observability     green
 03.2   a-gateway-you-cannot-route-around  P2 ch3 observability     green
-03.3   one-trace-id                       P2 ch3 observability     prose
+03.3   one-trace-id                       P2 ch3 observability     method
 04.1   when-the-email-gives-orders        P3 ch4 injection         green
 04.2   the-email-is-data-not-orders       P3 ch4 injection         green
 04.3   system-prompt-leakage              P3 ch4 injection         green
@@ -74,10 +74,10 @@ id     slug                               part                     result
 06.2   the-human-gate                     P3 ch6 agency            green
 06.3   circuit-breakers                   P3 ch6 agency            green
 
-green 15  red 0  prose 8  not yet 39
+green 15  red 0  intro 2  feature 1  method 3  problem 1  not yet 39
 ```
 
-Every lesson that has a control runs green, and `make board` re-runs all of them on every push, so a line that went green cannot quietly go red again without the gate catching it. The injection, the leaks, the exfiltration, the over-agency, the runaway loop, each one landed against the agent at the start of this book and each one now ends on a refusal you can reproduce. The rows still marked `not yet` are the next three parts, and the `prose` rows are the posts that teach rather than defend.
+Every lesson that has a control runs green, and `make board` re-runs all of them on every push, so a line that went green cannot quietly go red again without the gate catching it. The injection, the leaks, the exfiltration, the over-agency, the runaway loop, each one landed against the agent at the start of this book and each one now ends on a refusal you can reproduce. The rows still marked `not yet` are the next three parts, and the rows labelled intro, feature, method, or problem are the posts that set up or teach rather than defend.
 
 ## Conclusion
 
