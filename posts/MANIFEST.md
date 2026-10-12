@@ -37,7 +37,7 @@ folders sort in book order. Keep specs on one line and never use `|` inside one.
 | 08.1 | the-dual-llm-brain | P4 ch8 dual-LLM | The dual-LLM brain (CaMeL) | privileged planner decides, quarantined reader touches untrusted text but cannot act -> model output is data |
 | 08.2 | agent-to-agent-hand-off | P4 ch8 dual-LLM | Agent-to-agent hand-off | authenticate planner to executor -> a2a-spoof -> 0% |
 | 09.1 | pin-the-tools | P4 ch9 protocol and supply chain | A pinned tool catalog (MCP) | gustoms -> mcp-rug-pull swaps the catalog -> pin -> 0% |
-| 09.2 | model-artifacts | P4 ch9 protocol and supply chain | Model artifacts | malicious .pkl vs verified .gguf -> magic + hash check -> pickle 0% |
+| 09.2 | model-artifacts | P4 ch9 protocol and supply chain | Model artifacts | prose only (real control is internal/assets, not an importable module; LIVE receipts from the real verifymodel CLI) -> malicious .pkl vs verified .gguf -> magic + hash check deletes it before load -> pickle 0% |
 | 09.3 | defeating-the-lethal-trifecta | P4 ch9 protocol and supply chain | Defeating the lethal trifecta | netpolicy + captoken + argcheck together -> ssrf-imds -> 0% -> Part closer: paste make board |
 | 10.1 | answering-whats-on-this-month | P5 ch10 RAG and memory | Answering what is on this month | build retrieval (GoRag) -> no attack -> the thing Part 5 then attacks |
 | 10.2 | index-poisoning | P5 ch10 RAG and memory | Index poisoning | rag-poisoning planted doc steers answers -> XML-encapsulated chunks -> 0% |
