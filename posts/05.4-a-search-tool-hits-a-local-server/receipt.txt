@@ -1,0 +1,15 @@
+== before: the naive search tool ==
+  asked to fetch http://127.0.0.1:63227
+  it returned:  "INTERNAL-SECRET: admin-token" (internal service hit 1 time(s))
+
+== after: the egress policy in front of the tool ==
+  loopback http://127.0.0.1:63227
+    refused: netpolicy: host is not on the egress allowlist: "127.0.0.1" (internal service hit 0 time(s))
+  metadata http://169.254.169.254/...
+    refused: netpolicy: host is not on the egress allowlist: "169.254.169.254"
+  allowlisted-but-rebinding http://rebind.example/ -> 127.0.0.1
+    refused: netpolicy: host resolves to a blocked (internal) address: rebind.example -> 127.0.0.1
+  allowlisted http://search.example/...
+    allowed: true
+
+attack blocked (the receipt): the naive tool reaches inside; the gated tool refuses
