@@ -1,0 +1,13 @@
+== before: place items by the weekday the email states ==
+  Monday:   Mandatory all-staff sync
+  Thursday: PTA Meeting
+  Friday:   Book Fair
+  crafted item on Monday: true | on its real day (Thursday): false
+
+== after: place items by the date, weekday derived from it ==
+  Thursday: Mandatory all-staff sync; PTA Meeting
+  Friday:   Book Fair
+  crafted item on its real day (Thursday): true | on Monday: false
+  flagged: weekday_mismatch: stated Monday, but 2026-10-08 is Thursday
+
+attack blocked (the receipt): a stated weekday moves the item to the wrong day on the naive view; the agent places by the date it parsed, so the item lands on its real day and the lie is flagged
