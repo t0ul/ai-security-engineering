@@ -69,19 +69,19 @@ This is the same shape as the dual-LLM split from Part 4, pointed at a different
 Part 5 gave the agent memory and then an honest relationship with it: retrieval that cannot be poisoned or leaked across people, and data it refuses to get wrong or make up. With the integrity chapter closed, the agent is feature-complete for everything the first five parts set out to build, so the whole book re-attacks itself one more time.
 
 ```
-00.0  introduction                        prose
-00.1  the-plan                            prose
-00.2  setting-up-the-lab                  prose
-00.3  attack-driven-design-shown-once     prose
-01.1  one-shape-for-everything            prose
+00.0  introduction                        intro
+00.1  the-plan                            intro
+00.2  setting-up-the-lab                  intro
+00.3  attack-driven-design-shown-once     method
+01.1  one-shape-for-everything            feature
 01.2  dates-the-model-never-decides       green
 01.3  inert-output-and-the-human-accept   green
 01.4  the-watched-folder                  green
-02.1  the-eval-harness                    prose
-02.2  attacking-the-baseline              prose
+02.1  the-eval-harness                    method
+02.2  attacking-the-baseline              problem
 03.1  a-log-you-can-trust                 green
 03.2  a-gateway-you-cannot-route-around   green
-03.3  one-trace-id                        prose
+03.3  one-trace-id                        method
 04.1  when-the-email-gives-orders         green
 04.2  the-email-is-data-not-orders        green
 04.3  system-prompt-leakage               green
@@ -92,23 +92,23 @@ Part 5 gave the agent memory and then an honest relationship with it: retrieval 
 06.1  least-privilege                     green
 06.2  the-human-gate                      green
 06.3  circuit-breakers                    green
-07.1  the-problem-with-running-code       prose
-07.2  the-detonation-chamber              prose
+07.1  the-problem-with-running-code       problem
+07.2  the-detonation-chamber              live
 07.3  egress-deny-and-the-broker          green
 07.4  no-shell                            green
 08.1  the-dual-llm-brain                  green
 08.2  agent-to-agent-hand-off             green
 09.1  pin-the-tools                       green
-09.2  model-artifacts                     prose
+09.2  model-artifacts                     live
 09.3  defeating-the-lethal-trifecta       green
-10.1  answering-whats-on-this-month       prose
+10.1  answering-whats-on-this-month       feature
 10.2  index-poisoning                     green
 10.3  cross-tenant-leak                   green
 10.4  memory-poisoning                    green
 11.1  conflicts-and-mangled-data          green
 11.2  hallucinated-dates                  green
 
-green 26  red 0  prose 12
+green 26  red 0  intro 3  feature 2  method 3  problem 2  live 2
 ```
 
-Twenty-six runnable controls holding, twelve prose lessons, no red. The parts so far built the agent and made it safe one attack at a time. Part 6 changes the question. Instead of adding another control, it asks how you keep all of this true as the agent grows: one command that scores the whole thing, the attacks turned into a reusable library, a red-team that runs continuously, and the same method pointed at an app that is not this one. The controls are the work; the flywheel is how the work stays done.
+Twenty-six runnable controls holding, twelve lessons that teach rather than defend (the intro, feature, method, problem, and live rows), no red. The parts so far built the agent and made it safe one attack at a time. Part 6 changes the question. Instead of adding another control, it asks how you keep all of this true as the agent grows: one command that scores the whole thing, the attacks turned into a reusable library, a red-team that runs continuously, and the same method pointed at an app that is not this one. The controls are the work; the flywheel is how the work stays done.

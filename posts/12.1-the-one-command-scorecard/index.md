@@ -52,19 +52,19 @@ Only the wired row passes. The stubbed row is called out for proving nothing, be
 With that guarantee behind each row, the all-green board finally means something, and it is one command. In the book that command is `make board`, which runs every lesson's test; in the product it is `make check`, the deterministic scorecard plus the live model suite plus the unit tests. The same command runs on a git pre-push hook, so a control cannot regress without the push that broke it going red first.
 
 ```
-00.0  introduction                        prose
-00.1  the-plan                            prose
-00.2  setting-up-the-lab                  prose
-00.3  attack-driven-design-shown-once     prose
-01.1  one-shape-for-everything            prose
+00.0  introduction                        intro
+00.1  the-plan                            intro
+00.2  setting-up-the-lab                  intro
+00.3  attack-driven-design-shown-once     method
+01.1  one-shape-for-everything            feature
 01.2  dates-the-model-never-decides       green
 01.3  inert-output-and-the-human-accept   green
 01.4  the-watched-folder                  green
-02.1  the-eval-harness                    prose
-02.2  attacking-the-baseline              prose
+02.1  the-eval-harness                    method
+02.2  attacking-the-baseline              problem
 03.1  a-log-you-can-trust                 green
 03.2  a-gateway-you-cannot-route-around   green
-03.3  one-trace-id                        prose
+03.3  one-trace-id                        method
 04.1  when-the-email-gives-orders         green
 04.2  the-email-is-data-not-orders        green
 04.3  system-prompt-leakage               green
@@ -75,16 +75,16 @@ With that guarantee behind each row, the all-green board finally means something
 06.1  least-privilege                     green
 06.2  the-human-gate                      green
 06.3  circuit-breakers                    green
-07.1  the-problem-with-running-code       prose
-07.2  the-detonation-chamber              prose
+07.1  the-problem-with-running-code       problem
+07.2  the-detonation-chamber              live
 07.3  egress-deny-and-the-broker          green
 07.4  no-shell                            green
 08.1  the-dual-llm-brain                  green
 08.2  agent-to-agent-hand-off             green
 09.1  pin-the-tools                       green
-09.2  model-artifacts                     prose
+09.2  model-artifacts                     live
 09.3  defeating-the-lethal-trifecta       green
-10.1  answering-whats-on-this-month       prose
+10.1  answering-whats-on-this-month       feature
 10.2  index-poisoning                     green
 10.3  cross-tenant-leak                   green
 10.4  memory-poisoning                    green
@@ -92,7 +92,7 @@ With that guarantee behind each row, the all-green board finally means something
 11.2  hallucinated-dates                  green
 12.1  the-one-command-scorecard           green
 
-green 27  red 0  prose 12
+green 27  red 0  intro 3  feature 2  method 3  problem 2  live 2
 ```
 
 Twenty-seven wired controls, every one re-attacked and holding, no red. That is the gate. The rest of this chapter builds out the flywheel around it: pulling the attack loop out into the reusable library you just saw, scoring honestly when the judge is itself a model, keeping a live red-team in the gate rather than saving it for a quarterly pentest, and then the real test of whether any of this generalizes, pointing the same method at an app that is not this one.
