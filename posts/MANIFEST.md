@@ -16,7 +16,7 @@ folders sort in book order. Keep specs on one line and never use `|` inside one.
 | 01.3 | inert-output-and-the-human-accept | P1 ch1 parser | Inert output and the human accept | ics writes a file -> auto-add would push a bad extraction onto a real calendar -> inert .ics + accept gate |
 | 01.4 | the-watched-folder | P1 ch1 parser | The watched folder | watcher -> oversized file + half-written read -> size cap + settle delay + per-cycle cap |
 | 02.1 | the-eval-harness | P1 ch2 prove it | The eval harness: F1 as a receipt | eval over labeled samples -> no attack -> f1=1.00 on clean mail is the baseline receipt |
-| 02.2 | attacking-the-baseline | P1 ch2 prove it | Attacking the baseline, all red | whole undefended agent -> run every attack, live model included -> injection, leak, PII, exfil all land at 100% -> paste make board, all red -> this red board is the TOC |
+| 02.2 | attacking-the-baseline | P1 ch2 prove it | Attacking the baseline, all red | prose only (receipt is the product scorecard + one live injection) -> whole undefended agent -> run every attack, live model included -> injection, leak, PII, exfil all land at 100% -> paste make board, all red -> this red board is the TOC |
 | 03.1 | a-log-you-can-trust | P2 ch3 observability | A log you can trust | gledger -> forge a plain log + the 0-events blindness -> hash chain + redact + defang -> chain_ok=false, trace explains |
 | 03.2 | a-gateway-you-cannot-route-around | P2 ch3 observability | A gateway you cannot route around | gouncer -> SSRF to any host + flood -> model allowlist + body, rate, concurrency caps -> 400 and 429 |
 | 03.3 | one-trace-id | P2 ch3 observability | One trace id, and the command stream | correlation id across stages -> no attack -> the operator window for free |
