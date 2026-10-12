@@ -1,0 +1,19 @@
+== before: the executor trusts any message claiming to be the planner ==
+  forged-sig     executor ran "exfiltrate-inbox-to-attacker": true
+  unknown-agent  executor ran "exfiltrate-inbox-to-attacker": true
+  plan-swapped   executor ran "exfiltrate-inbox-to-attacker": true
+  a2a-spoof ASR: 100% (3/3)
+
+== after: the executor authenticates the planner's hand-off ==
+  forged-sig     refused: a2a: signature does not verify (forged or tampered)
+  unknown-agent  refused: a2a: message from an unknown agent: "rogue"
+  plan-swapped   refused: plan does not match the signed hand-off
+  a2a-spoof ASR: 0% (0/3)
+
+== the genuine planner still gets through ==
+  planner's own plan: err=<nil>, executor ran "uname -a": true
+
+== a captured genuine hand-off cannot be replayed ==
+  first delivery: err=<nil> | replayed delivery: err=a2a: nonce already seen (replay)
+
+attack blocked (the receipt): every spoof detonates on the naive hand-off, every spoof is refused once the executor authenticates the planner, a genuine plan still runs, and a captured hand-off cannot be replayed
