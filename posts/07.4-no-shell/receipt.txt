@@ -1,0 +1,11 @@
+== before: arguments in a shell string ==
+  pattern = "x; echo INJECTED-COMMAND-RAN > /var/folders/dp/x30vl4jx1218fn05m75q3rqc0000gn/T/lesson-07.4-1350235597/injected_marker.txt #"
+  an injected command ran (marker file created): true
+  file = "../secret.txt" read a file outside the base folder: true
+
+== after: the validator + an argument array ==
+  the injecting pattern: refused: shell metacharacter in argument: "pattern" (no command ran: true)
+  the traversing file:   refused: path escapes the confinement base: "../secret.txt"
+  a clean call:          found: the word root appears here
+
+attack blocked (the receipt): a shell string lets arguments run commands and escape; the validator does not
