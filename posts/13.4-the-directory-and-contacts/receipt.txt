@@ -1,0 +1,11 @@
+== before: surface every detail the recognizer finds ==
+  directory: [lee@school.org admin@pta.org 123-45-6789 AKIAIOSFODNN7EXAMPLE]
+  the SSN or account key is in the directory: true
+
+== after: the agent's PII-scoped contacts tool ==
+  capability: read_only
+  surfaced:   [admin@pta.org lee@school.org]
+  audited:    PII-scoped: surfaced 2 contact(s)
+  the SSN or account key is in the directory: false (the two contacts are: true)
+
+attack blocked (the receipt): a naive directory dumps the SSN and the key alongside the addresses; the contacts tool surfaces only email addresses, read-only, and flags what it surfaced
