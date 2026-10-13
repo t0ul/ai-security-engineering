@@ -1,0 +1,11 @@
+== attribution: a forged 'from: planner' fact ==
+  naive board trusts the label; the forged planner fact is on the board: true
+  real board rejects the forged write: a2a: signature does not verify (forged or tampered)
+  the forged planner fact is on the board: false
+
+== scoped recall: one agent's private workspace ==
+  naive recall returns planner's private note to anyone: true
+  researcher's scoped recall sees planner's secret: false
+  planner's own scoped recall sees it: true
+
+attack blocked (the receipt): a naive board trusts a forged author and shares every scope; the real blackboard rejects an unverifiable write and returns only the asking scope, so shared memory stays attributed and private
