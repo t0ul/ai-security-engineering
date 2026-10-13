@@ -1,8 +1,8 @@
 ---
 title: "Cross-tenant leak"
 description: "The last leak was about what a document said. This one is about whose documents come back at all. One retrieval store holds more than one household's email, and a search that is not scoped to the asker hands one household's private line to another. The fix is to put the tenant check inside the search itself, so authorization is not a step the retrieval path can forget."
-date: 2026-10-12
-draft: true
+date: 2026-03-31
+draft: false
 tags: ["ai-security", "golang", "rag", "authorization"]
 series: "AI Security Engineering"
 ---
@@ -68,3 +68,12 @@ The agent goes one belt tighter, which is worth noticing in the code above. The 
 The reason this belongs in the query and not in a wrapper is that wrappers are optional and `WHERE` clauses are not. Any retrieval the agent does, through any path, goes through the same `Query`, so the tenant rule is enforced once, by the database, for everyone, instead of being re-implemented and occasionally forgotten at each call site. That is the general shape of a good authorization control: push it down to the layer that cannot be bypassed, and let every caller inherit it.
 
 That is leaking across households closed. The last leak in this chapter is across time. Retrieval pulls from a store that outlives any single email, and a document poisoned or wrongly scoped today keeps coming back tomorrow. The next post gives the memory a lifecycle, a scope and an expiry and a sanitized recall, so that what the agent remembers cannot quietly become what the agent is told.
+
+## Take it to your own project
+
+Scope every lookup to who is asking:
+
+- Check ownership before returning any retrieved record.
+- Scope retrieval and queries to the current tenant or user.
+- Default to returning nothing when scope is unclear.
+- Test a cross-tenant query and confirm it returns none of the other tenant's data.

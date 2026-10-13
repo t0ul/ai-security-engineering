@@ -1,8 +1,8 @@
 ---
 title: "Calendar CRUD and export"
 description: "The danger in this feature is not an attacker. It is the agent doing the same safe thing twice: a watcher re-reads an email, a request is retried, an export runs again, and the same event lands on the calendar a second time. A naive write fires on every call. The agent routes each write through a durable exactly-once ledger keyed by the event's content, so a replay returns the first result and never writes again."
-date: 2026-10-12
-draft: true
+date: 2026-07-07
+draft: false
 tags: ["ai-security", "golang", "agents", "reliability"]
 series: "AI Security Engineering"
 ---
@@ -57,3 +57,11 @@ One Potluck. The first pass ran the write and recorded its key; the second pass 
 It is worth ending the feature on why this belongs in a security book at all. The export is dup-free for the same reason: it keys each event and skips the ones already exported, so importing into a real calendar happens exactly once. And the ledger underneath is the same primitive that will matter far more in the reliability chapters, where the side effect is not adding a calendar line but spending money or sending a message. "At most once" for a dangerous action is the same engineering as "exactly once" for a calendar write: a durable record of what has already happened, keyed so a replay cannot pretend to be new. The agent is allowed to retry anything; it is not allowed to let a retry count twice.
 
 That is the last of the agent's own features. The one surface left in the capstone is the one people touch directly, the chat box over everything the agent knows, and its attack brings the whole book full circle: a prompt injection, arriving this time through the corpus the chat retrieves.
+
+## Take it to your own project
+
+Guard the writes, not just the reads:
+
+- Put least privilege and the human gate on writes and deletes.
+- Sanitize exported fields and keep the export inert.
+- Attack create, update, delete, and export each on its own.

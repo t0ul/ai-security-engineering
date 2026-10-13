@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 566" width="100%" role="img" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif">
+<title>The architecture so far, through Part 3</title>
+<desc>The full architecture as a stack of defense layers. The layers built so far are solid, the newest highlighted; the layers still ahead are faded.</desc>
+<rect x="1" y="1" width="718" height="564" rx="10" fill="#fbfcfe" stroke="#d9e2ec" stroke-width="1"/>
+<text x="380" y="30" text-anchor="middle" font-size="12" fill="#627d98">untrusted email in</text>
+<line x1="380" y1="38" x2="380" y2="60" stroke="#334e68" stroke-width="1.5" marker-end="url(#sah)"/>
+<g>
+<rect x="150" y="448" width="470" height="56" rx="8" fill="#ffffff" stroke="#334e68" stroke-width="1.5"/>
+<rect x="164" y="464" width="44" height="24" rx="5" fill="#e3e8ef"/>
+<text x="186" y="481" text-anchor="middle" font-size="13" font-weight="700" fill="#243b53">P1</text>
+<text x="222" y="481" font-size="13" fill="#243b53">The core: email → dates → calendar</text>
+</g>
+<g>
+<rect x="150" y="384" width="470" height="56" rx="8" fill="#ffffff" stroke="#334e68" stroke-width="1.5"/>
+<rect x="164" y="400" width="44" height="24" rx="5" fill="#e3e8ef"/>
+<text x="186" y="417" text-anchor="middle" font-size="13" font-weight="700" fill="#243b53">P2</text>
+<text x="222" y="417" font-size="13" fill="#243b53">Audit log · signed gateway · one trace id</text>
+</g>
+<g>
+<rect x="150" y="320" width="470" height="56" rx="8" fill="#eef4ff" stroke="#2563eb" stroke-width="2"/>
+<rect x="164" y="336" width="44" height="24" rx="5" fill="#dbe5ff"/>
+<text x="186" y="353" text-anchor="middle" font-size="13" font-weight="700" fill="#243b53">P3</text>
+<text x="222" y="353" font-size="13" font-weight="600" fill="#243b53">Injection guard · secret scrub · least privilege</text>
+<rect x="548" y="337" width="58" height="22" rx="11" fill="#2563eb"/>
+<text x="577" y="352" text-anchor="middle" font-size="10.5" font-weight="700" fill="#ffffff">new</text>
+</g>
+<g opacity="0.55">
+<rect x="150" y="256" width="470" height="56" rx="8" fill="#f7f9fb" stroke="#9fb3c8" stroke-width="1.2" stroke-dasharray="5 4"/>
+<rect x="164" y="272" width="44" height="24" rx="5" fill="#eef2f6"/>
+<text x="186" y="289" text-anchor="middle" font-size="13" font-weight="700" fill="#9fb3c8">P4</text>
+<text x="222" y="289" font-size="13" fill="#9fb3c8">Isolation · dual-LLM split · supply-chain pins</text>
+</g>
+<g opacity="0.55">
+<rect x="150" y="192" width="470" height="56" rx="8" fill="#f7f9fb" stroke="#9fb3c8" stroke-width="1.2" stroke-dasharray="5 4"/>
+<rect x="164" y="208" width="44" height="24" rx="5" fill="#eef2f6"/>
+<text x="186" y="225" text-anchor="middle" font-size="13" font-weight="700" fill="#9fb3c8">P5</text>
+<text x="222" y="225" font-size="13" fill="#9fb3c8">Memory: provenance-fenced retrieval</text>
+</g>
+<g opacity="0.55">
+<rect x="150" y="128" width="470" height="56" rx="8" fill="#f7f9fb" stroke="#9fb3c8" stroke-width="1.2" stroke-dasharray="5 4"/>
+<rect x="164" y="144" width="44" height="24" rx="5" fill="#eef2f6"/>
+<text x="186" y="161" text-anchor="middle" font-size="13" font-weight="700" fill="#9fb3c8">P6</text>
+<text x="222" y="161" font-size="13" fill="#9fb3c8">Scorecard · ADD library · continuous attack</text>
+</g>
+<g opacity="0.55">
+<rect x="150" y="64" width="470" height="56" rx="8" fill="#f7f9fb" stroke="#9fb3c8" stroke-width="1.2" stroke-dasharray="5 4"/>
+<rect x="164" y="80" width="44" height="24" rx="5" fill="#eef2f6"/>
+<text x="186" y="97" text-anchor="middle" font-size="13" font-weight="700" fill="#9fb3c8">P7</text>
+<text x="222" y="97" font-size="13" fill="#9fb3c8">Governance plane · kill-switch · GORED red-team</text>
+</g>
+<line x1="380" y1="504" x2="380" y2="524" stroke="#334e68" stroke-width="1.5" marker-end="url(#sah)"/>
+<rect x="232" y="528" width="296" height="30" rx="15" fill="#ffffff" stroke="#334e68" stroke-width="1.5"/>
+<text x="380" y="547" text-anchor="middle" font-size="11.5" fill="#627d98">a vetted calendar entry, the only thing that leaves</text>
+<defs><marker id="sah" markerWidth="10" markerHeight="10" refX="7" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L8,4 L0,8 z" fill="#334e68"/></marker></defs>
+</svg>

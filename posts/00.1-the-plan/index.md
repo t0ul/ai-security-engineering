@@ -1,8 +1,8 @@
 ---
 title: "The plan: a local email-to-calendar agent, built to be attacked"
 description: "What I'm building in this series and why: a small AI agent that reads my kid's school email and puts the real dates on our family calendar, running entirely on my own machine, built security-first because an agent with your inbox is the most dangerous combination in the book. Then the whole book, post by post, so you can see where we're going."
-date: 2026-10-01
-draft: true
+date: 2025-08-12
+draft: false
 tags: ["ai-security", "golang", "agents"]
 series: "AI Security Engineering"
 ---

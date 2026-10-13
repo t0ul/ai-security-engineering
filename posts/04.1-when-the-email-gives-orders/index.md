@@ -1,8 +1,8 @@
 ---
 title: "When the email gives orders"
 description: "Part 3 opens on the first red line from the baseline: an email that tells the model what to do, and a model that does it. This post runs that injection against the real local model, watches it land five times out of five, then adds the agent's real sanitizer and watches the same attack go to zero, measured live."
-date: 2026-10-12
-draft: true
+date: 2025-11-04
+draft: false
 tags: ["ai-security", "golang", "agents", "prompt-injection"]
 series: "AI Security Engineering"
 ---
@@ -79,3 +79,12 @@ It is a live receipt. The oracle does not look for a marker I planted; it reads 
 So the first red line on the board is green, and it is green the way the rest will be: an attack that lands against the real model, a small real control, and the same attack measured back down to nothing. The agent is no longer a thing that does whatever its mail tells it.
 
 One layer carried this, the sanitizer that strips the order at the door. The next post takes the second layer on its own, spotlighting, the prompt that teaches the model to treat the entire email as data to be read and never as instructions to be followed, so that even an order the sanitizer misses does not outrank the one person who is actually allowed to give the agent instructions.
+
+## Take it to your own project
+
+Wherever your agent reads text it did not write:
+
+- Treat every received or retrieved document as untrusted input, not instructions.
+- Run an injection neutralizer over it before it reaches the model.
+- Measure the attack with real seeds, not a hand-picked example.
+- Keep the part that reads untrusted text from being the part that acts.

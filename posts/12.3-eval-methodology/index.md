@@ -1,8 +1,8 @@
 ---
 title: "Honest eval methodology"
 description: "When you grade an agent's output with a model, the judge reads that output, and the output may be hostile. A naive judge that splices the candidate answer into its own instructions obeys a directive hidden in it and passes garbage. This post gets the local model to game its own judge, then hardens the judge by fencing the candidate as untrusted data graded by a fixed rubric, and the embedded directive goes inert."
-date: 2026-10-12
-draft: true
+date: 2026-05-12
+draft: false
 tags: ["ai-security", "golang", "evaluation", "prompt-injection"]
 series: "AI Security Engineering"
 ---
@@ -59,3 +59,11 @@ go test -tags live -v ./...
 It is worth connecting this back to the gate from the start of the chapter, because a judge you can manipulate quietly corrupts everything downstream of it. The agent's own scorecard carries a deterministic version of this exact case, a judge-manipulation row that models the naive and hardened judges as plain functions so the invariant is cheap to check on every push. This post is the honest ground truth behind that row: run it against the actual model and the live judge behaves the way the deterministic case claims, gamed when the candidate is spliced in, solid when it is fenced. The fast check and the real one agree, which is exactly what you want before you let a model grade your work.
 
 The judge is the last piece of measurement. The next post is about when that measurement runs: not as a quarterly review but as part of the same gate, a live red-team firing the real attacks at the real model on every push, and why a suite that skips itself when the model is slow is a suite that is lying to you.
+
+## Take it to your own project
+
+Be honest about what your eval measures:
+
+- Measure pass@k across runs, not a single lucky pass.
+- If a model judges output, fence the candidate as data so it cannot instruct the judge.
+- Say plainly what the number means and where it could be gamed.

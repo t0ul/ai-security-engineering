@@ -1,8 +1,8 @@
 ---
 title: "Circuit breakers and runaway loops"
 description: "The last abuse in this part needs no approval and no overreach: a loop that will not stop. Each step of an agent loop is a model call that costs time and money, and a cycle with no cap spins until the machine or the budget gives out. This post caps it with the loop engine's circuit breaker, then closes Part 3 by pasting the board, where every model-surface attack from the red baseline is now green."
-date: 2026-10-12
-draft: true
+date: 2026-01-06
+draft: false
 tags: ["ai-security", "golang", "agents", "denial-of-service"]
 series: "AI Security Engineering"
 ---
@@ -47,6 +47,10 @@ Eight steps and then a clean stop with a circuit-breaker error. The loop that ra
 
 ## The board, at the end of Part 3
 
+![The architecture so far: the defense layers built through Part 3, solid, with the newest highlighted; the layers still ahead faded.](spine-sofar.svg)
+
+*The architecture so far. Everything solid is built and attacked; P3 is what this part added. The faded layers are the map of what is still ahead.*
+
 This post closes the part, so it is time to look at the scorecard the whole book is built to turn green. Back in [the baseline post](/blog/attacking-the-baseline/) the undefended agent lit up red across the model surface. Here is the board now, after three parts of work:
 
 ```
@@ -84,3 +88,12 @@ Every lesson that has a control runs green, and `make board` re-runs all of them
 That closes Part 3, and with it the part of the agent you can secure without ever letting it run code. The model surface is covered: an email can no longer give the agent orders, fish out its instructions, smuggle data in or out, overstep a tool's privilege, forge an approval, or spin it in place. All of it was proven against the real model, and all of it is held by a gate that runs before every push.
 
 Part 4 is where the stakes change kind. The agent is about to get a tool that executes code, and an email that can reach an executor is not the same class of problem as one that can reach a fetcher. A regular expression over a URL is no longer a wall. The next posts build real ones: an isolated machine with no network card where untrusted-influenced code can run and touch nothing, a two-model design that keeps the part reading hostile text from ever being the part that acts, and the broker that is the single audited way anything gets out. It opens by showing, with nothing between the model and a shell, exactly how bad the unguarded version is.
+
+## Take it to your own project
+
+Cap what a single run can do:
+
+- Set a hard cap on steps, tokens, tool calls, and wall-clock time per run.
+- Trip a breaker when a cap is hit, and fail closed.
+- Alert on a trip; a runaway loop is a signal, not just noise.
+- Test it with an input designed to loop forever, and confirm it stops.

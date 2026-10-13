@@ -1,8 +1,8 @@
 ---
 title: "The UI and chat"
 description: "The chat box is the surface people actually touch: ask a question, the agent retrieves from everything it has stored, and answers. But everything it has stored includes untrusted emails, so a poisoned one, pulled back for an innocent question, can hijack the reply. This closes the capstone the way the book began, with prompt injection, arriving this time through the corpus the chat reads, and defeated by the same move that neutralized it in the inbox."
-date: 2026-10-12
-draft: true
+date: 2026-07-14
+draft: false
 tags: ["ai-security", "golang", "agents", "prompt-injection"]
 series: "AI Security Engineering"
 ---
@@ -58,3 +58,11 @@ go test -tags live -v ./...
 That closes the capstone, and it closes it deliberately on the attack the book opened with. Every feature in this chapter arrived with its own attack, and the last one turned out to be the first one, prompt injection, reaching the agent through a surface that did not exist when we first defended against it. It did not need a new defense. The rule that the model proposes and code disposes, that untrusted text is data and never instructions, held at the chat box exactly as it held at the inbox, because it was never a property of where the text came from. It was a property of how the agent is built.
 
 The agent is now complete and whole, every feature wired, every surface attacked and holding. What is left is not the agent but the operation of it. Part 7 is the governance, reliability, and polish that turn a secure program into one a team can actually run: who is allowed to change its prompts, how it survives a crash without firing a side effect twice, and how the whole thing reads as code you would not be embarrassed to open.
+
+## Take it to your own project
+
+Do not let the UI be a bypass:
+
+- Govern the chat prompt; do not hardcode it.
+- Render model and retrieved output inertly, with output allow-listing.
+- Do not let UI input skip the data-versus-instruction split.

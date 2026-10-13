@@ -1,8 +1,8 @@
 ---
 title: "No shell"
 description: "The chamber is isolated and its one exit is gated, but there is still a hole in how a command gets in. A command is a string, and a string handed to a shell is a small programming language an attacker can write in. This post closes it: arguments validated against a schema and passed as an array, with no shell to inject into and no path to escape through."
-date: 2026-10-12
-draft: true
+date: 2026-02-03
+draft: false
 tags: ["ai-security", "golang", "agents", "isolation"]
 series: "AI Security Engineering"
 ---
@@ -71,3 +71,12 @@ It is worth stating the rules plainly, because they are small and they cover a h
 That closes the isolation chapter, and with it the hardest problem in the series. The agent can run code produced from an untrusted email, and every dangerous part of that is now contained: the code executes in a virtual machine with no host and no network, it reaches out only through a broker that dials the allowlist and reads nothing, and the command that goes in is an array of validated arguments, never a sentence an attacker gets to compose. Running untrusted code went from owning the machine to touching nothing.
 
 Part 4 is not done, though, because isolation is only one of its two big ideas. The chamber keeps dangerous code from reaching anything; the next chapter keeps the model that reads dangerous text from being the model that decides to run it in the first place. That is the dual-LLM design, where a privileged planner acts and a quarantined reader touches the untrusted email but can never do anything with it except hand back data. The walls are built; next we split the brain.
+
+## Take it to your own project
+
+Never let a string become a command:
+
+- Pass arguments as an argv array, never by string concatenation.
+- Validate every argument against an allowlist.
+- Reject shell metacharacters outright.
+- Run without a shell, so there is no shell to inject into.

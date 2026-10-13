@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 250" width="100%" role="img" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif">
+  <title>A hash-chained audit log</title>
+  <desc>Each log record hashes its own contents plus the previous record's hash, so the records are linked. Editing any field changes that record's hash, which no longer matches the link the next record stored, so reopening the log recomputes the chain and refuses it. The edit cannot hide.</desc>
+  <rect x="1" y="1" width="698" height="248" rx="10" fill="#fbfcfe" stroke="#d9e2ec" stroke-width="1"/>
+  <text x="24" y="40" font-size="11" font-weight="700" fill="#627d98">HASH-CHAINED AUDIT LOG</text>
+
+  <rect x="36" y="64" width="176" height="78" rx="8" fill="#ffffff" stroke="#334e68" stroke-width="1.5"/>
+  <text x="124" y="90" text-anchor="middle" font-size="12" font-weight="600" fill="#243b53">record 1</text>
+  <text x="124" y="118" text-anchor="middle" font-size="10.5" fill="#627d98">hash = h1</text>
+
+  <line x1="212" y1="103" x2="258" y2="103" stroke="#334e68" stroke-width="1.5"/>
+  <text x="235" y="96" text-anchor="middle" font-size="11" fill="#627d98">#</text>
+
+  <rect x="260" y="64" width="176" height="78" rx="8" fill="#eef4ff" stroke="#2563eb" stroke-width="1.8"/>
+  <text x="348" y="90" text-anchor="middle" font-size="12" font-weight="600" fill="#243b53">record 2 (edited)</text>
+  <text x="348" y="118" text-anchor="middle" font-size="10.5" fill="#627d98">hash = h2 no longer matches</text>
+  <rect x="384" y="54" width="46" height="20" rx="10" fill="#2563eb"/>
+  <text x="407" y="68" text-anchor="middle" font-size="10" font-weight="700" fill="#ffffff">edit</text>
+
+  <line x1="436" y1="103" x2="460" y2="103" stroke="#334e68" stroke-width="1.5" stroke-dasharray="4 4"/>
+  <text x="473" y="99" font-size="13" font-weight="700" fill="#334e68">✗</text>
+  <text x="455" y="128" text-anchor="middle" font-size="9.5" fill="#627d98">link broken</text>
+
+  <rect x="488" y="64" width="176" height="78" rx="8" fill="#ffffff" stroke="#334e68" stroke-width="1.5"/>
+  <text x="576" y="90" text-anchor="middle" font-size="12" font-weight="600" fill="#243b53">record 3</text>
+  <text x="576" y="118" text-anchor="middle" font-size="10.5" fill="#627d98">expected h2, got mismatch</text>
+
+  <text x="350" y="186" text-anchor="middle" font-size="11.5" fill="#243b53">each record hashes its contents <tspan font-weight="600">and the previous hash</tspan>. change one field and the next read</text>
+  <text x="350" y="206" text-anchor="middle" font-size="11.5" fill="#243b53">recomputes the chain and refuses it: <tspan font-weight="700" fill="#2563eb">chain verified = false</tspan>. the edit announces itself.</text>
+</svg>

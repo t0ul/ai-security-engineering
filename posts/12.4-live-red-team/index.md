@@ -1,8 +1,8 @@
 ---
 title: "A live red-team against the real model"
 description: "The live model suite has been in this book's gate since the first attack. This post makes the case for it directly. A suite that skips the model when it is slow, or swaps in a stub, reports green while testing nothing. The honest gate fires the real attack at the real model, reports a measured number, and fails closed when the model is gone. The live number here is 100 percent: the raw model obeys the injection every time."
-date: 2026-10-12
-draft: true
+date: 2026-05-19
+draft: false
 tags: ["ai-security", "golang", "testing", "red-team"]
 series: "AI Security Engineering"
 ---
@@ -57,3 +57,11 @@ This is also why the live suite is cheap enough to never need the shortcut. The 
 That closes the loop the chapter has been building. The one command is only a gate because its rows are wired; the library makes every row the same honest shape; the judge that scores subjective outputs cannot be talked into a pass; and the whole thing runs against the actual model, every time, or fails. None of it depends on remembering to be careful. It depends on the suite refusing to lie, even to make itself green.
 
 There is one claim left to test, the biggest one. Everything so far has been this agent, secured by its own method. The next post points the exact same method, the gorauder catalog, a technique, the ADD gate, at an app that is not this one, and runs its live suite green, to find out whether any of this was ever really about email at all.
+
+## Take it to your own project
+
+Keep the real model in the loop:
+
+- Run the attacks against the real model, never a stub.
+- Keep the live model inside the gate that runs on every push.
+- A defense proven only offline is not proven.

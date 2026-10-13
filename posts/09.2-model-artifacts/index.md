@@ -1,8 +1,8 @@
 ---
 title: "Model artifacts"
 description: "The agent downloads its model as a file from somewhere and runs it. One model format, the pickle, executes code the moment you load it, so a swapped file is remote code execution before the model says a word. This post runs the agent's real supply-chain gate, which refuses anything that is not a magic-verified GGUF pinned to the hash you approved, and deletes it before it is ever loaded."
-date: 2026-10-12
-draft: true
+date: 2026-03-03
+draft: false
 tags: ["ai-security", "golang", "supply-chain", "models"]
 series: "AI Security Engineering"
 ---
@@ -68,3 +68,12 @@ You will see the pickle rejected on its magic bytes and the GGUF accepted only a
 ## The trifecta, named
 
 Two chapters of Part 4 are now in place. Code the agent runs is boxed away from the host, the hand-off between its brains is authenticated, the tools it calls are pinned, and the model it loads is verified. Each of those closed off one leg of what people have started calling the lethal trifecta: access to untrusted content, access to private data, and the ability to act or communicate outward. Any one leg alone is survivable. All three at once, in a single agent that reads your email, holds your calendar, and can reach the network, is the shape every attack in this book has been circling. The next post puts the three legs on the table together and shows how the controls so far keep them from lining up into a working exfiltration.
+
+## Take it to your own project
+
+Never load an artifact you cannot verify:
+
+- Check magic bytes and a known hash before loading any model or artifact.
+- Refuse formats that can execute on load, such as pickles.
+- Delete a failed artifact before anything runs it.
+- Verify first, load second, always in that order.

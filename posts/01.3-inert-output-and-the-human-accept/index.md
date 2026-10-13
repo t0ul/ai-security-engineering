@@ -1,8 +1,8 @@
 ---
 title: "Inert output and the human accept"
 description: "The safest thing an email agent can do with an event is write it to a file and stop. This post shows why the one-line shortcut of adding events straight to your calendar is the bug, and builds the two-part control that replaces it: output that changes nothing on its own, and a human accept step that only adds what a person chose."
-date: 2026-10-07
-draft: true
+date: 2025-09-16
+draft: false
 tags: ["ai-security", "golang", "agents"]
 series: "AI Security Engineering"
 ---
@@ -115,3 +115,12 @@ The folder's tests assert all three: the shortcut calendars the flagged event, t
 Two small decisions, and neither needs a model. The agent's output is inert, so writing it changes nothing on its own. And a real calendar gains an event only through an accept a person drives, with anything suspect left unchecked. Between them there is no automatic path from an extraction to your schedule, which is the property that will still hold three parts from now when the thing proposing the events is a model reading hostile mail.
 
 It is worth saying what this is not. This is the plain version of a human-in-the-loop gate, good enough for a parser you trust. Once the agent can take actions that are harder to undo than a calendar entry, the accept needs more: evidence shown up front, a single-use confirmation, resistance to a forged click. That is its own lesson later in the book. For now the agent has a dependable core: one shape, honest dates, inert output, a human gate. Next I give it the last piece of that core, the part that watches a folder and picks up the mail, and I show what goes wrong when the thing it reads is hostile or simply too big.
+
+## Take it to your own project
+
+Before your agent can change anything real:
+
+- Make its output inert by default: a file, a draft, a proposal that nothing applies on its own.
+- Put an explicit human accept step between the proposal and any irreversible effect.
+- Separate "propose" from "apply" in the code, so the apply path cannot run without a person.
+- Make the accept decision specific: approve this item, not a blanket "trust the agent."

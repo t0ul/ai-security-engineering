@@ -1,8 +1,8 @@
 ---
 title: "The dual-LLM brain"
 description: "Every injection in this book works because one model both reads the untrusted email and decides what to do. This post splits that in two: a privileged planner that decides but never reads the untrusted text, and a quarantined reader that reads it but can only produce data, never act. A command hidden in an email reaches only the reader, where it is data, and the planner it was meant for never sees it."
-date: 2026-10-12
-draft: true
+date: 2026-02-10
+draft: false
 tags: ["ai-security", "golang", "agents", "camel"]
 series: "AI Security Engineering"
 ---
@@ -43,6 +43,10 @@ The exfiltration happened. The model that was supposed to extract an event also 
 
 ## II. Two brains, and the one invariant
 
+![The dual-LLM split: a quarantined reader that reads untrusted text but cannot act, and a privileged planner that acts on its goal and reads the reader's output as data.](dual-llm.svg)
+
+*The injected command reaches the reader and stops there, as text. Control flow never crosses into the planner, so phrasing the injection any other way changes nothing.*
+
 Now split it. The quarantined reader reads the untrusted email and returns data, and the crucial detail is the type of that return: it has a field for the facts it extracted and a field for the raw text, and no field that can become an action. There is nowhere in the reader's output for a command to live. The privileged planner then decides the actual actions from its own goal, reading the reader's data as facts, never as instructions.
 
 ```go
@@ -75,3 +79,12 @@ It is worth naming what this rests on, because it is the next post. The split on
 The brain is split in two. The model that reads the untrusted email produces only data and cannot act; the model that acts decides from its own goal and never takes the email's text as a command. The injection that would have owned a single-model agent reaches the reader and dies there as a harmless fact. It is the architectural form of the rule this whole book keeps returning to: the model proposes, in data, and code disposes.
 
 The two halves of the brain have to talk, though, and that hand-off is itself a target. The next post authenticates it: the planner signs its plan, and the executor refuses to run any plan that does not verify as the real planner's, unaltered, so that nothing can forge a decision and walk it across the boundary we just built.
+
+## Take it to your own project
+
+Separate the part that reads from the part that acts:
+
+- Have the component that touches untrusted text output only data, never actions.
+- Have the component that acts work from its own goal and treat that data as facts.
+- Make the boundary structural: the reader has no capability to act.
+- Do not rely on detecting the injection; rely on it having nowhere to go.

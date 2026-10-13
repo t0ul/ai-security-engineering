@@ -1,8 +1,8 @@
 ---
 title: "Answering what is on this month"
 description: "Part 4 finished the agent's architecture. Part 5 gives it memory: the ability to answer a question by retrieving across everything it has ever read, not just today's email. This post builds that retrieval with GoRag, shows it answering what is on this month, and does not attack it, because it is the feature the rest of the chapter attacks."
-date: 2026-10-12
-draft: true
+date: 2026-03-17
+draft: false
 tags: ["ai-security", "golang", "rag", "retrieval"]
 series: "AI Security Engineering"
 ---

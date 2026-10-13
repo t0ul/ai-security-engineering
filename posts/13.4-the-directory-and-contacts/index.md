@@ -1,8 +1,8 @@
 ---
 title: "The directory and contacts"
 description: "The agent builds a contact directory from who appears in your mail, and contacts are PII. An email that mixes them with other sensitive values, an SSN, an account key, and asks for everything on file, tempts a naive directory to hand it all over. The agent's contacts tool surfaces exactly one kind of thing, email addresses, nothing else it finds, read-only, and flags what it surfaced."
-date: 2026-10-12
-draft: true
+date: 2026-06-23
+draft: false
 tags: ["ai-security", "golang", "agents", "pii"]
 series: "AI Security Engineering"
 ---
@@ -69,3 +69,11 @@ Two addresses, the two that belong in a directory, and the SSN and key left exac
 The shape here is one the whole book keeps arriving at from different directions: the safe default is the narrow one. The scrubber removed every kind of secret it could find; the contacts tool surfaces only the single kind it should. Both are the same instinct, that a component touching personal data should do the least it can get away with, and that "show the contacts" must mean addresses and only addresses, chosen by a rule, not inferred by something an email can talk to. A directory is allowed to know who to email. It is not allowed to become the dossier a hostile message asks it to be.
 
 The next feature is the sharpest edge in the agent, the one that acts on the outside world: action links, the buttons an email wants you to click. That is where the human gate, the egress policy, and the sandbox all meet at once.
+
+## Take it to your own project
+
+Treat contact and directory data as PII:
+
+- Scrub it at ingest and scope who can read it.
+- Apply least privilege to the tools that touch it.
+- Do not surface a contact to someone who should not see it.

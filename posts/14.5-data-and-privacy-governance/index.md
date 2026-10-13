@@ -1,8 +1,8 @@
 ---
 title: "Data and privacy governance"
 description: "Two gates stand between the world and what the agent trusts. At ingestion, a record that claims a trusted source must prove it with a signature, or a forged document poisons the corpus; unsigned data is accepted but contained. At promotion, a change to the agent must clear the eval and red-team gates before it goes live. This forges a trusted record and ships an unsafe change past a naive path, then holds both gates, fail-closed."
-date: 2026-10-13
-draft: true
+date: 2026-08-18
+draft: false
 tags: ["ai-security", "golang", "governance", "mlops"]
 series: "AI Security Engineering"
 ---
@@ -51,3 +51,11 @@ The naive promote ships a change whose red-team score is not zero, which is to s
 Both gates are the same instinct the whole book runs on, applied at the two edges of the system instead of inside it. Trusting data requires a verifiable signature, not a claim; shipping a change requires passing the measures, not a promise. And both fail closed, so the absence of proof is a refusal, not a default-allow. Poisoned data cannot enter wearing trust it did not earn, and a change cannot leave without the evidence that it is safe, which is exactly the boundary governance is for: not to slow the good path, but to make the bad path require something it cannot produce.
 
 The last governance post is about the agent's output rather than its inputs: signing what it produces, so that a thing claiming to come from the agent can be verified as genuine and unaltered, the same provenance check turned outward.
+
+## Take it to your own project
+
+Gate what you trust and what you ship:
+
+- Require provenance or a signature for data you will trust at ingest.
+- Contain unsigned data rather than trusting it.
+- Gate any model change behind the eval and red-team, and fail closed.

@@ -1,8 +1,8 @@
 ---
 title: "Defeating the lethal trifecta"
 description: "Three capabilities in one agent make a breach: reading untrusted content, reaching private data, and acting outward. The classic chain is SSRF to the cloud metadata service for credentials, then an outbound post to the attacker. This post runs that chain with no controls, then stacks the three the agent already has, each one severing a different leg, and closes Part 4 with the board."
-date: 2026-10-12
-draft: true
+date: 2026-03-10
+draft: false
 tags: ["ai-security", "golang", "ssrf", "defense-in-depth"]
 series: "AI Security Engineering"
 ---
@@ -33,6 +33,10 @@ The email the agent is summarizing carries a hidden instruction: fetch the metad
 The credential left the machine. All three legs were present, nothing cut any of them, and the injection read a secret and sent it away in a single pass.
 
 ## One control per leg
+
+![The lethal-trifecta chain and the three controls that each sever it.](trifecta.svg)
+
+*Defense in depth: the chain has no single checkpoint to beat. netpolicy, captoken, and argcheck each refuse the attack on their own.*
 
 The agent already built the three controls that cut these legs, in earlier chapters. This post is where they stand together, which is the point: defense in depth means the chain has no single checkpoint to beat, because each control refuses it on its own.
 
@@ -66,6 +70,10 @@ A control that only ever says no would be useless, so the last check is that a r
 ```
 
 ## The board, at the end of Part 4
+
+![The architecture so far: the defense layers built through Part 4, solid, with the newest highlighted; the layers still ahead faded.](spine-sofar.svg)
+
+*The architecture so far. Everything solid is built and attacked; P4 is what this part added. The faded layers are the map of what is still ahead.*
 
 Part 4 was isolation, the dual-LLM split, the protocol and supply-chain pins, and now the trifecta taken apart. That is the last of the architecture. Before moving on, the whole book re-attacks itself, every lesson's break run again, which is the discipline this series keeps: a control that regresses is a red line here, not a surprise in production.
 
@@ -109,3 +117,12 @@ green 21  red 0  intro 3  feature 1  method 3  problem 2  live 2
 Twenty-one runnable controls, every one of them re-attacked and holding, and no red. The rows that are not green are the lessons that teach rather than defend: the intro and method posts that set the agent up, the problem statements, and the two live proofs against things that are not importable modules, the detonation chamber and the model-artifact gate. Everything that can be a failing-then-passing test is one.
 
 That is the architecture finished. The agent is boxed, authenticated, pinned, and now proof against the trifecta that every attack so far was a piece of. Part 5 turns from the agent's structure to its memory: once it can remember things across emails and search what it has seen, the data it retrieves becomes a new place for an attacker to hide, and the next chapter asks what happens when the poisoned instruction is not in today's email but in something the agent wrote down weeks ago.
+
+## Take it to your own project
+
+Take apart the trifecta on every dangerous path:
+
+- Name which of the three legs a path has: untrusted input, private data, acting outward.
+- Cut at least one leg on every such path.
+- Stack independent controls so no single checkpoint is the only one.
+- Assume one control will fail, and make the others still hold.

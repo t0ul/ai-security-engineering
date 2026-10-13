@@ -1,8 +1,8 @@
 ---
 title: "Incident response and the kill switch"
 description: "The kill switch is the control you reach for in an incident, so it has to be two things an ad-hoc flag is not. Governed, because an attacker who can flip the switch can flip it off mid-incident or on as a denial of service. And layered, because a single full-stop is its own outage, a deny storm against every legitimate user. The agent's safety gate requires a break-glass capability to toggle, and stops side effects without stopping reads."
-date: 2026-10-13
-draft: true
+date: 2026-08-11
+draft: false
 tags: ["ai-security", "golang", "governance", "incident-response"]
 series: "AI Security Engineering"
 ---
@@ -60,3 +60,11 @@ The thing causing harm, side effects, is stopped instantly, and the household ca
 The lesson under both failures is that stopping an agent is a governed action with a blast radius, not a boolean. Who may stop it is an authorization question, answered by a capability scoped to the switch, so the control cannot be turned against you. How much to stop is a proportionality question, answered by levels, so the response fits the incident instead of flattening everything. A kill switch built as a flag gets both wrong; built as a governed, layered control, it is something you can actually use the moment you need it, which is the only time it matters.
 
 The last two governance posts move from the agent's operation to its data and its output: the gates that keep a poisoned dataset or an unreviewed model from being promoted, and the signatures that let anyone verify the agent produced a thing, unaltered.
+
+## Take it to your own project
+
+Build the stop button before you need it:
+
+- Make a layered kill switch: pause tools, revoke credentials, halt the agent.
+- Make it easy for an operator and hard to trip maliciously.
+- Test it, and practice the response.

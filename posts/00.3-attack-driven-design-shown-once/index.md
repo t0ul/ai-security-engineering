@@ -1,8 +1,8 @@
 ---
 title: "Attack-Driven Design, shown once"
 description: "Before we build anything for real, one full turn of the loop on a single small thing: put a language model in the agent, watch it invent an event that was never in the email, add the small check that throws the invention away, and prove the fix with a number you can reproduce. This is the rhythm the rest of the book repeats."
-date: 2026-10-03
-draft: true
+date: 2025-08-26
+draft: false
 tags: ["ai-security", "golang", "agents", "attack-driven-design"]
 series: "AI Security Engineering"
 ---
@@ -28,6 +28,11 @@ You cannot prove a coin is fair by flipping it once and getting heads. In the sa
 So the method I use does not rely on catching the model misbehaving by luck. Instead I write the attack down as a fixed, repeatable case: an input that always exercises the worst path, and a check that says whether the bad thing got through. Then I measure two numbers. How often the attack succeeds with no defense in place, and how often it succeeds once the defense is added. A defense that works takes the first number to zero and keeps it there, run after run.
 
 That is Attack-Driven Design, and the whole rest of this book is that one move, repeated. Let me show it turning once, start to finish, on something small.
+
+![The Attack-Driven Design loop: build a small thing, attack it and measure that it lands, fix what broke, then re-attack with the same test and measure that it now lands never.](add-loop.svg)
+
+*Every feature in the book runs this loop. The only thing that proves a defense worked is the second measurement: the same attack that landed every time now lands never.*
+
 
 ## One turn of the loop, start to finish
 
@@ -71,3 +76,13 @@ The full scorecard has a line like that for each thing the agent needs to resist
 So that is the loop: build a small thing, write the attack down so it is repeatable, watch it land, add the smallest honest fix, and prove the same attack now fails with a number anyone can rerun. One email, one invented gala, one check, one receipt.
 
 Now we rewind all the way back to an empty project. The next few posts build the boring, dependable core of the agent with no model and no defenses at all, because you cannot meaningfully attack something until it first does its job. Once it does, we point the red-team tools at the whole thing and watch the board light up red. That red board becomes our to-do list, and we spend the rest of the book turning it green, one line at a time.
+
+## Take it to your own project
+
+Run this loop on any feature you build, not just this one:
+
+- Write the attack down as a repeatable test before you write the defense.
+- Measure how often it succeeds with no defense in place; that number is your baseline.
+- Add the smallest control that closes it.
+- Run the exact same attack again and confirm the number is zero.
+- Keep the test in your suite so a regression turns red before you ship.

@@ -1,8 +1,8 @@
 ---
 title: "Memory poisoning and lifecycle"
 description: "The earlier leaks were about retrieval. This one is about time. The agent remembers things across emails, so a poisoned note planted today is an injection on a delay, recalled tomorrow as trusted context. The fix is to give memory a lifecycle: scope each entry to one subject, expire it, and neutralize untrusted recall, so what the agent remembers cannot quietly become what it is told."
-date: 2026-10-12
-draft: true
+date: 2026-04-07
+draft: false
 tags: ["ai-security", "golang", "memory", "prompt-injection"]
 series: "AI Security Engineering"
 ---
@@ -57,3 +57,12 @@ The instruction never reaches the prompt. The per-control lines show why there i
 These three are not only injection defenses, which is why they are worth building as the memory's shape rather than bolting on later. The TTL and the scope are also how an agent holding personal data stays honest about it: data that expires is data you are not hoarding, and data scoped to a subject is data you can hand back or erase when that subject asks, which the store supports directly. Memory poisoning and privacy turn out to be the same engineering problem, that persistent memory is a liability unless it has a lifecycle, approached from two sides.
 
 That closes the memory chapter, and with it the store. The agent can retrieve and remember across time without any of it becoming a channel for instructions or a leak across people. The next chapter steps away from the attacker for a moment and asks a quieter question that is just as dangerous: what happens when the data is not poisoned but simply wrong, two emails that disagree, a garbled date, a model that fills a gap with something that sounds right. Integrity, not security, but the same discipline of never trusting what you did not check.
+
+## Take it to your own project
+
+Treat stored memory as an attack surface:
+
+- Scope what the agent remembers to a tenant and a purpose.
+- Expire memories; nothing lives forever by default.
+- Do not let a single poisoned note persist and steer later answers.
+- Re-apply retrieval fencing to memory, not just to fresh input.

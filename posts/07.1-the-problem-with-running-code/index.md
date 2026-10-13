@@ -1,8 +1,8 @@
 ---
 title: "The problem with running code"
 description: "Part 4 changes the kind of problem. So far the agent has read mail, written inert files, and fetched through a gate. Now it gets a tool that runs code, and an agent that executes a command a model produced from a hostile email is a different class of danger. This post shows the unguarded version, with nothing between the model and a shell, so the walls the rest of Part 4 builds have something real to defend against."
-date: 2026-10-12
-draft: true
+date: 2026-01-13
+draft: false
 tags: ["ai-security", "golang", "agents", "isolation"]
 series: "AI Security Engineering"
 ---

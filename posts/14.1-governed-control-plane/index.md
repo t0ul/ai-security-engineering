@@ -1,8 +1,8 @@
 ---
 title: "A governed control plane and operator roles"
 description: "Part 7 is about running the agent, not building it. The first operator power is changing a prompt without shipping code, and it is also the sharpest insider risk, because a prompt is the agent's instructions. An ungoverned plane lets anyone own the agent by swapping it. The governed plane applies a change only for a signed, scoped operator capability, refuses a narrower role, and records who changed what."
-date: 2026-10-12
-draft: true
+date: 2026-07-21
+draft: false
 tags: ["ai-security", "golang", "governance", "rbac"]
 series: "AI Security Engineering"
 ---
@@ -68,3 +68,11 @@ The last piece is the one an auditor asks for: not just that the change was auth
 The denied attempt is recorded, not just the successful one, because a refused privileged action is exactly what you want to see when you go looking for who tried. That is governance in one feature: a privileged action needs a signed capability scoped to it, a role that does not have that scope cannot perform it however valid its other powers, and every attempt is on a tamper-evident record attributed to a subject. The operator can change the agent without a deploy; nobody else can change it at all, and the agent remembers which of them did.
 
 The next operator question is about the agent's own credentials rather than the operator's: it now holds tokens to act in the world, and the post is about what happens to those tokens when you need to take them away right now.
+
+## Take it to your own project
+
+Treat changing the agent as a privileged action:
+
+- Require a signed capability scoped to exactly that change.
+- Version changes so they can be pinned and rolled back.
+- Audit every attempt, the refusals too.

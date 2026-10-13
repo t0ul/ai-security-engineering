@@ -1,8 +1,8 @@
 ---
 title: "A web-search tool that hits a local server"
 description: "The agent gets its first tool that reaches out on its own, a web search, and a tool that fetches whatever URL it is handed is server-side request forgery waiting to happen, because the URL comes from a model that read an untrusted email. This post points a naive fetcher at the agent's own machine and watches it comply, then puts the real egress policy in front, which refuses loopback, the cloud-metadata address, and even an allowlisted name that resolves inward."
-date: 2026-10-12
-draft: true
+date: 2025-12-16
+draft: false
 tags: ["ai-security", "golang", "agents", "ssrf"]
 series: "AI Security Engineering"
 ---
@@ -63,3 +63,12 @@ This is a teaser, and I will say plainly what it is teasing. One tool, fetching 
 Chapter 5 closes with the three ends covered: secrets scrubbed before they are stored, the agent's own output stripped of anything that beacons, and now its first outbound tool held to an allowlist of resolved hosts. The agent can look things up without being tricked into looking inward.
 
 Next the stakes rise for real. The agent is about to get a tool that executes, and an email that can reach an executor is a different class of problem than an email that can reach a fetcher. Part 4 builds the chamber, the brain, and the broker that make running untrusted-influenced code survivable, and it starts by showing, with nothing between the model and a shell, exactly how bad the unguarded version is.
+
+## Take it to your own project
+
+Put an egress policy on every tool that fetches:
+
+- Apply a host allowlist to any tool that reaches the network.
+- Block internal, loopback, and link-local addresses, including the cloud metadata range.
+- Resolve the name first, then check the address, so a name cannot point inward.
+- Deny by default; a tool that does not need the network should not have it.

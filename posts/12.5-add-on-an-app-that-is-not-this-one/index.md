@@ -1,8 +1,8 @@
 ---
 title: "ADD on an app that is not this one"
 description: "Every attack in this book was against one agent. The claim underneath has always been that the method, not the agent, is the point. This post tests that: a brand-new toy app, a text summarizer with nothing to do with email, attacked with the same gorauder catalog, wrapped in the same ADD Technique, scored by the same gate, green against the live model in a second. If it transfers here, it was never about email."
-date: 2026-10-12
-draft: true
+date: 2026-05-26
+draft: false
 tags: ["ai-security", "golang", "attack-driven-design", "transfer"]
 series: "AI Security Engineering"
 ---
@@ -63,3 +63,11 @@ Green. The injection breaches the naive config every time and dies on the harden
 That is the flywheel, finished, and it is also the honest answer to a question this book should have made you ask: is any of this general, or did it only ever describe one person's calendar agent. The method is a loop and three libraries, the red-team runner, its catalog, and the gate, and they attached to a summarizer as readily as to the agent, because prompt injection, data-versus-instructions, and wired-not-stubbed are properties of LLM apps, not of emaildrop. Build your thing, point the catalog at it, wire the before and after, run it live on every push. The app changes; the method does not.
 
 With the flywheel built and shown to transfer, the last stretch of this part stops adding method and goes back to building the agent, now at full capability, every new feature arriving with its attack and its fix in the same breath. The next chapter is the capstone: one poisoned email that tries the whole catalog at once, replayed through the agent by its trace id, and every layer this book built standing between it and your calendar.
+
+## Take it to your own project
+
+Prove the method transfers:
+
+- Point the same loop at the next thing you build.
+- Let it go red with no defenses; that red board is your table of contents.
+- Turn each red line green; the method transfers, the controls are yours to write.
