@@ -1,0 +1,12 @@
+== before: an ungoverned, all-or-nothing kill switch ==
+  attacker flipped the switch back off mid-incident: true
+  the only stop is a full halt; a safe read is refused too: true (deny storm)
+
+== after: governed toggle, layered levels ==
+  app role tries to toggle: refused: controlplane: grant does not cover requested scope
+  responder engages block-tools (authorized): applied=true
+    a side-effecting tool: blocked
+    a safe read:           allowed   (contained, no storm)
+  responder escalates to full halt when warranted: everything stopped=true
+
+attack blocked (the receipt): an ungoverned switch anyone can flip and only a full halt is its own incident; the governed switch refuses an unauthorized toggle, and its layered levels stop side effects while reads keep serving, escalating to a full halt only when warranted
