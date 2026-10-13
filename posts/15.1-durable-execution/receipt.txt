@@ -1,0 +1,10 @@
+== before: resume by trusting the log on disk ==
+  the resumed agent reads the approval decision as: "approved"
+  it would issue the refund the human denied: true
+
+== after: resume-verify the hash chain ==
+  reopening the tampered log: durable: step log hash-chain does not verify (tampered checkpoint)
+  resume refused on a tampered checkpoint: true
+  a clean log resumes (err=<nil>); the real decision is: "denied"
+
+attack blocked (the receipt): a naive resume trusts a forged checkpoint and reverses a decision; the hash chain refuses a tampered log and fails closed, while a clean log resumes with the real decision intact
