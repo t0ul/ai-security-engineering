@@ -1,7 +1,7 @@
 ---
 title: "Tasks and reminders"
 description: "The agent now pulls to-dos, heads-ups, and actions out of an email, not just meetings. An action is the dangerous kind, because it carries a URL to act on, so it has to be surfaced for review rather than dropped into a silent to-do list. Classify by what a sentence sounds like and an attacker hides a phishing link behind to-do language. The real classifier checks for a URL first, so a link is always an action."
-date: 2026-10-12
+date: 2026-06-09
 draft: true
 tags: ["ai-security", "golang", "agents", "classification"]
 series: "AI Security Engineering"
@@ -69,3 +69,11 @@ The genuine reminder is still a task, because it has no link. The smuggled one i
 It would be tempting to make this smarter, to score how suspicious a link looks or train something to spot phishing. The agent does the boring thing instead: a link is an action, full stop, no matter how friendly the sentence around it. That is the same move as never letting the model decide a date, or never running a tool beyond its capability. The security-relevant decision, is this a thing that acts, is made by a rule that cannot be social-engineered, and the model-shaped judgment is only allowed to run on what is left. A phishing link cannot talk its way into the task list, because the thing that sorts it never listens to it.
 
 The next feature is the weekly view, pulling all of this together into "what is my week", and its attack is quieter: not a link, but a crafted item that tries to make one real day look like another.
+
+## Take it to your own project
+
+When you add a feature, re-apply the controls:
+
+- Give a new item type the same inert output, human accept, and validation as the first.
+- Do not let a new surface skip the controls the old ones have.
+- Attack the new feature before you trust it.

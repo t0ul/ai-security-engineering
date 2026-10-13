@@ -1,7 +1,7 @@
 ---
 title: "Output authenticity"
 description: "The agent produces artifacts people act on: a calendar file they import, a summary they trust. If anyone can produce a file that claims to be from the agent, or alter one after the fact, then the agent said so means nothing. The agent signs what it produces with a content credential, so a consumer can verify the artifact came from the agent and was not changed. A forged or tampered one fails the check. This closes the governance chapter."
-date: 2026-10-13
+date: 2026-08-25
 draft: true
 tags: ["ai-security", "golang", "governance", "provenance"]
 series: "AI Security Engineering"
@@ -53,3 +53,11 @@ The genuine artifact verifies, because the agent signed exactly those bytes with
 That completes the governance chapter, and it completes it symmetrically. Data entering the agent has to prove its source or be contained; artifacts leaving the agent carry a proof of theirs. In between sits everything the earlier posts governed: who may change the agent, how it is stopped, what may be promoted. The common thread is that trust is never a label in this system. It is a signature you can check, a capability you can verify, a gate that fails closed, so that at every edge the burden is on the thing asking to be trusted to produce the evidence, not on the agent to assume good faith.
 
 The agent is now built, attacked, hardened, and governed. The last part before the finish is reliability: making all of this survive a crash, a retry, a compaction, the ordinary operational failures that are not attacks but can undo a secure system just as thoroughly if the engineering underneath is not exactly-once and durable.
+
+## Take it to your own project
+
+Make the agent's output provable:
+
+- Sign what the agent produces.
+- Let downstream verify the signature.
+- Do not let unsigned output be trusted as the agent's.

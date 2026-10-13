@@ -1,7 +1,7 @@
 ---
 title: "System-prompt leakage"
 description: "The last two posts were about an email planting an instruction. This one is the mirror: an attacker who coaxes the model into reciting the instructions it already has. The model gives up its whole system prompt on the first ask, so the fix is not to trust the model to stay quiet but to check what it is about to say and withhold a response that reads its own rules back out."
-date: 2026-10-12
+date: 2025-11-18
 draft: true
 tags: ["ai-security", "golang", "agents", "prompt-injection"]
 series: "AI Security Engineering"
@@ -67,3 +67,12 @@ It is worth naming why this one is sturdier than the spotlighting layer two post
 That closes the injection chapter. An email that plants an order is met by stripping the order and by fencing the email as untrusted data; a prompt that fishes for the system's own instructions is met by checking the response and refusing to read those instructions back out. Three posts, three turns of the same loop, each ending on an attack that went from landing every time to never, measured against the real model.
 
 Chapter 5 is next, and it moves from what the model is told to what the model handles: the private data that flows through the agent. The first post is about secrets and personal information, and keeping them from ever reaching the parts of the system where they would sit in the clear, waiting to be leaked by an attack like the one we just stopped.
+
+## Take it to your own project
+
+Assume the system prompt is not a secret:
+
+- Put no secrets, keys, or trust decisions inside the prompt itself.
+- Detect prompt-leakage in outputs and refuse to return it.
+- Design so that leaking the prompt does not hand an attacker anything.
+- Treat the prompt as public, and put the security in the structure around it.

@@ -1,7 +1,7 @@
 ---
 title: "Agent memory architecture"
 description: "When several agents share a blackboard, two properties decide whether the shared memory is safe. Recall must be scoped, so one agent's private workspace does not leak into another's. And every fact must be attributed, so a rogue agent cannot write a fact that claims to come from a trusted one. The agent's blackboard is a scoped memory store whose writes are signed inter-agent messages. This closes the reliability chapter."
-date: 2026-10-13
+date: 2026-09-22
 draft: true
 tags: ["ai-security", "golang", "reliability", "multi-agent"]
 series: "AI Security Engineering"
@@ -61,3 +61,11 @@ The researcher asking its own workspace never sees the planner's account number;
 Put the two together and the architecture has the property the whole part has been building toward: an agent can trust the shared memory precisely as far as it can check it. A fact is trustworthy because it is signed by the agent it claims, not because it says so; a recall is private because it is scoped, not because everyone agreed to be polite. Those are the two failures of naive shared state, impersonation and leakage, closed with a signature and a scope, the same two primitives that secured hand-offs and retrieval earlier. Agent memory is not a new security domain; it is the old ones, applied to the place agents keep what they know.
 
 That completes the reliability chapter, and nearly the book. The agent is built, attacked, hardened, governed, and made durable. One part remains, and it is the one that makes all of it maintainable: turning the pile of controls into code you would be glad to hand to someone else, and pointing a model-driven red team at the finished product to find what the author's own tests could not.
+
+## Take it to your own project
+
+Design the whole memory as an attack surface:
+
+- Separate trusted memory from untrusted.
+- Scope and expire what you keep.
+- Verify integrity on read, end to end.

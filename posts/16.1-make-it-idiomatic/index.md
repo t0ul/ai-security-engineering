@@ -1,7 +1,7 @@
 ---
 title: "Make it idiomatic: the repo refactor"
 description: "A secure system you cannot read is a secure system you cannot keep secure. This post is the refactor that turned a pile of controls into Go you would be glad to hand to someone else: small packages with single jobs, security primitives extracted into reusable libraries, and the product split from the handbook. There is no attack here. The point is that every lesson in this book could import a real control because the refactor made the controls real packages."
-date: 2026-10-13
+date: 2026-09-29
 draft: true
 tags: ["ai-security", "golang", "architecture", "refactoring"]
 series: "AI Security Engineering"
@@ -49,3 +49,11 @@ None of this is novel Go. It is just Go done with the assumption that someone wi
 ## The last thing to try
 
 The agent is built, attacked, hardened, governed, made durable, and now readable. One question is left, and it is the one you can only ask of a finished system: what did the author miss. Every test in this book was written by the same person who wrote the defenses, which means every test encodes the same blind spots. The final post hands the finished product to an adversary that does not share them, a model-driven red team that plants its own flags and tries to capture them, and sees what a year of careful building looks like to something actively trying to break it.
+
+## Take it to your own project
+
+Refactor without losing the proof:
+
+- Change the shape for readability, not the behavior.
+- Keep every attack green through the refactor.
+- Keep the dependency surface small; idiomatic code is auditable code.

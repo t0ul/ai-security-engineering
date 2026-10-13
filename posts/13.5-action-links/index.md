@@ -1,7 +1,7 @@
 ---
 title: "Action links"
 description: "An action link is the sharpest thing an email can carry: a URL it wants acted on, and acting on one is where the human gate, the egress policy, and the sandbox fetch all meet. A naive agent that just follows the link lets an email exfiltrate data or reach the cloud metadata service. The agent requires a human to approve the exact action, checks the URL against the egress allowlist, and only then fetches it, inside the sandbox."
-date: 2026-10-12
+date: 2026-06-30
 draft: true
 tags: ["ai-security", "golang", "agents", "ssrf"]
 series: "AI Security Engineering"
@@ -63,3 +63,11 @@ Zero exfiltration, and the genuine RSVP, approved by the owner and pointing at t
 It is not an accident that the most dangerous feature is the one with the most controls on it, and that they are controls you have already seen. Nothing here is new; action links are just the place where human approval, egress filtering, and sandboxing all become load-bearing at the same moment, because this is the one operation that reaches past the agent into the world. Each gate covers a different failure of the others: the human gate stops an action nobody intended, the egress policy stops an intended action aimed somewhere it should not go, and the sandbox stops whatever slips past both from reaching the host. A link has to beat all three, and they were built so that beating all three at once is the thing no single clever email can do.
 
 That is the agent's riskiest surface contained. The next feature is quieter but just as important to get right: the calendar's own writes and exports, where the danger is not an attacker at all but the agent doing the same safe thing twice.
+
+## Take it to your own project
+
+Make action links safe to hand out:
+
+- Make them unguessable, scoped, single-use, and expiring.
+- Keep the human gate behind them.
+- Sign them so they cannot be forged.

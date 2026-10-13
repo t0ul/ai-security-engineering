@@ -1,7 +1,7 @@
 ---
 title: "Attacking the baseline, all red"
 description: "The agent works and I can prove it. So now I try to break it, with the real model, not a stub. A naive prompt and one hostile email, and the model does exactly what the email tells it to. That live failure, plus the catalog of every attack class still to come, is the to-do list for the rest of the book."
-date: 2026-10-10
+date: 2025-10-07
 draft: true
 tags: ["ai-security", "golang", "agents"]
 series: "AI Security Engineering"
@@ -61,6 +61,10 @@ The attack hit the real model. The oracle, the thing that decides whether the at
 Hold that against the tempting shortcut. It is easy to write a "security test" where you hand-write the vulnerable answer and hand-write the safe answer and compare them, so the before is always a failure and the after is always a pass. That test is green forever and tells you nothing, because the attack never touched your real system. A test that cannot fail is not a test. The reason to trust a defense in this book is that the exact same attack went from landing to not landing against the real agent, and you watched it. So the rule, for every post from here: wire the real thing, and let the result be free to come out red.
 
 ## III. The whole board, and what it is
+
+![The architecture so far: the defense layers built through Part 1, solid, with the newest highlighted; the layers still ahead faded.](spine-sofar.svg)
+
+*The architecture so far. Everything solid is built and attacked; P1 is what this part added. The faded layers are the map of what is still ahead.*
 
 That was one attack class, injection, shown live. There are many more, and the agent resists none of them yet. The project keeps a scorecard of them, the full catalog of attacks a calendar agent built on a model has to withstand, mapped to the industry's two lists for this: the OWASP Top 10 for LLM applications, and its companion list for agentic systems. Run it and the coverage map prints out:
 

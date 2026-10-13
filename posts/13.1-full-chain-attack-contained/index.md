@@ -1,7 +1,7 @@
 ---
 title: "A full-chain attack, contained"
 description: "The capstone. One email that tries everything at once: a hidden instruction to exfiltrate the calendar, a planted AWS key, and a tool that claims to be read-only but tries to write a file. A naive agent lets all three through. The real pipeline runs every email under one trace id through the controls this book built, each layer catches its piece, and the trace replays to show which control stopped what."
-date: 2026-10-12
+date: 2026-06-02
 draft: true
 tags: ["ai-security", "golang", "agents", "defense-in-depth"]
 series: "AI Security Engineering"
@@ -29,6 +29,10 @@ A hidden instruction to turn the agent against its owner, a secret planted where
 cd posts/13.1-full-chain-attack-contained
 go run .
 ```
+
+![One poisoned email with three payloads. A naive agent lets all three land; the real pipeline stops each at its own gate and writes a receipt for each into one hash-chained log.](chain.svg)
+
+*The same email, two ways. On the naive path every payload lands, three for three. The real pipeline meets each payload with the control built for it, scrub, injection guard, capability check, and records each refusal in one trace, so nothing lands.*
 
 ## The naive agent loses three times
 
@@ -73,3 +77,11 @@ The last column of the capstone is the one an incident responder actually wants.
 Three lines, three layers, named. The scrubber logged the AWS key it removed, the injection guard logged the indicator it caught, and the capability check logged the read-only tool that tried to write. And the whole trace is a verified hash chain, so an attacker who got onto the box could not quietly edit the record of what they did without the verification failing. The agent does not just stop the attack; it can tell you, line by line, how.
 
 This is the agent whole, under fire, holding. The rest of the capstone chapter builds outward from here, every remaining feature, tasks, the weekly view, the contact directory, action links, the calendar and its exports, the chat, arriving the way they should, each with its own attack and its own fix in the same breath, so the agent grows without the board ever going red.
+
+## Take it to your own project
+
+Test the whole chain, not one attack at a time:
+
+- Run one input that tries everything at once, against the real pipeline.
+- Confirm each control catches its piece under a single trace id.
+- Replay by trace id to see which control stopped what.

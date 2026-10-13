@@ -1,7 +1,7 @@
 ---
 title: "A gateway you cannot route around"
 description: "A model call should have exactly one way out, through a choke point you control. This post builds the naive proxy first, lets it be steered at an internal service and flooded with no limit, then puts gouncer in front: an allowlist of model names, a body cap, and a rate cap, so an unknown host is a 400, a burst is a 429, and an oversized body is a 413."
-date: 2026-10-12
+date: 2025-10-21
 draft: true
 tags: ["ai-security", "golang", "agents"]
 series: "AI Security Engineering"
@@ -96,3 +96,12 @@ A four kilobyte body through the naive proxy, a `413 Request Entity Too Large` t
 So the agent now has its lens: a log that cannot be quietly forged, and a gateway that every model call passes through, where the host is fixed, the body is capped, and the rate is capped, all of it audited under one trace id. An unknown host is a 400, a burst is a 429, a fat request is a 413, and each refusal is a real status code you watched the gateway return, not a promise.
 
 That finishes the observability part. We built the ability to see and to say no at the door before building a single model-facing defense, because now when we start closing the red findings from the baseline, we will be able to watch each attack happen and watch it stop. The next post ties the two halves together with the trace id that runs through everything, and the operator view it buys you for free. After that, Part 3 begins, and we start turning the red board green.
+
+## Take it to your own project
+
+Put one door in front of every model and outbound call:
+
+- Route all model and network calls through a single gateway; no component calls out directly.
+- Allowlist the hosts it may reach and deny everything else by default.
+- Cap rate, concurrency, and body size at that one place.
+- Make it the only path, so a new feature cannot quietly open a second door.

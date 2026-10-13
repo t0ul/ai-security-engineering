@@ -1,7 +1,7 @@
 ---
 title: "The one-command scorecard"
 description: "Five parts built a pile of before/after tests. This post turns the pile into one command that scores every control and reds the build when one regresses. But a scorecard is only a gate if each row is wired: the attack has to really land with the control removed, and the control has to really be on the path. The agent's Attack-Driven Design gate enforces exactly that, and catches the two false-green rows this book keeps warning about."
-date: 2026-10-12
+date: 2026-04-28
 draft: true
 tags: ["ai-security", "golang", "testing", "attack-driven-design"]
 series: "AI Security Engineering"
@@ -48,6 +48,10 @@ The ADD gate does not just check the defended arm. For every row it asserts thre
 Only the wired row passes. The stubbed row is called out for proving nothing, because its undefended arm did not breach. The not-wired row is called out because the control, though it works in isolation, is not on the path that actually runs. This is the discipline from the very first attacks made mechanical: a green row now certifies that the attack was real and that the thing stopping it is wired into the product, not just present in it.
 
 ## The board, run before every push
+
+![The architecture so far: the defense layers built through Part 6, solid, with the newest highlighted; the layers still ahead faded.](spine-sofar.svg)
+
+*The architecture so far. Everything solid is built and attacked; P6 is what this part added. The faded layers are the map of what is still ahead.*
 
 With that guarantee behind each row, the all-green board finally means something, and it is one command. In the book that command is `make board`, which runs every lesson's test; in the product it is `make check`, the deterministic scorecard plus the live model suite plus the unit tests. The same command runs on a git pre-push hook, so a control cannot regress without the push that broke it going red first.
 

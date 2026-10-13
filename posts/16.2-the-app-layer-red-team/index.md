@@ -1,7 +1,7 @@
 ---
 title: "The app-layer red team: GORED"
 description: "Every test in this book was written by the person who wrote the defenses, which means every test shares the author's blind spots. The final move hands the finished product to an adversary that does not: a model-driven red team that plants its own unforgeable flags and drives a small local model to capture them, confirms success with an oracle a self-report cannot fake, and comes up empty once the bug is fixed. The model is the weapon, and this is live by nature, its own exercise, not a gate."
-date: 2026-10-13
+date: 2026-10-06
 draft: true
 tags: ["ai-security", "golang", "red-team", "offensive"]
 series: "AI Security Engineering"
@@ -22,6 +22,10 @@ The first thing a red team against a language model has to solve is that the att
 The target for this run is a small benign app with a planted object-level access bug, an IDOR: a notes API that checks you have a session but never checks the note is yours, so a low-privilege session can read an admin note that holds the flag. It is the most common serious web vulnerability there is, and it is a good test of whether a cheap model can find and walk through a real one.
 
 ## The model captures the flag
+
+![GORED: a small local model attacks the app while an oracle it cannot forge records a capture only when the real exploit discloses a server-side secret.](gored.svg)
+
+*Against the vulnerable build the model walks the access-control bug and the oracle records the capture at the exploit site; against the hardened build the note is refused and the oracle stays empty.*
 
 Pointed at the vulnerable build, a half-billion-parameter local model, the kind that boots in a couple of seconds, drives the attack and captures the flag.
 
@@ -50,3 +54,11 @@ The hardened build gives the red team nothing: the exploit path is closed, the a
 GORED is a separate project from the agent, deliberately, and it is bigger than one post. What belongs here, at the end of this book, is the symmetry it completes. The series opened with a model reading an untrusted email and a long argument that the model's output must never be trusted as an instruction. It closes with a model reading an untrusted app and the same model's output being trusted least of all, its claims of success ignored in favor of a secret only the target can reveal. Offense and defense turn out to be the same discipline seen from opposite ends: in both, the model is powerful, useful, and fundamentally not to be taken at its word, and the security is in the structure around it that does not have to.
 
 That is the whole method, finished. Build the thing. Attack it with the real tool against the real code, and watch the attack land. Add the real control, and watch it stop, measured, every time. Keep the loop running so a regression turns a line red before a push, and keep the attacker honest with an oracle it cannot forge. Then hand the finished product to something that does not share your blind spots, and let it tell you what you missed. An agent built this way is not an agent that cannot be attacked. It is an agent whose every defense you can point to, reproduce, and prove still holds, which is the most honest thing security engineering has to offer, and the only kind worth shipping.
+
+## Take it to your own project
+
+Hand the finished app to an adversary:
+
+- Let an attacker, even a model, hunt your app for what you missed.
+- Use an oracle it cannot talk out of the truth: a secret only the target can reveal.
+- Fix what it finds, then run the same hunt and confirm it comes up empty.

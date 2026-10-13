@@ -1,7 +1,7 @@
 ---
 title: "One trace id, and the command stream"
 description: "The log and the gateway become a lens only when one thread runs through them. This post follows a single trace id across every stage of one request, verifies the whole run as a tamper-evident chain, and shows the operator view that falls out of it for free: a plain-language feed of exactly what the agent did, correlated by that one id."
-date: 2026-10-12
+date: 2025-10-28
 draft: true
 tags: ["ai-security", "golang", "agents"]
 series: "AI Security Engineering"
@@ -59,6 +59,11 @@ That is the two halves of Part 2 meeting. The trace id says which records belong
 Here is the part I like, because it cost nothing. The audit log is structured, correlated, and trustworthy, which means anything that reads it back is an operator tool. The agent's own interface has an activity view that is exactly that: it reads the same `audit.jsonl` and renders it as a plain-language feed of what the agent did, grouped by trace, so a run is one expandable entry instead of twenty-three scattered lines. Alongside it sits the command stream, the raw tool calls the agent made, each with the gateway's allow-or-block decision next to it, correlated by the same id. Click a trace and you replay that request: what came in, what the model was asked, what the gateway permitted, what came out.
 
 I did not write a logging system for the UI and a separate one for the audit. There is one log, instrumented once, and the operator view is a reader over it. That is the whole argument for doing observability first and properly: the trustworthy record you need for security is the same record that makes the thing operable, and you get the second for free when you build the first.
+
+
+![The architecture so far: the defense layers built through Part 2, solid, with the newest highlighted; the layers still ahead faded.](spine-sofar.svg)
+
+*The architecture so far. Everything solid is built and attacked; P2 is what this part added. The faded layers are the map of what is still ahead.*
 
 ## Conclusion
 

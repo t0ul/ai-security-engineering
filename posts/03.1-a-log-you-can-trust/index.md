@@ -1,7 +1,7 @@
 ---
 title: "A log you can trust"
 description: "Part 2 starts with the lens, not a defense, because you cannot secure what you cannot see. But a log is only evidence if the log itself is honest. This post edits an agent's audit trail to rewrite what happened, watches a plain log accept the forgery, then adds gledger's hash-chained log and watches the same edit get caught."
-date: 2026-10-11
+date: 2025-10-14
 draft: true
 tags: ["ai-security", "golang", "agents"]
 series: "AI Security Engineering"
@@ -57,6 +57,10 @@ Read the log back and it believes the file, because believing the file is all a 
 
 ## II. A chain the edit breaks
 
+![A hash-chained audit log: each record hashes its contents and the previous hash, so an edit breaks the chain on the next read.](audit-chain.svg)
+
+*Change one field and its hash stops matching the link the next record stored. Reopening recomputes the chain and refuses it, so the edit cannot hide.*
+
 The fix is to make every record depend on the one before it, so that changing any record invalidates every record after it. That is what a hash chain is, and I did not write one by hand; I added `gledger`, a small, dependency-free Go library that is a tamper-evident audit log for exactly this job. It gives each record a `prev` field holding the hash of the previous record and a `hash` field over its own contents, so the whole log is a chain. It also carries one `trace_id` across every step of a request, so you can tie a run together and answer the "why zero events" question, and it redacts secrets and defangs log-injection on the way in, which the next section shows. What it defends against is precisely the move above: an edited record no longer hashes to what the next record expects, and a verify walk catches the break.
 
 Recording the same run through gledger looks the same to write, `log.Emit(trace, span, event, fields)` per step, but each line now lands in the chain. Verify it and then make the identical edit:
@@ -94,3 +98,12 @@ The token is gone, replaced by `<SECRET=redacted>`, and what remains is a normal
 So the agent now has a log that is hard to forge and does not hoard secrets: every record chained to the last, a single trace id tying a run together, tampering caught by a verify, secrets redacted before they land. It is the plainest possible version of a security property the rest of the book leans on constantly, that your evidence has to be trustworthy before it is worth anything, and it cost one small library and no change to how the agent writes its log.
 
 A log tells you what the agent did. It does not stop the agent from reaching somewhere it should not. The next post builds the other half of the lens: a gateway every model call has to pass through, one choke point you cannot route around, so that "what host did it contact" has one honest answer and a bad one can be refused.
+
+## Take it to your own project
+
+Give your agent a log you could hand to an auditor:
+
+- Record every security-relevant step: what was decided, by whom, under which trace id.
+- Hash-chain the records so editing one breaks the chain on the next read.
+- Redact secrets and personal data before they reach the log.
+- Verify the chain when you read it, and refuse to trust a log that does not verify.

@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 280" width="100%" role="img" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif">
+  <title>Egress-deny and the one broker</title>
+  <desc>The network is default-deny. The one audited broker is the only way out, and it vets every target against an allowlist. An allowlisted host is let through and logged; an attacker host or an internal address is refused.</desc>
+  <rect x="1" y="1" width="698" height="278" rx="10" fill="#fbfcfe" stroke="#d9e2ec" stroke-width="1"/>
+
+  <rect x="26" y="108" width="150" height="64" rx="8" fill="#ffffff" stroke="#334e68" stroke-width="1.5"/>
+  <text x="101" y="136" text-anchor="middle" font-size="12.5" font-weight="700" fill="#243b53">the agent</text>
+  <text x="101" y="156" text-anchor="middle" font-size="10.5" fill="#627d98">wants the network</text>
+
+  <line x1="176" y1="140" x2="232" y2="140" stroke="#334e68" stroke-width="1.5" marker-end="url(#ebh)"/>
+
+  <!-- default-deny wall + broker -->
+  <rect x="234" y="90" width="170" height="100" rx="8" fill="#eef4ff" stroke="#2563eb" stroke-width="1.8"/>
+  <text x="319" y="126" text-anchor="middle" font-size="12.5" font-weight="700" fill="#243b53">the broker</text>
+  <text x="319" y="146" text-anchor="middle" font-size="10.5" fill="#627d98">default-deny</text>
+  <text x="319" y="162" text-anchor="middle" font-size="10.5" fill="#627d98">allowlist + audit</text>
+
+  <line x1="404" y1="118" x2="456" y2="92" stroke="#2563eb" stroke-width="1.6" marker-end="url(#ebb)"/>
+  <text x="464" y="86" font-size="12.5" font-weight="700" fill="#2563eb">✓</text>
+  <text x="480" y="86" font-size="11.5" fill="#243b53">api.weather.example</text>
+  <text x="480" y="101" font-size="10" fill="#627d98">allowlisted, let through and logged</text>
+
+  <line x1="404" y1="162" x2="456" y2="188" stroke="#334e68" stroke-width="1.5" marker-end="url(#ebh)"/>
+  <text x="464" y="186" font-size="12.5" font-weight="700" fill="#334e68">✗</text>
+  <text x="480" y="186" font-size="11.5" fill="#243b53">attacker.example · 169.254.x</text>
+  <text x="480" y="201" font-size="10" fill="#627d98">not allowlisted / internal: refused</text>
+
+  <text x="350" y="252" text-anchor="middle" font-size="11" fill="#627d98">nothing reaches the network except through the one audited door, and the door vets every target.</text>
+  <defs>
+    <marker id="ebh" markerWidth="10" markerHeight="10" refX="7" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L8,4 L0,8 z" fill="#334e68"/></marker>
+    <marker id="ebb" markerWidth="10" markerHeight="10" refX="7" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L8,4 L0,8 z" fill="#2563eb"/></marker>
+  </defs>
+</svg>

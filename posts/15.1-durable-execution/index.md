@@ -1,7 +1,7 @@
 ---
 title: "Durable execution and resume-verify"
 description: "A long-running agent crashes and resumes, replaying completed steps from a durable log instead of redoing them. That log is on disk, so it is attackable: edit a recorded step and the agent resumes into a state it never reached, an approval that was a denial. The agent's log is a hash chain, so a tampered checkpoint does not verify, and resume fails closed rather than trusting a forged state."
-date: 2026-10-13
+date: 2026-09-01
 draft: true
 tags: ["ai-security", "golang", "reliability", "durability"]
 series: "AI Security Engineering"
@@ -36,6 +36,10 @@ The agent is now about to issue a refund that a human explicitly refused, not be
 
 ## A log that cannot be edited quietly
 
+![Durable execution with resume-verify: the step log is a hash chain, so a flipped decision breaks it and the resume is refused rather than entering a forged state.](durable.svg)
+
+*A naive resume trusts the log and would issue the refund the human denied. Resume-verify recomputes the chain, the edited step no longer matches, and the resume halts instead.*
+
 The agent's durable log is not a plain file of steps, it is a hash chain. Each recorded step includes a hash over its own contents and the previous step's hash, so the steps are linked: change any field of any step and its hash no longer matches, which breaks the link to every step after it. Reopening the log recomputes the whole chain and refuses it if a single thing has moved.
 
 ```
@@ -52,3 +56,11 @@ The tampered log does not load. The agent refuses to resume rather than resume i
 This is the same hash-chain idea as the audit ledger, turned toward a different job. The audit trail proves what the agent did for an investigator reading it later; the durable log proves what the agent did to the agent itself, before it acts on that memory again. In both, integrity comes from chaining, so that tampering is not something you have to catch in the act but something the data structure reveals on the next read. An agent that resumes is remembering, and a memory you cannot verify is a memory an attacker can rewrite.
 
 The next post is the other half of durable execution, the one hinted at back in the calendar chapter: not whether the record of a step is trustworthy, but whether replaying it re-fires the side effect, and how exactly-once holds when the crash lands in the worst possible place.
+
+## Take it to your own project
+
+Make the agent's memory of itself verifiable:
+
+- Hash-chain the durable step log.
+- Verify it on resume and refuse a tampered checkpoint.
+- Stop and get a human rather than resume into a forged state.

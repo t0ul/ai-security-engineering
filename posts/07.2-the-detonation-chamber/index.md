@@ -1,7 +1,7 @@
 ---
 title: "The detonation chamber"
 description: "The last post showed a command from an email owning the whole machine. The fix is not to inspect the command but to run it somewhere it can do no harm. This post builds the detonation chamber, an Apple virtual machine with no network card and no access to the host, and runs the exact command that owned the Mac inside it, live, where it reaches nothing at all."
-date: 2026-10-12
+date: 2026-01-20
 draft: true
 tags: ["ai-security", "golang", "agents", "isolation"]
 series: "AI Security Engineering"
@@ -33,6 +33,10 @@ HOST (my Mac):        Darwin macOS
 My machine is macOS. The command ran on Alpine Linux. That is the whole idea in two lines: the code the agent executes does not run on my computer, it runs inside a different, disposable computer that happens to exist for a moment to contain it. Everything after this is just confirming that the disposable computer is as empty and as sealed as it needs to be.
 
 ## The walls, one at a time
+
+![The detonation chamber: an ephemeral VM with no host filesystem, a read-only disk, and no network card.](chamber.svg)
+
+*The command that owned the Mac a chapter ago runs here and meets three walls at once: it cannot persist, cannot reach the host, and cannot phone home.*
 
 First, the host's files. If the chamber could see my Mac's filesystem, it would not be isolation, just indirection. It cannot:
 
@@ -75,3 +79,12 @@ I will be honest about the chamber's edges, because they are the next two posts.
 The most dangerous capability in the whole series, running code produced from an untrusted email, is now survivable, not because we got clever about reading commands, but because the command runs in a box with no host, no network, and nothing to persist to. The same line that owned my machine two posts ago ran here and reached nothing, which I did not describe, I ran it and watched it fail.
 
 The chamber has exactly one channel out, the vsock bridge that carries the command in and the output back. The next post is about the moment a tool legitimately needs more than that, a real network fetch, and the broker that makes that one audited exception without reopening the door we just closed.
+
+## Take it to your own project
+
+Run untrusted code where it can reach nothing:
+
+- Execute any model-suggested code in an isolated VM or sandbox, never on the host.
+- Give it no view of the host filesystem, a read-only disk, and no network card.
+- Treat the sandbox as disposable; a run leaves nothing behind.
+- Assume code inside is hostile and design for it to escape nothing.

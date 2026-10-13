@@ -1,7 +1,7 @@
 ---
 title: "Scrubbing secrets and PII at ingest"
 description: "The agent indexes every email into a searchable corpus so it can answer questions later. That corpus is on disk, so whatever secret an email carries ends up stored in the clear, waiting for a leak. This post indexes a secret-laden email as-is and finds everything on disk, then scrubs at ingest with goflage, and is honest about the one token format the scrubber does not know."
-date: 2026-10-12
+date: 2025-11-25
 draft: true
 tags: ["ai-security", "golang", "agents", "pii"]
 series: "AI Security Engineering"
@@ -77,3 +77,12 @@ So two things follow. The missing recognizer is a bug with a fix, a pattern to a
 The agent now cleans private data out of the text before it is ever stored, so the searchable memory it builds is not also a searchable copy of everyone's secrets. The recognized shapes, emails, SSNs, keys, and tokens, never reach disk, and the one shape the scrubber does not know is a named, honest gap rather than a silent one.
 
 That handles a secret coming in. The next posts handle a secret going out, through the parts of the agent that reach the world: the calendar file it writes, and the links it renders. The first is a quiet exfiltration channel hiding in a place no one looks, the fields of a calendar event.
+
+## Take it to your own project
+
+Catch secrets and personal data at the door:
+
+- Scrub secrets and PII at ingest, before anything reaches disk or the model.
+- Maintain recognizers for the key and token formats you actually handle.
+- Verify nothing sensitive lands in the corpus, with a test.
+- Prefer dropping sensitive data to masking it where you can.

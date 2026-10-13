@@ -1,7 +1,7 @@
 ---
 title: "The eval harness: F1 as a receipt"
 description: "Chapter 1 built a small agent. Before we attack it, we need a way to say it works that is a number, not a feeling. This post builds the eval harness: hand-labeled answers, a scorer, and an F1 of 1.00 on the clean sample that becomes the baseline every later attack is measured against."
-date: 2026-10-09
+date: 2025-09-30
 draft: true
 tags: ["ai-security", "golang", "agents"]
 series: "AI Security Engineering"

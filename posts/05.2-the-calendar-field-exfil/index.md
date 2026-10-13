@@ -1,7 +1,7 @@
 ---
 title: "The calendar-field exfil"
 description: "The last post stopped a secret coming in. This one stops a secret going out, through the one thing the agent sends into the world: the calendar file it writes. A URL hidden in an event's location or notes is a beacon that fires when a calendar app renders it, so the agent's writer strips every link from every field before the file is ever saved."
-date: 2026-10-12
+date: 2025-12-02
 draft: true
 tags: ["ai-security", "golang", "agents", "exfiltration"]
 series: "AI Security Engineering"
@@ -57,3 +57,12 @@ There is one honest exception worth naming, because "strip every URL" is too blu
 So the agent's one piece of output can no longer be turned into a quiet channel for data to leave. Secrets are scrubbed before they are stored, and links are stripped before the calendar file is written, which closes the two obvious ends, what comes in and what the agent itself sends out.
 
 There is a third surface, and it is the one people forget because it does not feel like output at all: the screen. The next post is the tracking pixel in a different disguise, a markdown image or link in something the agent shows you, which your own browser renders and beacons the moment the page loads. The fix rhymes with this one, allow-list what is safe to render, but the surface is new.
+
+## Take it to your own project
+
+Treat every outbound field as an exfil channel:
+
+- Sanitize each field that leaves the system, not just the obvious ones.
+- Allowlist what a field may contain; strip the rest.
+- Assume any free-text or URL field can smuggle data out.
+- Test with a payload hidden in notes and URLs, and confirm it does not leave.

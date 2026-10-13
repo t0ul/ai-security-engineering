@@ -1,7 +1,7 @@
 ---
 title: "Exactly-once side effects"
 description: "A calendar write done twice is annoying. A refund sent twice is money gone, and agents retry constantly: a timeout, a resume after a crash, a client that never saw the response. The naive answer fires the side effect on every attempt. The agent routes dangerous actions through a durable ledger keyed by an idempotency key, which fires the effect exactly once on success and still lets a genuinely failed attempt be retried until it completes."
-date: 2026-10-13
+date: 2026-09-08
 draft: true
 tags: ["ai-security", "golang", "reliability", "idempotency"]
 series: "AI Security Engineering"
@@ -53,3 +53,11 @@ There is a subtlety that separates a real exactly-once ledger from a naive dedup
 The first attempt failed and moved no money, so it left no record; the retry ran the action for real and completed it, exactly once. If the ledger had cached the failure, the refund would have been lost forever; if it had cached a pretend success, the customer would never be paid. Recording only success gives you the right guarantee on both sides: an action that happened cannot happen again, and an action that did not happen is still free to. At-least-once delivery on failure, exactly-once effect on success, which is the honest promise a durable system can actually keep.
 
 The next reliability post is about the agent's memory filling up: compaction, where a long conversation is summarized to fit the window, and the summary, being model-written over untrusted history, becomes one more place an instruction can hide.
+
+## Take it to your own project
+
+Survive a crash without firing twice:
+
+- Make side effects idempotent, with an idempotency key.
+- Journal the intent before you act.
+- On resume, check whether the effect already fired before firing it again.

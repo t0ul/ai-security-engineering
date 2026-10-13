@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 430" width="100%" role="img" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif">
+  <title>The Attack-Driven Design loop</title>
+  <desc>Every feature runs the same four-step loop: build a small thing, attack it for real and measure that it lands every time, fix what broke, then re-attack with the same test and measure that it now lands never. The loop then repeats for the next feature.</desc>
+
+  <rect x="1" y="1" width="678" height="428" rx="10" fill="#fbfcfe" stroke="#d9e2ec" stroke-width="1"/>
+
+  <!-- clockwise arrows (drawn first, behind boxes) -->
+  <g fill="none" stroke="#334e68" stroke-width="1.6">
+    <path d="M422,92 L470,180" marker-end="url(#aah)"/>
+    <path d="M470,250 L422,338" marker-end="url(#aah)"/>
+    <path d="M258,344 L206,252" marker-end="url(#aah)"/>
+    <path d="M166,180 L250,96" marker-end="url(#aah)"/>
+  </g>
+  <text x="333" y="140" text-anchor="middle" font-size="10.5" fill="#627d98" transform="rotate(32 333 140)">next feature</text>
+
+  <!-- center -->
+  <text x="340" y="210" text-anchor="middle" font-size="15" font-weight="700" fill="#243b53">Attack-Driven Design</text>
+  <text x="340" y="229" text-anchor="middle" font-size="11.5" fill="#627d98">build · break · fix · prove</text>
+
+  <!-- 1 Build (top) -->
+  <rect x="252" y="31" width="176" height="62" rx="8" fill="#ffffff" stroke="#334e68" stroke-width="1.5"/>
+  <circle cx="266" cy="45" r="10" fill="#eef4ff" stroke="#2563eb" stroke-width="1.3"/>
+  <text x="266" y="49" text-anchor="middle" font-size="11" font-weight="700" fill="#2563eb">1</text>
+  <text x="340" y="58" text-anchor="middle" font-size="12.5" font-weight="600" fill="#243b53">Build a small thing</text>
+  <text x="340" y="76" text-anchor="middle" font-size="10.5" fill="#627d98">get it working</text>
+
+  <!-- 2 Attack (right) -->
+  <rect x="468" y="184" width="176" height="62" rx="8" fill="#ffffff" stroke="#334e68" stroke-width="1.5"/>
+  <circle cx="482" cy="198" r="10" fill="#eef4ff" stroke="#2563eb" stroke-width="1.3"/>
+  <text x="482" y="202" text-anchor="middle" font-size="11" font-weight="700" fill="#2563eb">2</text>
+  <text x="556" y="211" text-anchor="middle" font-size="12.5" font-weight="600" fill="#243b53">Attack it, for real</text>
+  <text x="556" y="229" text-anchor="middle" font-size="10.5" fill="#627d98">measured: lands <tspan font-weight="700" fill="#243b53">100%</tspan></text>
+
+  <!-- 3 Fix (bottom) -->
+  <rect x="252" y="337" width="176" height="62" rx="8" fill="#ffffff" stroke="#334e68" stroke-width="1.5"/>
+  <circle cx="266" cy="351" r="10" fill="#eef4ff" stroke="#2563eb" stroke-width="1.3"/>
+  <text x="266" y="355" text-anchor="middle" font-size="11" font-weight="700" fill="#2563eb">3</text>
+  <text x="340" y="364" text-anchor="middle" font-size="12.5" font-weight="600" fill="#243b53">Fix what broke</text>
+  <text x="340" y="382" text-anchor="middle" font-size="10.5" fill="#627d98">add the control</text>
+
+  <!-- 4 Prove (left) -->
+  <rect x="36" y="184" width="176" height="62" rx="8" fill="#ffffff" stroke="#334e68" stroke-width="1.5"/>
+  <circle cx="50" cy="198" r="10" fill="#eef4ff" stroke="#2563eb" stroke-width="1.3"/>
+  <text x="50" y="202" text-anchor="middle" font-size="11" font-weight="700" fill="#2563eb">4</text>
+  <text x="124" y="211" text-anchor="middle" font-size="12.5" font-weight="600" fill="#243b53">Re-attack, same test</text>
+  <text x="124" y="229" text-anchor="middle" font-size="10.5" fill="#627d98">measured: lands <tspan font-weight="700" fill="#2563eb">0%</tspan></text>
+
+  <defs>
+    <marker id="aah" markerWidth="10" markerHeight="10" refX="7" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 z" fill="#334e68"/>
+    </marker>
+  </defs>
+</svg>

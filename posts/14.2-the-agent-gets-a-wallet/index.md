@@ -1,7 +1,7 @@
 ---
 title: "The agent gets a wallet"
 description: "The agent is a non-human identity that holds a wallet of short-lived, signed, scoped grants it presents to act. When one leaks you revoke it, and revocation has to take effect now. The classic bug is that it does not: a token checked only for its expiry keeps working after revocation until it times out. The agent's authority consults the revocation list on every check, and the kill switch revokes the whole wallet at once."
-date: 2026-10-12
+date: 2026-07-28
 draft: true
 tags: ["ai-security", "golang", "governance", "identity"]
 series: "AI Security Engineering"
@@ -54,3 +54,11 @@ Sometimes you do want the panic button, and it is the same mechanism widened. Th
 That is the containment primitive the whole operator story rests on. Revoking a subject answers "this one identity is compromised"; the kill switch answers "stop everything, now", and both reduce to the same question asked at every credential check, is this still allowed. Nothing the agent holds is a standing permission; it is a permission the authority can withdraw between one action and the next, for one identity or for all of them.
 
 The next two posts are the other half of operating safely: when a change does go wrong, rolling it back cleanly and proving it was rolled back, and then the incident itself, the kill switch under the kind of pressure where you find out whether its own controls are as careful as the ones it protects.
+
+## Take it to your own project
+
+Give the agent its own identity, not yours:
+
+- Issue scoped, short-lived, revocable credentials.
+- Rotate them, and be able to revoke instantly.
+- Never let the agent hold a credential broader than its job.

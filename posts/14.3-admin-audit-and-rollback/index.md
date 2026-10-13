@@ -1,7 +1,7 @@
 ---
 title: "Admin audit and one-click rollback"
 description: "Operators make changes, and some are bad. Recovering is not re-pasting the old text, because a hand-restored prompt is a new, unverified version that only looks right. A clean rollback re-activates a specific known-good version and proves, by its content hash, that the live prompt is exactly that version again, and records who rolled back to what. The agent's prompts plane is versioned and hash-pinned for exactly this."
-date: 2026-10-13
+date: 2026-08-04
 draft: true
 tags: ["ai-security", "golang", "governance", "operations"]
 series: "AI Security Engineering"
@@ -63,3 +63,11 @@ The other half of a clean rollback is that it leaves a record, because the quest
 Now the whole episode is reconstructable: the bad change, who made it, the rollback, who performed it, and the hash that proves what the agent is running now. Versioning gives you something precise to return to, the hash pin proves you returned to it, and the audit records that you did. A change can go wrong; it cannot go wrong untraceably, and it cannot be undone in a way you only hope worked.
 
 The next post is the sharpest version of this: not a bad change to walk back at leisure, but an incident in progress, where the control you reach for is the kill switch, and the thing you have to get right is that the switch itself is as carefully governed as everything it turns off.
+
+## Take it to your own project
+
+Make a bad change undoable:
+
+- Record who changed what, under a trace id.
+- Version every change and make rollback one step.
+- Keep the admin audit tamper-evident, like the rest of your logs.

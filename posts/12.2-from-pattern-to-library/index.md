@@ -1,7 +1,7 @@
 ---
 title: "From pattern to library"
 description: "Every control lesson in this book is the same shape: an attack, the same attack with the control removed, and an oracle. Written by hand each time, that shape is noise around the one thing that differs. This post collapses it into a declarative value. An ADD Technique names the attack and the two targets, the library runs the before/after and asserts the invariants, and a suite of them becomes an OWASP coverage grid."
-date: 2026-10-12
+date: 2026-05-05
 draft: true
 tags: ["ai-security", "golang", "attack-driven-design", "testing"]
 series: "AI Security Engineering"
@@ -59,3 +59,11 @@ The grid is the artifact a team actually tracks. It does not just say the tests 
 The reason this belongs in Part 6 and not an appendix is that a method you have to remember to follow decays, and a method encoded in a library does not. Every new lesson in this book, and every new control in the real agent, is one more `Technique` added to the suite, which means one more line in the grid and one more row the single command checks before every push. The work of securing the agent and the work of proving it stays secure stop being separate activities. You add the control as a value, and the proof comes with it.
 
 That is the loop as code. The next post turns to the hardest thing to measure honestly, what happens when the oracle is itself a language model, and how a judge that reads untrusted output can be talked into scoring an attack as a pass.
+
+## Take it to your own project
+
+Turn your attacks into a tool, not a pile of scripts:
+
+- Extract your attacks into a reusable test library so adding one is cheap.
+- Share seeds and scorers across projects.
+- Make every control's attack a standing test, not a one-off.

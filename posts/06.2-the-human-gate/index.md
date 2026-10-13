@@ -1,7 +1,7 @@
 ---
 title: "The human gate"
 description: "Some actions are irreversible, and no automatic rule should ever perform them. They need a person to say yes. But a one-click yes can be forged, overlaid, or rubber-stamped, so this post builds the real gate: an approval is valid only when a human was shown the evidence and echoes back a nonce displayed with it, which a blind or forged click can never produce."
-date: 2026-10-12
+date: 2025-12-30
 draft: true
 tags: ["ai-security", "golang", "agents", "human-in-the-loop"]
 series: "AI Security Engineering"
@@ -57,3 +57,12 @@ I want to be honest about the edge of this. The gate makes an approval unforgeab
 Irreversible actions now require a specific, evidenced, un-forgeable human approval. The agent cannot be talked into acting on your behalf by a confident model or a clickjacked dialog, and it cannot act on a yes that no person actually gave, while a real person's yes still works the moment they give it.
 
 There is one more way to abuse an agent that does not need any approval at all, because it never tries to finish an action, it just refuses to stop. The next post is circuit breakers, the cap that keeps a runaway loop from spinning forever and draining the machine, and it closes this chapter and this part of the book.
+
+## Take it to your own project
+
+Put a human in front of anything irreversible:
+
+- Deny irreversible actions by default; require an explicit approval to proceed.
+- Make the approval specific to the action, not a blanket trust of the agent.
+- Design so persuasive text in the input cannot drive the approval on its own.
+- Log who approved what, under a trace id.

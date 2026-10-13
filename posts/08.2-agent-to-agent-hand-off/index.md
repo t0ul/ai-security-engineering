@@ -1,7 +1,7 @@
 ---
 title: "Agent-to-agent hand-off"
 description: "The dual-LLM split only holds if the hand-off between the planner and the executor is authenticated. This post shows a naive executor that runs any plan claiming to come from the planner, forges that hand-off three ways to drive it, then wires the agent's real inter-agent authentication so the executor runs only a plan that verifies as the planner's own, unaltered, and never twice."
-date: 2026-10-12
+date: 2026-02-17
 draft: true
 tags: ["ai-security", "golang", "agents", "camel", "a2a"]
 series: "AI Security Engineering"
@@ -99,3 +99,12 @@ The planner's own signed plan runs. The same message delivered a second time is 
 It is worth being clear about what this defends and what it does not. a2a does not read the plan or judge whether it is safe. It answers one question: did this exact plan come from the agent I trust to make plans, and have I seen it before. The content controls are the rest of the book, from spotlighting the untrusted email to confining the command the planner is even allowed to choose. What this post adds is that the decision itself, the hand-off from the brain that decides to the hand that acts, has an identity, so nothing can impersonate the planner and smuggle an action across the boundary the last post built.
 
 That is the seam closed. The planner and the executor now speak on an authenticated channel, and a forged decision gets nowhere. The next target is the tools the executor reaches for once it has a genuine plan. A plan can be perfectly authentic and still call a tool whose definition changed out from under you, so the next post pins the tool catalog and watches what happens when someone swaps it.
+
+## Take it to your own project
+
+Authenticate every hand-off between components:
+
+- Sign the message that crosses from the privileged side to the executor.
+- Reject anything that cannot prove it came from the privileged side.
+- Do not trust a message because it arrived on the expected channel.
+- Test a spoofed hand-off and confirm it is refused.

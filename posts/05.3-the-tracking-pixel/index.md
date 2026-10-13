@@ -1,7 +1,7 @@
 ---
 title: "The tracking pixel"
 description: "The exfil surface everyone forgets is the screen. The agent shows you a summary rendered from markdown the model wrote, and a markdown image in it is a tracking pixel: the browser fetches it on page load, no click, carrying data out in the URL. The fix is to strip images and auto-fetching links from model output before anything renders it."
-date: 2026-10-12
+date: 2025-12-09
 draft: true
 tags: ["ai-security", "golang", "agents", "exfiltration"]
 series: "AI Security Engineering"
@@ -55,3 +55,12 @@ This post and the last are the same control wearing two coats. In both, the mode
 The two obvious ends of the agent are closed now. Secrets are scrubbed before they are stored, and the agent's output, whether a file or a web page, can no longer be turned into a quiet channel for data to leave. That is the end of the exfiltration chapter.
 
 It ends on a cliffhanger, though, because there is a kind of reaching-out the sanitizers above do not touch: not a link the agent writes down, but a request the agent itself makes. The last post of this part gives the agent a web-search tool, points it at what looks like a normal lookup, and watches it fetch a server on its own machine that it was never meant to reach. That is server-side request forgery from the inside, and it is the doorway into Part 4, where the agent gains the power to run code and we have to build real walls around it.
+
+## Take it to your own project
+
+Make rendered output unable to phone home:
+
+- Allowlist what the agent's output may contain when it is viewed.
+- Strip markdown images and links that fetch on render.
+- Render untrusted content inertly, never as live HTML.
+- Test the tracking-pixel case: a result that is viewed must make no outbound request.

@@ -1,7 +1,7 @@
 ---
 title: "Dates the model never decides"
 description: "The first field that bit me was the date. A naive parser happily calendars a Thursday that is really a Tuesday and a February 30 that does not exist, with no warning. This post shows that happening, then adds the agent's deterministic date parser, which flags the first and rejects the second, and proves it with a test you can run."
-date: 2026-10-06
+date: 2025-09-09
 draft: true
 tags: ["ai-security", "golang", "agents"]
 series: "AI Security Engineering"
@@ -170,3 +170,12 @@ That first test is the one I would ask you to keep: it asserts that the naive pa
 So the date is decided twice over: once by code that will not normalize an impossible day, and once by a check that the stated weekday agrees with the date. Neither involves a model, which is the point, and both end in a warning or a refusal you can read, rather than a calendar entry you have to go looking for.
 
 There is a loose end, on purpose. The Thursday event was "held for review, not calendared," but held where, and reviewed by whom? And even the clean event only became a file. Nothing in this agent adds anything to a real calendar on its own, and that is a decision, not a gap. The next post is about that file and the human step after it.
+
+## Take it to your own project
+
+Wherever a model hands you a fact that has consequences:
+
+- Decide which facts are security-critical (dates, amounts, recipients) and never let the model be the authority on them.
+- Extract those facts with deterministic code, and treat the model's version as a proposal to check.
+- Reject values that cannot be true (an impossible date, a negative amount) outright.
+- Flag internal contradictions for a human instead of guessing which side is right.

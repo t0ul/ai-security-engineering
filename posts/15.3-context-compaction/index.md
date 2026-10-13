@@ -1,7 +1,7 @@
 ---
 title: "Context compaction and summarization injection"
 description: "A long conversation is summarized to fit the context window, and the summary is fed back as trusted context on the next turn. The conversation includes untrusted turns, an email the agent read, so an instruction buried in one can ride into the summary and launder itself into trusted standing. The agent's compactor summarizes trusted and untrusted turns separately, quarantines and sanitizes the untrusted summary, and never promotes untrusted content to trusted."
-date: 2026-10-13
+date: 2026-09-15
 draft: true
 tags: ["ai-security", "golang", "reliability", "prompt-injection"]
 series: "AI Security Engineering"
@@ -46,3 +46,11 @@ Zero. The trusted summary is built only from trusted turns, so there is simply n
 The lesson here is that provenance is not a property you can afford to lose when you compress. Every control in Part 5 depended on knowing which text was trusted and which was not, and a compactor that blends everything into one summary throws exactly that distinction away, quietly, as a side effect of saving space. Keeping trusted and untrusted apart through the summary is what lets the agent get smaller without getting more gullible. An agent that forgets which of its memories to trust is an agent an old email can still be giving orders to.
 
 The last reliability post steps back to the shape of all of this, the registry and the blackboard that hold the agent's memory, and asks the same question of the architecture that the last three posts asked of its pieces: that recall stays scoped, that state stays attributable, that nothing the agent remembers becomes something it cannot question.
+
+## Take it to your own project
+
+Do not let compaction launder an instruction:
+
+- When you summarize context, keep an instruction from surviving that the raw text would not be obeyed as.
+- Carry provenance through the compaction.
+- Detect a laundered instruction in the summary.

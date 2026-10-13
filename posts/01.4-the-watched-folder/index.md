@@ -1,7 +1,7 @@
 ---
 title: "The watched folder"
 description: "The agent picks up mail by watching a folder, and a folder is a door anyone can slip a file under. This post runs a naive scanner into the three things that go wrong at that boundary, an oversized file, a half-written file, and a flood, then adds the product's real limits and shows each one refused, skipped, or bounded."
-date: 2026-10-08
+date: 2025-09-23
 draft: true
 tags: ["ai-security", "golang", "agents"]
 series: "AI Security Engineering"
@@ -120,3 +120,12 @@ Twenty-five arrived, twenty were handled this pass, five wait for the next. Noth
 That closes the boring core, and it is worth saying what we have before the model shows up. One typed shape every stage agrees on. Dates decided by code that will not calendar an impossible or inconsistent one. Output that is an inert file, moved onto a real calendar only by a human. And now an ingestion boundary that refuses a file too big to trust, waits for a file to finish being written, and will not let a flood melt a cycle. None of it needs a language model, and all of it is testable, which is the point: when the model arrives and starts making mistakes, every one of these limits is still standing underneath it.
 
 Chapter 1 built the thing. Chapter 2 proves it, and then breaks it. The next post builds the eval harness, the scorer that turns "it works" into a number on known-good mail, so that when the attacks start landing we have a baseline to measure the damage against. After that we point the attacks at the whole undefended agent and watch the board light up red, which is the to-do list for the rest of the book.
+
+## Take it to your own project
+
+For any place your agent picks up untrusted input:
+
+- Cap the size of a single input and reject anything larger.
+- Wait for a file to stop changing before you read it, so you never process a half-written one.
+- Cap how many items you handle per cycle, so a flood cannot starve everything else.
+- Treat the source as untrusted: a malformed or huge file should be skipped, not crash the run.

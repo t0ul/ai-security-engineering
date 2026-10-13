@@ -1,7 +1,7 @@
 ---
 title: "Conflicts and mangled data"
 description: "This chapter steps away from the attacker. The adversary here is wrong data: a date on the wrong weekday, a time borrowed from nowhere, a negation flipped, the same event announced twice. A model passes all of it through. The agent re-checks every extracted event with deterministic standard-library code that cannot be talked into agreeing, and catches each one."
-date: 2026-10-12
+date: 2026-04-14
 draft: true
 tags: ["ai-security", "golang", "integrity", "agents"]
 series: "AI Security Engineering"
@@ -55,3 +55,12 @@ Each check is small and boring, which is the point. The weekday check parses the
 You could ask a model to check its own dates, and it would usually agree with itself, because the error and the check come from the same place. That is the whole reason these live in deterministic code. A calendar is arithmetic and string equality, and those are things a computer is exactly right about and a language model is approximately right about. The division of labor from the very first chapters holds here too: let the model propose the messy human parts, the title, the span of text that looks like a date, and let code decide anything that has a correct answer. The model reads; the code checks.
 
 These checks flag and, where it is safe, correct. The next post is about the one error that is not in the email at all, which no consistency check against the text can catch, because the text never said it. A date the model simply invented. That one needs a different move, and it closes the chapter and the part.
+
+## Take it to your own project
+
+Catch wrong data with deterministic code:
+
+- Check for internal contradictions: a weekday that does not match its date, a borrowed time, a flipped negation.
+- Deduplicate before anything acts on the data.
+- Flag conflicts for a human instead of letting the model pick a side.
+- Keep these checks as plain code, not model judgment.

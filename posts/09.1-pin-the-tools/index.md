@@ -1,7 +1,7 @@
 ---
 title: "A pinned tool catalog"
 description: "An authenticated plan can still call a tool whose definition changed after you approved it. This post has an MCP server quietly swap a tool's description, a rug-pull, and the agent takes it. Then it routes every tool call through the real MCP gateway, which pins the manifest it approved and refuses a changed one until an operator reviews it."
-date: 2026-10-12
+date: 2026-02-24
 draft: true
 tags: ["ai-security", "golang", "agents", "mcp", "supply-chain"]
 series: "AI Security Engineering"
@@ -76,3 +76,12 @@ The poisoned definition never reached the agent. The gateway saw the live hash n
 A pin that only ever says no would be useless, because tools do get legitimate updates. The last line is the other half: an operator reviews the change and re-approves, which re-pins the gateway to the new catalog, and calls flow again. That is the whole point of pinning. It does not forbid change, it forces change to pass through a human who looked, instead of happening silently behind the agent's back. The decision to trust a new tool definition is yours to make on purpose, not the server's to make for you.
 
 That closes the tool catalog. The agent will now only call tools it approved, exactly as approved. But the tools are not the only thing the agent downloads and trusts. The model itself arrives as a file from somewhere, and so do its weights and adapters, and the next post asks the same question of them: how do you know the artifact you are running is the one you approved.
+
+## Take it to your own project
+
+Pin the tools the agent may call:
+
+- Fix the exact set and version of tools, and verify it before use.
+- Reject a tool that was swapped, added, or changed under you.
+- Treat tool definitions as part of your supply chain.
+- Fail closed if the catalog does not match what you pinned.

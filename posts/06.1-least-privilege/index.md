@@ -1,7 +1,7 @@
 ---
 title: "Least privilege"
 description: "Chapter 6 is about what the agent is allowed to do. The rule is least privilege: each tool declares one narrow capability and can never exceed it, even when it is subverted. This post runs a read-only tool that has gone rogue and tries to write a file, watches a naive runner let it, then watches the agent's real pipeline refuse the write while a proper write tool still does its job."
-date: 2026-10-12
+date: 2025-12-23
 draft: true
 tags: ["ai-security", "golang", "agents", "least-privilege"]
 series: "AI Security Engineering"
@@ -33,6 +33,10 @@ Here is the loop I would write first: run each tool, and write whatever files it
 There it is, `stolen.txt`, written to the outbox by a tool whose entire job is to produce a line of text. The runner treated every tool as equally trusted, so the moment one of them overstepped, the overstep went straight to disk. A read-only tool just exfiltrated data by writing a file, because nothing said it could not.
 
 ## II. One capability, enforced
+
+![A read-only capability: reading is in scope, while writing a file and opening a socket are simply not granted.](least-privilege.svg)
+
+*This is not a runtime check that could be tricked past. The write and network powers are absent from the capability, so a read-only tool physically cannot use them.*
 
 The agent's real runner does not trust a tool's output that far. Every tool implements a small contract that includes one method, its declared capability, and the pipeline reads that declaration and routes the tool's output accordingly. The rule is one line and it is the whole control: only a tool that declared the write capability may emit a file. When any other tool returns an artifact, the pipeline refuses to write it and records a `capability_violation` in the audit log, so the overreach is not just blocked, it is evidence. What it defends against is exactly the rogue above: a read-only tool can return whatever it likes, and the one thing the system will never do with that return is carry out a write the tool had no right to ask for.
 

@@ -1,7 +1,7 @@
 ---
 title: "Hallucinated dates"
 description: "The last post caught data that was wrong in the email. This one catches data that was never in the email: a date the model invented for an event the email left undated. No check against the text can catch it, because the text is silent. The agent reconciles the model's proposals against the dates the deterministic parser actually found, and drops any that are not there. It closes the integrity chapter and Part 5."
-date: 2026-10-12
+date: 2026-04-21
 draft: true
 tags: ["ai-security", "golang", "integrity", "hallucination", "camel"]
 series: "AI Security Engineering"
@@ -66,6 +66,10 @@ This is the same shape as the dual-LLM split from Part 4, pointed at a different
 
 ## The board, at the end of Part 5
 
+![The architecture so far: the defense layers built through Part 5, solid, with the newest highlighted; the layers still ahead faded.](spine-sofar.svg)
+
+*The architecture so far. Everything solid is built and attacked; P5 is what this part added. The faded layers are the map of what is still ahead.*
+
 Part 5 gave the agent memory and then an honest relationship with it: retrieval that cannot be poisoned or leaked across people, and data it refuses to get wrong or make up. With the integrity chapter closed, the agent is feature-complete for everything the first five parts set out to build, so the whole book re-attacks itself one more time.
 
 ```
@@ -112,3 +116,12 @@ green 26  red 0  intro 3  feature 2  method 3  problem 2  live 2
 ```
 
 Twenty-six runnable controls holding, twelve lessons that teach rather than defend (the intro, feature, method, problem, and live rows), no red. The parts so far built the agent and made it safe one attack at a time. Part 6 changes the question. Instead of adding another control, it asks how you keep all of this true as the agent grows: one command that scores the whole thing, the attacks turned into a reusable library, a red-team that runs continuously, and the same method pointed at an app that is not this one. The controls are the work; the flywheel is how the work stays done.
+
+## Take it to your own project
+
+Ground model-proposed facts against the source:
+
+- Keep the model as a quarantined proposer, with deterministic code as the authority.
+- Drop any fact, such as a date, that does not appear in the input.
+- Boost what both the model and the source agree on; flag model-only facts for review.
+- Never let an invented value reach a real system unchecked.

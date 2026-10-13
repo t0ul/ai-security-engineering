@@ -1,7 +1,7 @@
 ---
 title: "My week at a glance"
 description: "The weekly view groups the household's items by day, and which day an item lands on is a decision an email can lie about: state one weekday while the date says another. A view that places items by the weekday written in the text files them on the wrong day and leaves the real day looking empty. The agent places by the date it parsed, derives the weekday from that, and flags the mismatch."
-date: 2026-10-12
+date: 2026-06-16
 draft: true
 tags: ["ai-security", "golang", "agents", "integrity"]
 series: "AI Security Engineering"
@@ -55,3 +55,11 @@ The sync is on Thursday, next to the PTA meeting it shares the day with, and Mon
 There is nothing new in this fix, and that is the point worth making at the capstone. The weekday check was built chapters ago to catch a mangled date in extraction; here it places an item in a calendar view; the same code will decide which day a reminder fires on and which day a question about "this week" is answered for. One deterministic authority on what day a date is, used everywhere a day matters, so there is no second place for a crafted weekday to slip through. The model and the email can suggest; the date, parsed once by code, decides.
 
 The next feature opens the agent up to people, a contact directory built from who appears in your mail, and its attack is about disclosure: surfacing the right contacts to the owner without quietly building a dossier an injected email can ask for.
+
+## Take it to your own project
+
+A convenience view is still a security surface:
+
+- Scope any aggregated view to the asker.
+- Render retrieved content inertly in the view.
+- Never let a digest leak across tenants.
