@@ -1,0 +1,11 @@
+== before: roll back by re-pasting the old text ==
+  after the re-paste, the live prompt is provably the known-good version: false
+
+== after: re-activate a known-good version, pinned and audited ==
+  bad change live: version 1, never-obey rule present: false
+  rolled back: live prompt is provably the known-good version: true (rule back: true)
+  audit (who rolled back to what):
+    map[by:alice-operator from_version:1 name:chat new_version:2 to_hash:2bcaf04fbfa9]
+  audit chain verified: true
+
+attack blocked (the receipt): a re-pasted prompt cannot be proven to be the known-good version; re-activating a pinned version restores the exact content, verifies it by hash, and records who rolled back to what
