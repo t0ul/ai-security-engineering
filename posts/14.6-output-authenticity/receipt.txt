@@ -1,0 +1,13 @@
+== before: a consumer that does not verify ==
+  genuine   accepted as genuine: true
+  forged    accepted as genuine: true
+  tampered  accepted as genuine: true
+  output-forgery ASR: 100% (2/2 forgeries accepted)
+
+== after: verify the content credential ==
+  genuine   verifies: true  (the agent produced this, unaltered)
+  forged    verifies: false (not signed by the agent)
+  tampered  verifies: false (content changed after signing)
+  output-forgery ASR: 0% (0/2)
+
+attack blocked (the receipt): a consumer that does not verify accepts a forged and a tampered artifact; verifying the content credential rejects both while the agent's genuine output still verifies
