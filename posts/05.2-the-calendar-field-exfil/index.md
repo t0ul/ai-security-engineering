@@ -2,7 +2,7 @@
 title: "The calendar-field exfil"
 description: "The last post stopped a secret coming in. This one stops a secret going out, through the one thing the agent sends into the world: the calendar file it writes. A URL hidden in an event's location or notes is a beacon that fires when a calendar app renders it, so the agent's writer strips every link from every field before the file is ever saved."
 date: 2025-12-02
-draft: true
+draft: false
 tags: ["ai-security", "golang", "agents", "exfiltration"]
 series: "AI Security Engineering"
 ---

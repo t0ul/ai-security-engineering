@@ -2,7 +2,7 @@
 title: "Make it idiomatic: the repo refactor"
 description: "A secure system you cannot read is a secure system you cannot keep secure. This post is the refactor that turned a pile of controls into Go you would be glad to hand to someone else: small packages with single jobs, security primitives extracted into reusable libraries, and the product split from the handbook. There is no attack here. The point is that every lesson in this book could import a real control because the refactor made the controls real packages."
 date: 2026-09-29
-draft: true
+draft: false
 tags: ["ai-security", "golang", "architecture", "refactoring"]
 series: "AI Security Engineering"
 ---

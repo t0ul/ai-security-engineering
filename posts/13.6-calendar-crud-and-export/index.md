@@ -2,7 +2,7 @@
 title: "Calendar CRUD and export"
 description: "The danger in this feature is not an attacker. It is the agent doing the same safe thing twice: a watcher re-reads an email, a request is retried, an export runs again, and the same event lands on the calendar a second time. A naive write fires on every call. The agent routes each write through a durable exactly-once ledger keyed by the event's content, so a replay returns the first result and never writes again."
 date: 2026-07-07
-draft: true
+draft: false
 tags: ["ai-security", "golang", "agents", "reliability"]
 series: "AI Security Engineering"
 ---

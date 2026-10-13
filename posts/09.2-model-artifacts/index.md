@@ -2,7 +2,7 @@
 title: "Model artifacts"
 description: "The agent downloads its model as a file from somewhere and runs it. One model format, the pickle, executes code the moment you load it, so a swapped file is remote code execution before the model says a word. This post runs the agent's real supply-chain gate, which refuses anything that is not a magic-verified GGUF pinned to the hash you approved, and deletes it before it is ever loaded."
 date: 2026-03-03
-draft: true
+draft: false
 tags: ["ai-security", "golang", "supply-chain", "models"]
 series: "AI Security Engineering"
 ---

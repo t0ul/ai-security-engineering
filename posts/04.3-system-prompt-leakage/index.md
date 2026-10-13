@@ -2,7 +2,7 @@
 title: "System-prompt leakage"
 description: "The last two posts were about an email planting an instruction. This one is the mirror: an attacker who coaxes the model into reciting the instructions it already has. The model gives up its whole system prompt on the first ask, so the fix is not to trust the model to stay quiet but to check what it is about to say and withhold a response that reads its own rules back out."
 date: 2025-11-18
-draft: true
+draft: false
 tags: ["ai-security", "golang", "agents", "prompt-injection"]
 series: "AI Security Engineering"
 ---

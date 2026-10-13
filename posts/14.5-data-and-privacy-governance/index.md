@@ -2,7 +2,7 @@
 title: "Data and privacy governance"
 description: "Two gates stand between the world and what the agent trusts. At ingestion, a record that claims a trusted source must prove it with a signature, or a forged document poisons the corpus; unsigned data is accepted but contained. At promotion, a change to the agent must clear the eval and red-team gates before it goes live. This forges a trusted record and ships an unsafe change past a naive path, then holds both gates, fail-closed."
 date: 2026-08-18
-draft: true
+draft: false
 tags: ["ai-security", "golang", "governance", "mlops"]
 series: "AI Security Engineering"
 ---

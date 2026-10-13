@@ -2,7 +2,7 @@
 title: "Attacking the baseline, all red"
 description: "The agent works and I can prove it. So now I try to break it, with the real model, not a stub. A naive prompt and one hostile email, and the model does exactly what the email tells it to. That live failure, plus the catalog of every attack class still to come, is the to-do list for the rest of the book."
 date: 2025-10-07
-draft: true
+draft: false
 tags: ["ai-security", "golang", "agents"]
 series: "AI Security Engineering"
 ---

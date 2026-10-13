@@ -2,7 +2,7 @@
 title: "Hallucinated dates"
 description: "The last post caught data that was wrong in the email. This one catches data that was never in the email: a date the model invented for an event the email left undated. No check against the text can catch it, because the text is silent. The agent reconciles the model's proposals against the dates the deterministic parser actually found, and drops any that are not there. It closes the integrity chapter and Part 5."
 date: 2026-04-21
-draft: true
+draft: false
 tags: ["ai-security", "golang", "integrity", "hallucination", "camel"]
 series: "AI Security Engineering"
 ---

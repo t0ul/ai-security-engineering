@@ -2,7 +2,7 @@
 title: "Conclusion: what you built, and what's next"
 description: "The whole system laid end to end, from the boring core to the governed, isolated, continuously red-teamed agent, the red scorecard now green, the method you keep, and an honest backlog for what comes after the last chapter."
 date: 2026-10-13
-draft: true
+draft: false
 tags: ["ai-security", "golang", "agents"]
 series: "AI Security Engineering"
 weight: 1700

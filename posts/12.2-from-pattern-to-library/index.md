@@ -2,7 +2,7 @@
 title: "From pattern to library"
 description: "Every control lesson in this book is the same shape: an attack, the same attack with the control removed, and an oracle. Written by hand each time, that shape is noise around the one thing that differs. This post collapses it into a declarative value. An ADD Technique names the attack and the two targets, the library runs the before/after and asserts the invariants, and a suite of them becomes an OWASP coverage grid."
 date: 2026-05-05
-draft: true
+draft: false
 tags: ["ai-security", "golang", "attack-driven-design", "testing"]
 series: "AI Security Engineering"
 ---

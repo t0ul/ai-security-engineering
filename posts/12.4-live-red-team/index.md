@@ -2,7 +2,7 @@
 title: "A live red-team against the real model"
 description: "The live model suite has been in this book's gate since the first attack. This post makes the case for it directly. A suite that skips the model when it is slow, or swaps in a stub, reports green while testing nothing. The honest gate fires the real attack at the real model, reports a measured number, and fails closed when the model is gone. The live number here is 100 percent: the raw model obeys the injection every time."
 date: 2026-05-19
-draft: true
+draft: false
 tags: ["ai-security", "golang", "testing", "red-team"]
 series: "AI Security Engineering"
 ---

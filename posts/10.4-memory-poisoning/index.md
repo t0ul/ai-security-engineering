@@ -2,7 +2,7 @@
 title: "Memory poisoning and lifecycle"
 description: "The earlier leaks were about retrieval. This one is about time. The agent remembers things across emails, so a poisoned note planted today is an injection on a delay, recalled tomorrow as trusted context. The fix is to give memory a lifecycle: scope each entry to one subject, expire it, and neutralize untrusted recall, so what the agent remembers cannot quietly become what it is told."
 date: 2026-04-07
-draft: true
+draft: false
 tags: ["ai-security", "golang", "memory", "prompt-injection"]
 series: "AI Security Engineering"
 ---

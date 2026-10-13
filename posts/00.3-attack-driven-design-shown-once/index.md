@@ -2,7 +2,7 @@
 title: "Attack-Driven Design, shown once"
 description: "Before we build anything for real, one full turn of the loop on a single small thing: put a language model in the agent, watch it invent an event that was never in the email, add the small check that throws the invention away, and prove the fix with a number you can reproduce. This is the rhythm the rest of the book repeats."
 date: 2025-08-26
-draft: true
+draft: false
 tags: ["ai-security", "golang", "agents", "attack-driven-design"]
 series: "AI Security Engineering"
 ---

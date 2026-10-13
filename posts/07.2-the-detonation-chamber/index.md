@@ -2,7 +2,7 @@
 title: "The detonation chamber"
 description: "The last post showed a command from an email owning the whole machine. The fix is not to inspect the command but to run it somewhere it can do no harm. This post builds the detonation chamber, an Apple virtual machine with no network card and no access to the host, and runs the exact command that owned the Mac inside it, live, where it reaches nothing at all."
 date: 2026-01-20
-draft: true
+draft: false
 tags: ["ai-security", "golang", "agents", "isolation"]
 series: "AI Security Engineering"
 ---

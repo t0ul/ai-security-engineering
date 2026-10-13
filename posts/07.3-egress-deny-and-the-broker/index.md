@@ -2,7 +2,7 @@
 title: "Egress-deny and the one way out"
 description: "The chamber has no network card, which is safe but too absolute: sometimes a tool legitimately needs the network. So the chamber gets exactly one way out, a broker on the host it has to ask, which dials only what the egress policy allows and tunnels raw bytes without ever reading the untrusted response. A naive broker dials anything; the real one dials only the allowlist."
 date: 2026-01-27
-draft: true
+draft: false
 tags: ["ai-security", "golang", "agents", "isolation"]
 series: "AI Security Engineering"
 ---

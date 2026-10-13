@@ -2,7 +2,7 @@
 title: "Defeating the lethal trifecta"
 description: "Three capabilities in one agent make a breach: reading untrusted content, reaching private data, and acting outward. The classic chain is SSRF to the cloud metadata service for credentials, then an outbound post to the attacker. This post runs that chain with no controls, then stacks the three the agent already has, each one severing a different leg, and closes Part 4 with the board."
 date: 2026-03-10
-draft: true
+draft: false
 tags: ["ai-security", "golang", "ssrf", "defense-in-depth"]
 series: "AI Security Engineering"
 ---

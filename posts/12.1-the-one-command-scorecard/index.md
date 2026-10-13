@@ -2,7 +2,7 @@
 title: "The one-command scorecard"
 description: "Five parts built a pile of before/after tests. This post turns the pile into one command that scores every control and reds the build when one regresses. But a scorecard is only a gate if each row is wired: the attack has to really land with the control removed, and the control has to really be on the path. The agent's Attack-Driven Design gate enforces exactly that, and catches the two false-green rows this book keeps warning about."
 date: 2026-04-28
-draft: true
+draft: false
 tags: ["ai-security", "golang", "testing", "attack-driven-design"]
 series: "AI Security Engineering"
 ---

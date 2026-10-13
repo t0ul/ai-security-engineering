@@ -2,7 +2,7 @@
 title: "Conflicts and mangled data"
 description: "This chapter steps away from the attacker. The adversary here is wrong data: a date on the wrong weekday, a time borrowed from nowhere, a negation flipped, the same event announced twice. A model passes all of it through. The agent re-checks every extracted event with deterministic standard-library code that cannot be talked into agreeing, and catches each one."
 date: 2026-04-14
-draft: true
+draft: false
 tags: ["ai-security", "golang", "integrity", "agents"]
 series: "AI Security Engineering"
 ---

@@ -2,7 +2,7 @@
 title: "One trace id, and the command stream"
 description: "The log and the gateway become a lens only when one thread runs through them. This post follows a single trace id across every stage of one request, verifies the whole run as a tamper-evident chain, and shows the operator view that falls out of it for free: a plain-language feed of exactly what the agent did, correlated by that one id."
 date: 2025-10-28
-draft: true
+draft: false
 tags: ["ai-security", "golang", "agents"]
 series: "AI Security Engineering"
 ---

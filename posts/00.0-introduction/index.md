@@ -2,7 +2,7 @@
 title: "Start here: how to use this handbook"
 description: "A short welcome to the AI Security Engineering Handbook: what you'll build, the one idea the whole book runs on, and how to work through the repo, one runnable lesson at a time."
 date: 2025-08-05
-draft: true
+draft: false
 tags: ["ai-security", "golang", "agents"]
 ---
 

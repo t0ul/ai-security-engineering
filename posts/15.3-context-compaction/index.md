@@ -2,7 +2,7 @@
 title: "Context compaction and summarization injection"
 description: "A long conversation is summarized to fit the context window, and the summary is fed back as trusted context on the next turn. The conversation includes untrusted turns, an email the agent read, so an instruction buried in one can ride into the summary and launder itself into trusted standing. The agent's compactor summarizes trusted and untrusted turns separately, quarantines and sanitizes the untrusted summary, and never promotes untrusted content to trusted."
 date: 2026-09-15
-draft: true
+draft: false
 tags: ["ai-security", "golang", "reliability", "prompt-injection"]
 series: "AI Security Engineering"
 ---

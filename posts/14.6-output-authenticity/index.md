@@ -2,7 +2,7 @@
 title: "Output authenticity"
 description: "The agent produces artifacts people act on: a calendar file they import, a summary they trust. If anyone can produce a file that claims to be from the agent, or alter one after the fact, then the agent said so means nothing. The agent signs what it produces with a content credential, so a consumer can verify the artifact came from the agent and was not changed. A forged or tampered one fails the check. This closes the governance chapter."
 date: 2026-08-25
-draft: true
+draft: false
 tags: ["ai-security", "golang", "governance", "provenance"]
 series: "AI Security Engineering"
 ---

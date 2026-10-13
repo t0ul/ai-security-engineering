@@ -2,7 +2,7 @@
 title: "A full-chain attack, contained"
 description: "The capstone. One email that tries everything at once: a hidden instruction to exfiltrate the calendar, a planted AWS key, and a tool that claims to be read-only but tries to write a file. A naive agent lets all three through. The real pipeline runs every email under one trace id through the controls this book built, each layer catches its piece, and the trace replays to show which control stopped what."
 date: 2026-06-02
-draft: true
+draft: false
 tags: ["ai-security", "golang", "agents", "defense-in-depth"]
 series: "AI Security Engineering"
 ---

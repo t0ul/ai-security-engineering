@@ -2,7 +2,7 @@
 title: "A pinned tool catalog"
 description: "An authenticated plan can still call a tool whose definition changed after you approved it. This post has an MCP server quietly swap a tool's description, a rug-pull, and the agent takes it. Then it routes every tool call through the real MCP gateway, which pins the manifest it approved and refuses a changed one until an operator reviews it."
 date: 2026-02-24
-draft: true
+draft: false
 tags: ["ai-security", "golang", "agents", "mcp", "supply-chain"]
 series: "AI Security Engineering"
 ---

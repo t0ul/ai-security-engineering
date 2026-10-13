@@ -2,7 +2,7 @@
 title: "A web-search tool that hits a local server"
 description: "The agent gets its first tool that reaches out on its own, a web search, and a tool that fetches whatever URL it is handed is server-side request forgery waiting to happen, because the URL comes from a model that read an untrusted email. This post points a naive fetcher at the agent's own machine and watches it comply, then puts the real egress policy in front, which refuses loopback, the cloud-metadata address, and even an allowlisted name that resolves inward."
 date: 2025-12-16
-draft: true
+draft: false
 tags: ["ai-security", "golang", "agents", "ssrf"]
 series: "AI Security Engineering"
 ---

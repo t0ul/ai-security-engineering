@@ -2,7 +2,7 @@
 title: "The tracking pixel"
 description: "The exfil surface everyone forgets is the screen. The agent shows you a summary rendered from markdown the model wrote, and a markdown image in it is a tracking pixel: the browser fetches it on page load, no click, carrying data out in the URL. The fix is to strip images and auto-fetching links from model output before anything renders it."
 date: 2025-12-09
-draft: true
+draft: false
 tags: ["ai-security", "golang", "agents", "exfiltration"]
 series: "AI Security Engineering"
 ---

@@ -2,7 +2,7 @@
 title: "No shell"
 description: "The chamber is isolated and its one exit is gated, but there is still a hole in how a command gets in. A command is a string, and a string handed to a shell is a small programming language an attacker can write in. This post closes it: arguments validated against a schema and passed as an array, with no shell to inject into and no path to escape through."
 date: 2026-02-03
-draft: true
+draft: false
 tags: ["ai-security", "golang", "agents", "isolation"]
 series: "AI Security Engineering"
 ---

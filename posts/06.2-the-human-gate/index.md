@@ -2,7 +2,7 @@
 title: "The human gate"
 description: "Some actions are irreversible, and no automatic rule should ever perform them. They need a person to say yes. But a one-click yes can be forged, overlaid, or rubber-stamped, so this post builds the real gate: an approval is valid only when a human was shown the evidence and echoes back a nonce displayed with it, which a blind or forged click can never produce."
 date: 2025-12-30
-draft: true
+draft: false
 tags: ["ai-security", "golang", "agents", "human-in-the-loop"]
 series: "AI Security Engineering"
 ---

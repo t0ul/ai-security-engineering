@@ -2,7 +2,7 @@
 title: "A governed control plane and operator roles"
 description: "Part 7 is about running the agent, not building it. The first operator power is changing a prompt without shipping code, and it is also the sharpest insider risk, because a prompt is the agent's instructions. An ungoverned plane lets anyone own the agent by swapping it. The governed plane applies a change only for a signed, scoped operator capability, refuses a narrower role, and records who changed what."
 date: 2026-07-21
-draft: true
+draft: false
 tags: ["ai-security", "golang", "governance", "rbac"]
 series: "AI Security Engineering"
 ---

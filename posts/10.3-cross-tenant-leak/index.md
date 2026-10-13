@@ -2,7 +2,7 @@
 title: "Cross-tenant leak"
 description: "The last leak was about what a document said. This one is about whose documents come back at all. One retrieval store holds more than one household's email, and a search that is not scoped to the asker hands one household's private line to another. The fix is to put the tenant check inside the search itself, so authorization is not a step the retrieval path can forget."
 date: 2026-03-31
-draft: true
+draft: false
 tags: ["ai-security", "golang", "rag", "authorization"]
 series: "AI Security Engineering"
 ---

@@ -2,7 +2,7 @@
 title: "When the email gives orders"
 description: "Part 3 opens on the first red line from the baseline: an email that tells the model what to do, and a model that does it. This post runs that injection against the real local model, watches it land five times out of five, then adds the agent's real sanitizer and watches the same attack go to zero, measured live."
 date: 2025-11-04
-draft: true
+draft: false
 tags: ["ai-security", "golang", "agents", "prompt-injection"]
 series: "AI Security Engineering"
 ---

@@ -2,7 +2,7 @@
 title: "The app-layer red team: GORED"
 description: "Every test in this book was written by the person who wrote the defenses, which means every test shares the author's blind spots. The final move hands the finished product to an adversary that does not: a model-driven red team that plants its own unforgeable flags and drives a small local model to capture them, confirms success with an oracle a self-report cannot fake, and comes up empty once the bug is fixed. The model is the weapon, and this is live by nature, its own exercise, not a gate."
 date: 2026-10-06
-draft: true
+draft: false
 tags: ["ai-security", "golang", "red-team", "offensive"]
 series: "AI Security Engineering"
 ---

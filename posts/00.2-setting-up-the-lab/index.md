@@ -2,7 +2,7 @@
 title: "Set up your lab: from a bare Mac to a running agent"
 description: "The one setup post for the whole series. Starting from a clean Apple Silicon Mac, you install Go and llama.cpp, build the email-to-calendar agent, and watch it turn a real school newsletter into calendar events, all on your own machine. Every later post links back here instead of repeating the setup."
 date: 2025-08-19
-draft: true
+draft: false
 tags: ["ai-security", "golang", "agents", "setup"]
 series: "AI Security Engineering"
 ---

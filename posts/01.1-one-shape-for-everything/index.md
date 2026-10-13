@@ -2,7 +2,7 @@
 title: "One shape for everything"
 description: "Before the parser, before the model, the first thing I wrote for the agent was a single typed record for a calendar event. This post shows that struct, runs it, and shows every stage of the agent agreeing on it, so that nothing a model says ever gets to be the data."
 date: 2025-09-02
-draft: true
+draft: false
 tags: ["ai-security", "golang", "agents"]
 series: "AI Security Engineering"
 ---

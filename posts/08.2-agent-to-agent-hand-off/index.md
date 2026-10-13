@@ -2,7 +2,7 @@
 title: "Agent-to-agent hand-off"
 description: "The dual-LLM split only holds if the hand-off between the planner and the executor is authenticated. This post shows a naive executor that runs any plan claiming to come from the planner, forges that hand-off three ways to drive it, then wires the agent's real inter-agent authentication so the executor runs only a plan that verifies as the planner's own, unaltered, and never twice."
 date: 2026-02-17
-draft: true
+draft: false
 tags: ["ai-security", "golang", "agents", "camel", "a2a"]
 series: "AI Security Engineering"
 ---

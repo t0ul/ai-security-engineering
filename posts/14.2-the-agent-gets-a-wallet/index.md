@@ -2,7 +2,7 @@
 title: "The agent gets a wallet"
 description: "The agent is a non-human identity that holds a wallet of short-lived, signed, scoped grants it presents to act. When one leaks you revoke it, and revocation has to take effect now. The classic bug is that it does not: a token checked only for its expiry keeps working after revocation until it times out. The agent's authority consults the revocation list on every check, and the kill switch revokes the whole wallet at once."
 date: 2026-07-28
-draft: true
+draft: false
 tags: ["ai-security", "golang", "governance", "identity"]
 series: "AI Security Engineering"
 ---

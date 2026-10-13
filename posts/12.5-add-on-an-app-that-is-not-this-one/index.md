@@ -2,7 +2,7 @@
 title: "ADD on an app that is not this one"
 description: "Every attack in this book was against one agent. The claim underneath has always been that the method, not the agent, is the point. This post tests that: a brand-new toy app, a text summarizer with nothing to do with email, attacked with the same gorauder catalog, wrapped in the same ADD Technique, scored by the same gate, green against the live model in a second. If it transfers here, it was never about email."
 date: 2026-05-26
-draft: true
+draft: false
 tags: ["ai-security", "golang", "attack-driven-design", "transfer"]
 series: "AI Security Engineering"
 ---

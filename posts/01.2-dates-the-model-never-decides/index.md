@@ -2,7 +2,7 @@
 title: "Dates the model never decides"
 description: "The first field that bit me was the date. A naive parser happily calendars a Thursday that is really a Tuesday and a February 30 that does not exist, with no warning. This post shows that happening, then adds the agent's deterministic date parser, which flags the first and rejects the second, and proves it with a test you can run."
 date: 2025-09-09
-draft: true
+draft: false
 tags: ["ai-security", "golang", "agents"]
 series: "AI Security Engineering"
 ---

@@ -2,7 +2,7 @@
 title: "Scrubbing secrets and PII at ingest"
 description: "The agent indexes every email into a searchable corpus so it can answer questions later. That corpus is on disk, so whatever secret an email carries ends up stored in the clear, waiting for a leak. This post indexes a secret-laden email as-is and finds everything on disk, then scrubs at ingest with goflage, and is honest about the one token format the scrubber does not know."
 date: 2025-11-25
-draft: true
+draft: false
 tags: ["ai-security", "golang", "agents", "pii"]
 series: "AI Security Engineering"
 ---

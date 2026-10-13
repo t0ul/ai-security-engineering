@@ -2,7 +2,7 @@
 title: "The directory and contacts"
 description: "The agent builds a contact directory from who appears in your mail, and contacts are PII. An email that mixes them with other sensitive values, an SSN, an account key, and asks for everything on file, tempts a naive directory to hand it all over. The agent's contacts tool surfaces exactly one kind of thing, email addresses, nothing else it finds, read-only, and flags what it surfaced."
 date: 2026-06-23
-draft: true
+draft: false
 tags: ["ai-security", "golang", "agents", "pii"]
 series: "AI Security Engineering"
 ---

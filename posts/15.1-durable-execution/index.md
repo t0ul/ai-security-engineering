@@ -2,7 +2,7 @@
 title: "Durable execution and resume-verify"
 description: "A long-running agent crashes and resumes, replaying completed steps from a durable log instead of redoing them. That log is on disk, so it is attackable: edit a recorded step and the agent resumes into a state it never reached, an approval that was a denial. The agent's log is a hash chain, so a tampered checkpoint does not verify, and resume fails closed rather than trusting a forged state."
 date: 2026-09-01
-draft: true
+draft: false
 tags: ["ai-security", "golang", "reliability", "durability"]
 series: "AI Security Engineering"
 ---

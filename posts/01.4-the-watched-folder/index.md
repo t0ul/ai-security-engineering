@@ -2,7 +2,7 @@
 title: "The watched folder"
 description: "The agent picks up mail by watching a folder, and a folder is a door anyone can slip a file under. This post runs a naive scanner into the three things that go wrong at that boundary, an oversized file, a half-written file, and a flood, then adds the product's real limits and shows each one refused, skipped, or bounded."
 date: 2025-09-23
-draft: true
+draft: false
 tags: ["ai-security", "golang", "agents"]
 series: "AI Security Engineering"
 ---

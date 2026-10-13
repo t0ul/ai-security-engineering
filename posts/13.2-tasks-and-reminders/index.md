@@ -2,7 +2,7 @@
 title: "Tasks and reminders"
 description: "The agent now pulls to-dos, heads-ups, and actions out of an email, not just meetings. An action is the dangerous kind, because it carries a URL to act on, so it has to be surfaced for review rather than dropped into a silent to-do list. Classify by what a sentence sounds like and an attacker hides a phishing link behind to-do language. The real classifier checks for a URL first, so a link is always an action."
 date: 2026-06-09
-draft: true
+draft: false
 tags: ["ai-security", "golang", "agents", "classification"]
 series: "AI Security Engineering"
 ---

@@ -2,7 +2,7 @@
 title: "TODO: calm, descriptive title (thing: plain clarifier)"
 description: "TODO: one or two plain sentences; feeds meta description + OG."
 date: 2026-MM-DD
-draft: true
+draft: false
 tags: ["ai-security", "golang", "agents"]
 series: "AI Security Engineering"
 ---

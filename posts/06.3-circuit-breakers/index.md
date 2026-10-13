@@ -2,7 +2,7 @@
 title: "Circuit breakers and runaway loops"
 description: "The last abuse in this part needs no approval and no overreach: a loop that will not stop. Each step of an agent loop is a model call that costs time and money, and a cycle with no cap spins until the machine or the budget gives out. This post caps it with the loop engine's circuit breaker, then closes Part 3 by pasting the board, where every model-surface attack from the red baseline is now green."
 date: 2026-01-06
-draft: true
+draft: false
 tags: ["ai-security", "golang", "agents", "denial-of-service"]
 series: "AI Security Engineering"
 ---

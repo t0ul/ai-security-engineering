@@ -2,7 +2,7 @@
 title: "A log you can trust"
 description: "Part 2 starts with the lens, not a defense, because you cannot secure what you cannot see. But a log is only evidence if the log itself is honest. This post edits an agent's audit trail to rewrite what happened, watches a plain log accept the forgery, then adds gledger's hash-chained log and watches the same edit get caught."
 date: 2025-10-14
-draft: true
+draft: false
 tags: ["ai-security", "golang", "agents"]
 series: "AI Security Engineering"
 ---

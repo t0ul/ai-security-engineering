@@ -2,7 +2,7 @@
 title: "Index poisoning"
 description: "The last post gave the agent memory. This one plants a document in that memory whose text is an instruction, not a fact, and shows the model obeying it when it is retrieved. The fix is the move from the injection chapter, applied to retrieval: every retrieved chunk is encapsulated as untrusted data and neutralized, so a poisoned document reaches the model as a quoted claim it will not follow."
 date: 2026-03-24
-draft: true
+draft: false
 tags: ["ai-security", "golang", "rag", "prompt-injection"]
 series: "AI Security Engineering"
 ---

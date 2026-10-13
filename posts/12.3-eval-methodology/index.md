@@ -2,7 +2,7 @@
 title: "Honest eval methodology"
 description: "When you grade an agent's output with a model, the judge reads that output, and the output may be hostile. A naive judge that splices the candidate answer into its own instructions obeys a directive hidden in it and passes garbage. This post gets the local model to game its own judge, then hardens the judge by fencing the candidate as untrusted data graded by a fixed rubric, and the embedded directive goes inert."
 date: 2026-05-12
-draft: true
+draft: false
 tags: ["ai-security", "golang", "evaluation", "prompt-injection"]
 series: "AI Security Engineering"
 ---

@@ -2,7 +2,7 @@
 title: "Admin audit and one-click rollback"
 description: "Operators make changes, and some are bad. Recovering is not re-pasting the old text, because a hand-restored prompt is a new, unverified version that only looks right. A clean rollback re-activates a specific known-good version and proves, by its content hash, that the live prompt is exactly that version again, and records who rolled back to what. The agent's prompts plane is versioned and hash-pinned for exactly this."
 date: 2026-08-04
-draft: true
+draft: false
 tags: ["ai-security", "golang", "governance", "operations"]
 series: "AI Security Engineering"
 ---

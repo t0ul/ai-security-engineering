@@ -2,7 +2,7 @@
 title: "Incident response and the kill switch"
 description: "The kill switch is the control you reach for in an incident, so it has to be two things an ad-hoc flag is not. Governed, because an attacker who can flip the switch can flip it off mid-incident or on as a denial of service. And layered, because a single full-stop is its own outage, a deny storm against every legitimate user. The agent's safety gate requires a break-glass capability to toggle, and stops side effects without stopping reads."
 date: 2026-08-11
-draft: true
+draft: false
 tags: ["ai-security", "golang", "governance", "incident-response"]
 series: "AI Security Engineering"
 ---

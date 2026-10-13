@@ -2,7 +2,7 @@
 title: "Inert output and the human accept"
 description: "The safest thing an email agent can do with an event is write it to a file and stop. This post shows why the one-line shortcut of adding events straight to your calendar is the bug, and builds the two-part control that replaces it: output that changes nothing on its own, and a human accept step that only adds what a person chose."
 date: 2025-09-16
-draft: true
+draft: false
 tags: ["ai-security", "golang", "agents"]
 series: "AI Security Engineering"
 ---

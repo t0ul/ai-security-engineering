@@ -2,7 +2,7 @@
 title: "The email is data, not orders"
 description: "The last post stripped the injected line with a sanitizer. But you cannot pattern-match every attack, so this post takes the deeper idea: teach the model to treat the whole email as data it reads and never as instructions it follows. It wires that to the real model and measures it, and the honest result is that asking politely does nothing, while a channel that declares itself untrusted takes the same attack from landing every time to never."
 date: 2025-11-11
-draft: true
+draft: false
 tags: ["ai-security", "golang", "agents", "prompt-injection"]
 series: "AI Security Engineering"
 ---

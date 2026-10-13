@@ -2,7 +2,7 @@
 title: "The UI and chat"
 description: "The chat box is the surface people actually touch: ask a question, the agent retrieves from everything it has stored, and answers. But everything it has stored includes untrusted emails, so a poisoned one, pulled back for an innocent question, can hijack the reply. This closes the capstone the way the book began, with prompt injection, arriving this time through the corpus the chat reads, and defeated by the same move that neutralized it in the inbox."
 date: 2026-07-14
-draft: true
+draft: false
 tags: ["ai-security", "golang", "agents", "prompt-injection"]
 series: "AI Security Engineering"
 ---

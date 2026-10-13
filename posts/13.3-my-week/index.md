@@ -2,7 +2,7 @@
 title: "My week at a glance"
 description: "The weekly view groups the household's items by day, and which day an item lands on is a decision an email can lie about: state one weekday while the date says another. A view that places items by the weekday written in the text files them on the wrong day and leaves the real day looking empty. The agent places by the date it parsed, derives the weekday from that, and flags the mismatch."
 date: 2026-06-16
-draft: true
+draft: false
 tags: ["ai-security", "golang", "agents", "integrity"]
 series: "AI Security Engineering"
 ---

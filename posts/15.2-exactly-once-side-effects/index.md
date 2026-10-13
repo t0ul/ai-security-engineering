@@ -2,7 +2,7 @@
 title: "Exactly-once side effects"
 description: "A calendar write done twice is annoying. A refund sent twice is money gone, and agents retry constantly: a timeout, a resume after a crash, a client that never saw the response. The naive answer fires the side effect on every attempt. The agent routes dangerous actions through a durable ledger keyed by an idempotency key, which fires the effect exactly once on success and still lets a genuinely failed attempt be retried until it completes."
 date: 2026-09-08
-draft: true
+draft: false
 tags: ["ai-security", "golang", "reliability", "idempotency"]
 series: "AI Security Engineering"
 ---

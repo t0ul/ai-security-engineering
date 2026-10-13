@@ -2,7 +2,7 @@
 title: "A gateway you cannot route around"
 description: "A model call should have exactly one way out, through a choke point you control. This post builds the naive proxy first, lets it be steered at an internal service and flooded with no limit, then puts gouncer in front: an allowlist of model names, a body cap, and a rate cap, so an unknown host is a 400, a burst is a 429, and an oversized body is a 413."
 date: 2025-10-21
-draft: true
+draft: false
 tags: ["ai-security", "golang", "agents"]
 series: "AI Security Engineering"
 ---

@@ -2,7 +2,7 @@
 title: "Least privilege"
 description: "Chapter 6 is about what the agent is allowed to do. The rule is least privilege: each tool declares one narrow capability and can never exceed it, even when it is subverted. This post runs a read-only tool that has gone rogue and tries to write a file, watches a naive runner let it, then watches the agent's real pipeline refuse the write while a proper write tool still does its job."
 date: 2025-12-23
-draft: true
+draft: false
 tags: ["ai-security", "golang", "agents", "least-privilege"]
 series: "AI Security Engineering"
 ---

@@ -2,7 +2,7 @@
 title: "Agent memory architecture"
 description: "When several agents share a blackboard, two properties decide whether the shared memory is safe. Recall must be scoped, so one agent's private workspace does not leak into another's. And every fact must be attributed, so a rogue agent cannot write a fact that claims to come from a trusted one. The agent's blackboard is a scoped memory store whose writes are signed inter-agent messages. This closes the reliability chapter."
 date: 2026-09-22
-draft: true
+draft: false
 tags: ["ai-security", "golang", "reliability", "multi-agent"]
 series: "AI Security Engineering"
 ---

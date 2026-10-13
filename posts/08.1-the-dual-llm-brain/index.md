@@ -2,7 +2,7 @@
 title: "The dual-LLM brain"
 description: "Every injection in this book works because one model both reads the untrusted email and decides what to do. This post splits that in two: a privileged planner that decides but never reads the untrusted text, and a quarantined reader that reads it but can only produce data, never act. A command hidden in an email reaches only the reader, where it is data, and the planner it was meant for never sees it."
 date: 2026-02-10
-draft: true
+draft: false
 tags: ["ai-security", "golang", "agents", "camel"]
 series: "AI Security Engineering"
 ---

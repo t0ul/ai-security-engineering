@@ -2,7 +2,7 @@
 title: "Action links"
 description: "An action link is the sharpest thing an email can carry: a URL it wants acted on, and acting on one is where the human gate, the egress policy, and the sandbox fetch all meet. A naive agent that just follows the link lets an email exfiltrate data or reach the cloud metadata service. The agent requires a human to approve the exact action, checks the URL against the egress allowlist, and only then fetches it, inside the sandbox."
 date: 2026-06-30
-draft: true
+draft: false
 tags: ["ai-security", "golang", "agents", "ssrf"]
 series: "AI Security Engineering"
 ---
