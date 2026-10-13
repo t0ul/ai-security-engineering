@@ -1,0 +1,11 @@
+== gate 1: dataset provenance at ingestion ==
+  before: a naive ingester trusts the forged 'signed' record: true
+  after:  genuine -> trusted=true | forged -> trusted=false (true) | unsigned -> trusted=false (contained, not rejected)
+
+== gate 2: the promotion gate ==
+  before: a naive promote ships the unsafe change: live="UNSAFE"
+  after:  unsafe change refused: promotion gate: ADD attack-success-rate 25% (must be 0)
+          live prompt stays known-good: "P0"
+          a change that clears eval+ADD is promoted: "REVIEWED" (version 1)
+
+the receipt: a forged 'trusted' record is rejected at ingestion while unsigned data is merely contained; an unsafe change is refused at promotion while a reviewed one ships, both gates fail-closed
