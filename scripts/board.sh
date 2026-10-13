@@ -17,7 +17,7 @@ kind_for() {
   case "$1" in
     00.0|00.1|00.2) echo intro;;
     01.1|10.1)      echo feature;;
-    00.3|02.1|03.3) echo method;;
+    00.3|02.1|03.3|16.1) echo method;;
     02.2|07.1)      echo problem;;
     07.2|09.2)      echo live;;
     *)              echo notes;;
