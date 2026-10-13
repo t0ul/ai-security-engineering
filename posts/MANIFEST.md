@@ -68,4 +68,4 @@ folders sort in book order. Keep specs on one line and never use `|` inside one.
 | 15.3 | context-compaction | P7 ch15 reliability | Context compaction and summarization injection | summarization-injection -> trusted-summary rules -> 0% |
 | 15.4 | agent-memory-architecture | P7 ch15 reliability | Agent memory architecture | registry and blackboard -> memory lifecycle -> scoped recall |
 | 16.1 | make-it-idiomatic | P7 ch16 idiomatic | Make it idiomatic: the repo refactor | the refactor -> no attack -> the product as Go you are not embarrassed by |
-| 16.2 | the-app-layer-red-team | P7 ch16 idiomatic | The app-layer red team: GORED | model as weapon against the app -> planted flags captured by an OSS-model agent -> fixed, flags no longer captured -> live by nature, its own lesson, not a CI gate |
+| 16.2 | the-app-layer-red-team | P7 ch16 idiomatic | The app-layer red team: GORED | prose only (GORED is a separate repo, not importable downstream; LIVE receipts from the real OSS-model hunt) -> model as weapon captures a planted IDOR flag (oracle-confirmed) -> hardened build: no capture -> live by nature, not a CI gate |
