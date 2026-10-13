@@ -1,0 +1,8 @@
+== before: a retried action re-fires the refund ==
+  refund issued per attempt; order-42 paid 2 times
+
+== after: a durable ledger, keyed by the idempotency key ==
+  retried refund: order-42 paid 1 time (first replayed=false, second replayed=true)
+  flaky refund: attempt1 err=true, retry completes; order-99 paid 1 time
+
+the receipt: a naive retry double-charges; the durable ledger fires the refund exactly once on success, replays a retry of a completed action, and still lets a genuinely failed attempt be retried to completion
