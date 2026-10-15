@@ -1,8 +1,8 @@
 == before: index the email as-is ==
-  GitHub token  on disk: true
   parent email  on disk: true
   SSN           on disk: true
   AWS key       on disk: true
+  GitHub token  on disk: true
   every secret the email carried is now in the searchable corpus, in the clear
 
 == after: scrub at ingest with goflage ==

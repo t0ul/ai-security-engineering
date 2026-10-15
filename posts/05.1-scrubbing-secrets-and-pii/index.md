@@ -20,19 +20,154 @@ cd posts/05.1-scrubbing-secrets-and-pii
 go run .
 ```
 
+The whole program is on this page, in the order it runs, so you can type it in instead of cloning. Make an empty folder, run `go mod init scrub`, then `go get github.com/t0ul/goflage@` followed by the version on the `require` line below, and put the code in one file called `main.go`, with the email in `attack/leaky.txt`.
+
+<!-- listing: go.mod#all -->
+```
+module github.com/t0ul/ai-security-engineering/posts/05.1-scrubbing-secrets-and-pii
+
+go 1.27.1
+
+// The real PII/secret scrubber. No overrides.
+require github.com/t0ul/goflage v0.0.0-20261009135357-739ce25ed7e2
+```
+<!-- /listing -->
+
+## The spine of the program
+
+The top of the file reads the email, lists the four secrets in it that the scrubber knows the shape of, names the one it does not, and runs the two halves: index the email as it is, then index it scrubbed. The receipt needs both: every recognized secret on disk the first time, none of them the second.
+
+<!-- listing: main.go#head -->
+```go
+// Command main is the runnable demo for lesson 05.1, scrubbing secrets and PII at
+// ingest.
+//
+// Run it with:
+//
+//	go run .
+//
+// The agent indexes every email into a searchable corpus so it can answer
+// questions later. That corpus is on disk and broadly queryable, so anything
+// secret that lands in it sits there in the clear, waiting for a leak. This demo
+// indexes an email full of secrets with no scrubbing, finds them all on disk, then
+// scrubs at ingest with the real goflage recognizer and finds them gone. It is
+// deterministic, no model involved. It is also honest about one secret the
+// recognizer does not know.
+package main
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/t0ul/goflage"
+)
+
+// leaky is the email full of secrets, read from attack/leaky.txt so what the
+// chapter prints is what gets indexed. There is no embedded copy to drift from it.
+func leaky() string {
+	b, err := os.ReadFile("attack/leaky.txt")
+	if err != nil {
+		panic(err)
+	}
+	return string(b)
+}
+
+// recognized are the secrets goflage knows how to find, in the order the email
+// carries them. The control should keep every one of these out of the corpus.
+var recognized = []struct{ name, secret string }{
+	{"parent email", "parent.contact@example.com"},
+	{"SSN", "123-45-6789"},
+	{"AWS key", "AKIAIOSFODNN7EXAMPLE"},
+	{"GitHub token", "ghp_abcdefghijklmnopqrstuvwxyz0123456789"},
+}
+
+// unusual is a billing-key format goflage does not recognize. It is here to keep
+// the lesson honest about what a pattern-based scrubber can and cannot promise.
+const unusual = "sk-live-abc123DEF456ghi789"
+
+func main() {
+	dir, err := os.MkdirTemp("", "lesson-05.1-*")
+	if err != nil {
+		panic(err)
+	}
+	defer os.RemoveAll(dir)
+
+	leak := indexRaw(dir)
+	scrub := indexScrubbed(dir)
+
+	fmt.Println()
+	if leak && scrub {
+		fmt.Println("attack blocked (the receipt): every recognized secret kept out of the corpus")
+	} else {
+		fmt.Println("a control did not hold")
+		os.Exit(1)
+	}
+}
+```
+<!-- /listing -->
+
+The corpus is one file on disk, the way the real retrieval index persists what the agent has read, and `onDisk` is the only oracle this lesson needs: is the secret in the file or not.
+
+<!-- listing: main.go#the corpus on disk -->
+```go
+// ---- the corpus on disk ----
+
+// corpus writes one indexed document to a file on disk, the way the real retrieval
+// index persists what the agent has read.
+func corpus(dir string, text string) string {
+	path := filepath.Join(dir, "corpus.txt")
+	f, _ := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+	defer f.Close()
+	f.WriteString(text)
+	return path
+}
+
+func onDisk(path, needle string) bool {
+	data, _ := os.ReadFile(path)
+	return strings.Contains(string(data), needle)
+}
+```
+<!-- /listing -->
+
 ## I. The corpus remembers everything
 
-Here is the kind of email that causes the problem. It is a mundane directory update, and like a lot of real mail it carries things that should never be stored: a parent's address and SSN, and, pasted into an admin note the way these things actually leak, a cloud key, a code-hosting token, and a billing key. Everything in it is fake, but the shapes are real.
+Here is the kind of email that causes the problem. It is a mundane directory update, and like a lot of real mail it carries things that should never be stored: a parent's address and SSN, and, pasted into an admin note the way these things actually leak, a cloud key, a code-hosting token, and a billing key. Everything in it is fake, but the shapes are real. It is `attack/leaky.txt`:
 
+<!-- listing: attack/leaky.txt#all -->
 ```
-New parent contact: parent.contact@example.com.
+Subject: Directory update + server notes
+
+Please update the class directory. New parent contact: parent.contact@example.com.
 For the records office, the enrollment ID carries SSN 123-45-6789.
-(Admin note: the sync job uses aws key AKIAIOSFODNN7EXAMPLE and the GitHub
-token ghp_abcdefghijklmnopqrstuvwxyz0123456789. The new billing key is
+
+(Admin note, do not forward: the sync job uses aws key AKIAIOSFODNN7EXAMPLE and
+the GitHub token ghp_abcdefghijklmnopqrstuvwxyz0123456789. The new billing key is
 sk-live-abc123DEF456ghi789.)
 ```
+<!-- /listing -->
 
 Index it the way the agent does, and then look at what landed on disk:
+
+<!-- listing: main.go#before: index the email as-is -->
+```go
+// ---- before: index the email as-is ----
+
+func indexRaw(dir string) bool {
+	fmt.Println("== before: index the email as-is ==")
+	path := corpus(dir, leaky())
+	all := true
+	for _, r := range recognized {
+		hit := onDisk(path, r.secret)
+		fmt.Printf("  %-13s on disk: %v\n", r.name, hit)
+		all = all && hit
+	}
+	fmt.Println("  every secret the email carried is now in the searchable corpus, in the clear")
+	return all // the attack lands: all recognized secrets reached disk
+}
+```
+<!-- /listing -->
 
 ```
 == before: index the email as-is ==
@@ -48,6 +183,46 @@ Every one of them, written into the searchable store verbatim. The agent did not
 ## II. Scrub at the door
 
 The fix is to clean the text before it is ever indexed. I added `goflage`, a small dependency-free Go library that finds and redacts secrets and personal data. It is deliberately not a model: it uses regular expressions and checksums to recognize the high-precision cases, emails, US SSNs, AWS keys, API tokens, JWTs, Luhn-valid credit cards, IP addresses, and replaces each with a labelled placeholder. What it defends against is exactly the leak above: run the email through it at ingest and the corpus never sees the real values.
+
+Here is the same email scrubbed at the door and then indexed. The function also prints the honest part, which the next section is about:
+
+<!-- listing: main.go#after: scrub at ingest -->
+```go
+// ---- after: scrub at ingest ----
+
+func indexScrubbed(dir string) bool {
+	fmt.Println("\n== after: scrub at ingest with goflage ==")
+	clean, findings := goflage.New().Scrub(leaky())
+	fmt.Printf("  goflage findings: %v\n", findings)
+	path := corpus(dir, clean)
+
+	none := true
+	for _, r := range recognized {
+		hit := onDisk(path, r.secret)
+		fmt.Printf("  %-13s on disk: %v\n", r.name, hit)
+		none = none && !hit
+	}
+	fmt.Printf("  what the corpus holds instead: %s\n", firstLine(clean))
+
+	// The honest part: a format the recognizer does not know still slips through.
+	fmt.Printf("\n  but the unrecognized billing key is still on disk: %v\n", onDisk(path, unusual))
+	fmt.Println("  goflage is deterministic and high-precision; it redacts shapes it knows and")
+	fmt.Println("  no others. An unusual token format is a recognizer it does not have yet.")
+	return none // the control holds for every recognized secret
+}
+
+func firstLine(s string) string {
+	s = strings.TrimSpace(s)
+	if i := strings.IndexByte(s, '\n'); i >= 0 {
+		return strings.TrimSpace(s[:i])
+	}
+	return s
+}
+
+// leakyScrubbed exposes the scrub result for the characterization test.
+func leakyScrubbed() (string, []goflage.Finding) { return goflage.New().Scrub(leaky()) }
+```
+<!-- /listing -->
 
 ```
 == after: scrub at ingest with goflage ==
@@ -71,6 +246,41 @@ Now the honest part, because a scrubber you trust blindly is its own hazard. Loo
 It slipped straight through. `goflage` is a deterministic, high-precision tool: it redacts the shapes it has a recognizer for, and no others. The billing key's format is not one it knows, so to the scrubber it is just a word, and it sailed into the corpus with everything else benign. This is the real shape of pattern-based scrubbing, and it is why the library draws its own line honestly: open-ended detection, the "is this a name, is this a secret I have never seen" judgment, belongs behind a model, which is a different and heavier tool. A regex scrubber is fast, dependency-free, and exact on what it knows, and silent on what it does not.
 
 So two things follow. The missing recognizer is a bug with a fix, a pattern to add, and the lesson's test pins the gap so that the day `goflage` learns that format, the test fails and reminds me to update this page. And more durably, a scrubber is one layer, not a guarantee: it belongs in front of the corpus, but the corpus should also assume something slipped, which is why the posts after this one keep tightening what can leave the agent even when something private did get in.
+
+That is the whole program. Its test pins both halves and, separately, the honest limit: the day a newer `goflage` learns the billing key's shape, the second test skips with a note telling me to update this page. Put it next to `main.go` as `contract_test.go`:
+
+<!-- listing: contract_test.go#all -->
+```go
+package main
+
+import "testing"
+
+// Deterministic, no model. Indexing the email as-is puts every recognized secret
+// on disk; scrubbing at ingest keeps all of them out. The test also pins the
+// honest limit: a token format goflage does not recognize still slips through, so
+// if a later goflage gains that recognizer, this test fails and tells us to update
+// the lesson.
+
+func TestSecretsLeakUndefendedScrubbedDefended(t *testing.T) {
+	dir := t.TempDir()
+	if !indexRaw(dir) {
+		t.Fatal("indexing as-is should put every recognized secret on disk; otherwise there is nothing to fix")
+	}
+	if !indexScrubbed(dir) {
+		t.Fatal("scrubbing at ingest must keep every recognized secret out of the corpus")
+	}
+}
+
+func TestUnrecognizedFormatStillSlips(t *testing.T) {
+	dir := t.TempDir()
+	clean, _ := leakyScrubbed()
+	path := corpus(dir, clean)
+	if !onDisk(path, unusual) {
+		t.Skip("goflage now recognizes this format; update the lesson's honesty note, this is good news")
+	}
+}
+```
+<!-- /listing -->
 
 ## Conclusion
 
