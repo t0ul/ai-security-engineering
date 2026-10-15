@@ -22,6 +22,20 @@ import (
 	"github.com/t0ul/emaildrop/pkg/durable"
 )
 
+func main() {
+	undef := duplicatesUndefended()
+	def := exactlyOnceDefended()
+	fmt.Println()
+	if undef && def {
+		fmt.Println("the receipt: a naive write duplicates the event when the email is re-ingested; the durable ledger keys the write by the event's content, so the replay returns the first result and the calendar holds exactly one")
+	} else {
+		fmt.Println("the write did not behave exactly once")
+		os.Exit(1)
+	}
+}
+
+// ---- the calendar, and the key for an event ----
+
 // calendar is the side the write touches: the household's actual calendar. A
 // duplicate here is a duplicate on their phone.
 var calendar []string
@@ -92,16 +106,4 @@ func exactlyOnceDefended() bool {
 	fmt.Printf("  calendar after two ingests of one email: %v\n", calendar)
 	fmt.Printf("  written exactly once: %v (the replay was recognized and skipped: %v)\n", once, replays == 1)
 	return once && replays == 1
-}
-
-func main() {
-	undef := duplicatesUndefended()
-	def := exactlyOnceDefended()
-	fmt.Println()
-	if undef && def {
-		fmt.Println("the receipt: a naive write duplicates the event when the email is re-ingested; the durable ledger keys the write by the event's content, so the replay returns the first result and the calendar holds exactly one")
-	} else {
-		fmt.Println("the write did not behave exactly once")
-		os.Exit(1)
-	}
 }

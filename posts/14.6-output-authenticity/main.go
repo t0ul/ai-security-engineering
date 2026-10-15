@@ -19,18 +19,6 @@ import (
 	"github.com/t0ul/emaildrop/pkg/provenance"
 )
 
-// the agent's genuine output: a calendar event it extracted and emitted.
-const artifact = "BEGIN:VEVENT\nSUMMARY:Multicultural Potluck\nDTSTART:20261023\nLOCATION:School Cafeteria\nEND:VEVENT"
-
-// a tampered copy: the time was changed after the agent signed it.
-const tampered = "BEGIN:VEVENT\nSUMMARY:Multicultural Potluck\nDTSTART:20261024\nLOCATION:Attacker Hall\nEND:VEVENT"
-
-type candidate struct {
-	name    string
-	content string
-	mark    provenance.Mark
-}
-
 func main() {
 	agent, agentPub, _ := provenance.NewSigner("emaildrop-agent")
 	attacker, _, _ := provenance.NewSigner("attacker")
@@ -45,7 +33,7 @@ func main() {
 		{"tampered", tampered, realMark}, // the agent's mark over altered content
 	}
 
-	// ---- before: trust anything that claims to be from the agent ----
+	// before: trust anything that claims to be from the agent
 	fmt.Println("== before: a consumer that does not verify ==")
 	accepted := 0
 	for _, c := range candidates {
@@ -56,7 +44,7 @@ func main() {
 	}
 	fmt.Printf("  output-forgery ASR: %d%% (%d/2 forgeries accepted)\n", accepted*100/2, accepted)
 
-	// ---- after: verify the content credential ----
+	// after: verify the content credential
 	fmt.Println("\n== after: verify the content credential ==")
 	landed := 0
 	var genuineOK bool
@@ -80,6 +68,22 @@ func main() {
 		os.Exit(1)
 	}
 }
+
+// ---- the genuine artifact, and a tampered copy ----
+
+// the agent's genuine output: a calendar event it extracted and emitted.
+const artifact = "BEGIN:VEVENT\nSUMMARY:Multicultural Potluck\nDTSTART:20261023\nLOCATION:School Cafeteria\nEND:VEVENT"
+
+// a tampered copy: the time was changed after the agent signed it.
+const tampered = "BEGIN:VEVENT\nSUMMARY:Multicultural Potluck\nDTSTART:20261024\nLOCATION:Attacker Hall\nEND:VEVENT"
+
+type candidate struct {
+	name    string
+	content string
+	mark    provenance.Mark
+}
+
+// ---- helpers ----
 
 func reason(name string, err error) string {
 	if err == nil {

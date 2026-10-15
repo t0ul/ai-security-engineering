@@ -58,6 +58,8 @@ func main() {
 	}
 }
 
+// ---- where a host resolves ----
+
 // resolve is a fixed resolver: the demo's named hosts map to the loopback test
 // servers; everything else resolves normally.
 func resolve(host string) ([]net.IP, error) {
@@ -153,6 +155,8 @@ func guestFetch(brokerAddr, url string) (string, error) {
 	b, _ := io.ReadAll(resp.Body)
 	return string(b), nil
 }
+
+// ---- helpers ----
 
 func port(u string) string { return u[strings.LastIndexByte(u, ':')+1:] }
 

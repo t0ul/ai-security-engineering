@@ -23,6 +23,49 @@ import (
 	"github.com/t0ul/gledger"
 )
 
+func main() {
+	fmt.Println("== before: a naive agent processes the poisoned email ==")
+	ns, ni, na := naiveLands()
+	fmt.Printf("  secret indexed into the corpus:   %v\n", ns)
+	fmt.Printf("  injection reached the extractor:  %v\n", ni)
+	fmt.Printf("  unauthorized .ics written:        %v\n", na)
+	nLanded := b2i(ns) + b2i(ni) + b2i(na)
+	fmt.Printf("  payloads landed: %d/3\n", nLanded)
+
+	fmt.Println("\n== after: the real pipeline, one trace id ==")
+	c := pipelineContains()
+	fmt.Printf("  secret indexed into the corpus:   %v   (goflage scrubbed it)\n", c.secretIndexed)
+	fmt.Printf("  injection reached the extractor:  %v   (guard neutralized it)\n", c.injectionReached)
+	fmt.Printf("  unauthorized .ics written:        %v   (capability enforced)\n", c.artifactWritten)
+	dLanded := b2i(c.secretIndexed) + b2i(c.injectionReached) + b2i(c.artifactWritten)
+	fmt.Printf("  payloads landed: %d/3\n", dLanded)
+
+	fmt.Printf("\n== replay by trace id %s ==\n", short(c.trace))
+	recs, _ := gledger.Read(c.logPath)
+	for _, r := range recs {
+		if r.TraceID != c.trace {
+			continue
+		}
+		switch r.Span + "/" + r.Event {
+		case "pii/scrubbed", "injection_guard/detected", "event_extractor/capability_violation":
+			fmt.Printf("  %-40s %v\n", r.Span+"/"+r.Event, r.Fields)
+		}
+	}
+	ok, n := gledger.VerifyFile(c.logPath)
+	fmt.Printf("  audit chain verified: %v (%d records)\n", ok, n)
+	os.RemoveAll(filepath.Dir(c.logPath))
+
+	fmt.Println()
+	if nLanded == 3 && dLanded == 0 {
+		fmt.Println("attack blocked (the receipt): every payload lands on the naive agent; the real pipeline scrubs the secret, neutralizes the injection, and refuses the over-capable tool, each recorded under one trace id")
+	} else {
+		fmt.Println("a layer did not hold")
+		os.Exit(1)
+	}
+}
+
+// ---- the poisoned email, and the tool that would leak the secret ----
+
 // The poisoned email: a real event, a hidden injection, and a planted secret.
 const secret = "AKIAIOSFODNN7EXAMPLE"
 const injectionURL = "http://attacker.example/exfil"
@@ -116,46 +159,7 @@ func pipelineContains() contained {
 	}
 }
 
-func main() {
-	fmt.Println("== before: a naive agent processes the poisoned email ==")
-	ns, ni, na := naiveLands()
-	fmt.Printf("  secret indexed into the corpus:   %v\n", ns)
-	fmt.Printf("  injection reached the extractor:  %v\n", ni)
-	fmt.Printf("  unauthorized .ics written:        %v\n", na)
-	nLanded := b2i(ns) + b2i(ni) + b2i(na)
-	fmt.Printf("  payloads landed: %d/3\n", nLanded)
-
-	fmt.Println("\n== after: the real pipeline, one trace id ==")
-	c := pipelineContains()
-	fmt.Printf("  secret indexed into the corpus:   %v   (goflage scrubbed it)\n", c.secretIndexed)
-	fmt.Printf("  injection reached the extractor:  %v   (guard neutralized it)\n", c.injectionReached)
-	fmt.Printf("  unauthorized .ics written:        %v   (capability enforced)\n", c.artifactWritten)
-	dLanded := b2i(c.secretIndexed) + b2i(c.injectionReached) + b2i(c.artifactWritten)
-	fmt.Printf("  payloads landed: %d/3\n", dLanded)
-
-	fmt.Printf("\n== replay by trace id %s ==\n", short(c.trace))
-	recs, _ := gledger.Read(c.logPath)
-	for _, r := range recs {
-		if r.TraceID != c.trace {
-			continue
-		}
-		switch r.Span + "/" + r.Event {
-		case "pii/scrubbed", "injection_guard/detected", "event_extractor/capability_violation":
-			fmt.Printf("  %-40s %v\n", r.Span+"/"+r.Event, r.Fields)
-		}
-	}
-	ok, n := gledger.VerifyFile(c.logPath)
-	fmt.Printf("  audit chain verified: %v (%d records)\n", ok, n)
-	os.RemoveAll(filepath.Dir(c.logPath))
-
-	fmt.Println()
-	if nLanded == 3 && dLanded == 0 {
-		fmt.Println("attack blocked (the receipt): every payload lands on the naive agent; the real pipeline scrubs the secret, neutralizes the injection, and refuses the over-capable tool, each recorded under one trace id")
-	} else {
-		fmt.Println("a layer did not hold")
-		os.Exit(1)
-	}
-}
+// ---- helpers ----
 
 // quiet runs fn with stdout redirected to /dev/null, so the audit log's console
 // echo does not clutter the demo output. The records still go to the log file.

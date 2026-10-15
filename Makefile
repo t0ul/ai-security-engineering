@@ -5,6 +5,9 @@
 #   make check [POST=...]        the gate: prose lint + vet + every contract test (all, or one)
 #   make board                   the whole book's attack board: every lesson re-attacked, red/green
 #   make capture POST=...        run the lesson and save its real output to receipt.txt
+#   make listings                print each lesson's code into its chapter (listing markers in index.md)
+#   make site-sync | site-check  copy every post body over its site copy (t0ul.com), or report drift
+#   make book                    assemble the chapters and build the web book and the EPUB with honkit
 #   make lint                    prose lint only
 #   make hooks                   install the pre-push hook so `make check` runs before every push
 #   make pr POST=...             branch, check, commit only that folder, push, open PR
@@ -16,7 +19,7 @@
 SHELL := /bin/bash
 MODS  := $(shell ls posts/[0-9]*/go.mod 2>/dev/null | xargs -n1 dirname)
 
-.PHONY: status new check board capture lint hooks pr
+.PHONY: status new check board capture lint listings site-sync site-check book hooks pr
 
 status:
 	@scripts/status.sh
@@ -26,6 +29,7 @@ new:
 	@scripts/new-post.sh "$(POST)"
 
 check: lint
+	@scripts/listings.py check --all
 	@set -e; for d in $(if $(POST),posts/$(POST),$(MODS)); do \
 	  test -f "$$d/go.mod" || continue; \
 	  echo "== $$d"; (cd "$$d" && go vet ./... && go test -count=1 ./...); \
@@ -40,6 +44,18 @@ capture:
 
 lint:
 	@scripts/lint-prose.sh
+
+listings:
+	@scripts/listings.py write --all
+
+site-sync:
+	@scripts/site-sync.py write
+
+site-check:
+	@scripts/site-sync.py check
+
+book:
+	@scripts/book.sh
 
 hooks:
 	@git config core.hooksPath .githooks && echo "pre-push hook installed: make check runs before every push"

@@ -20,6 +20,20 @@ import (
 	"github.com/t0ul/emaildrop/pkg/durable"
 )
 
+func main() {
+	undef := retryDoublesUndefended()
+	def := exactlyOnceDefended()
+	fmt.Println()
+	if undef && def {
+		fmt.Println("the receipt: a naive retry double-charges; the durable ledger fires the refund exactly once on success, replays a retry of a completed action, and still lets a genuinely failed attempt be retried to completion")
+	} else {
+		fmt.Println("the side effect did not fire exactly once")
+		os.Exit(1)
+	}
+}
+
+// ---- the orders, and the refund that pays ----
+
 const session = "orders"
 
 // paid records every refund that actually left: a duplicate here is a double charge.
@@ -77,16 +91,4 @@ func exactlyOnceDefended() bool {
 	fmt.Printf("  flaky refund: attempt1 err=%v, retry completes; order-99 paid %d time\n", err1 != nil, len(paid))
 
 	return once && !r1 && r2 && completed && err1 != nil && err2 == nil
-}
-
-func main() {
-	undef := retryDoublesUndefended()
-	def := exactlyOnceDefended()
-	fmt.Println()
-	if undef && def {
-		fmt.Println("the receipt: a naive retry double-charges; the durable ledger fires the refund exactly once on success, replays a retry of a completed action, and still lets a genuinely failed attempt be retried to completion")
-	} else {
-		fmt.Println("the side effect did not fire exactly once")
-		os.Exit(1)
-	}
 }

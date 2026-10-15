@@ -24,6 +24,18 @@ import (
 	"github.com/t0ul/emaildrop/pkg/agent/tools"
 )
 
+func main() {
+	trustedAsIs()
+	all := checksCatchAll()
+	fmt.Println()
+	if all {
+		fmt.Println("attack blocked (the receipt): a naive pipeline passes every mangled record through; the deterministic checks catch the wrong weekday, the borrowed time, the inverted negation, and the self-conflicting date")
+	} else {
+		fmt.Println("a check did not catch its case")
+		os.Exit(1)
+	}
+}
+
 // ---- before: a naive pipeline that trusts the extraction ----
 
 // naiveStrip is the title cleaner I might write to tidy a title: drop little
@@ -104,16 +116,4 @@ func checksCatchAll() bool {
 	}
 	fmt.Printf("  integrity problems caught: %d/%d\n", caught, len(checks))
 	return caught == len(checks)
-}
-
-func main() {
-	trustedAsIs()
-	all := checksCatchAll()
-	fmt.Println()
-	if all {
-		fmt.Println("attack blocked (the receipt): a naive pipeline passes every mangled record through; the deterministic checks catch the wrong weekday, the borrowed time, the inverted negation, and the self-conflicting date")
-	} else {
-		fmt.Println("a check did not catch its case")
-		os.Exit(1)
-	}
 }

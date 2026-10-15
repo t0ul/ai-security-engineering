@@ -64,6 +64,8 @@ func main() {
 	}
 }
 
+// ---- the corpus on disk ----
+
 // corpus writes one indexed document to a file on disk, the way the real retrieval
 // index persists what the agent has read.
 func corpus(dir string, text string) string {

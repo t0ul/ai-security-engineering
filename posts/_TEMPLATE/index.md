@@ -20,3 +20,35 @@ Hard rules: no em dashes; no label headers; calm, not hacker-bro; verify every r
 -->
 
 ## TODO
+
+This is a control lesson and it runs on its own. The whole program is on this page, in the order it runs, so you can type it in as you read. Or clone the lessons and run the folder:
+
+```bash
+cd posts/TODO-id-slug
+go run .
+```
+
+If you are typing along, make an empty folder, run `go mod init lesson`, then `go get` each module the file below requires, and put everything in one file called `main.go`:
+
+<!-- listing: go.mod#all -->
+<!-- /listing -->
+
+## The spine of the program
+
+<!-- listing: main.go#head -->
+<!-- /listing -->
+
+## I. TODO the feature, and the attack that lands
+
+<!-- listing: main.go#before: the feature with no control -->
+<!-- /listing -->
+
+## II. TODO the control, and the same attack blocked
+
+<!-- listing: main.go#after: the same attack, against the control -->
+<!-- /listing -->
+
+## The test is the receipt
+
+<!-- listing: contract_test.go#all -->
+<!-- /listing -->

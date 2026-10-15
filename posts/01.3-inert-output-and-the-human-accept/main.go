@@ -190,6 +190,8 @@ func cleanEventAccepted() bool {
 	return cal.has("Multicultural Potluck")
 }
 
+// ---- helpers ----
+
 func firstLines(s string, n int) []string {
 	lines := strings.Split(strings.ReplaceAll(s, "\r\n", "\n"), "\n")
 	if len(lines) > n {

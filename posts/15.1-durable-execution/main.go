@@ -24,6 +24,44 @@ import (
 	"github.com/t0ul/emaildrop/pkg/durable"
 )
 
+func main() {
+	dir, _ := os.MkdirTemp("", "durable")
+	defer os.RemoveAll(dir)
+	path := filepath.Join(dir, "steps.log")
+
+	runWorkflow(path)
+	tamper(path) // an attacker flips the denial to an approval on disk
+
+	fmt.Println("== before: resume by trusting the log on disk ==")
+	decision := naiveResume(path)
+	adopted := decision == "approved"
+	fmt.Printf("  the resumed agent reads the approval decision as: %q\n", decision)
+	fmt.Printf("  it would issue the refund the human denied: %v\n", adopted)
+
+	fmt.Println("\n== after: resume-verify the hash chain ==")
+	_, err := durable.Open(path) // Open loads AND verifies the chain
+	refused := errors.Is(err, durable.ErrTampered)
+	fmt.Printf("  reopening the tampered log: %v\n", err)
+	fmt.Printf("  resume refused on a tampered checkpoint: %v\n", refused)
+
+	// A clean log of the same workflow still resumes, and the real decision stands.
+	clean := filepath.Join(dir, "clean.log")
+	runWorkflow(clean)
+	l, errClean := durable.Open(clean)
+	real, _ := l.Lookup(session, "approve")
+	fmt.Printf("  a clean log resumes (err=%v); the real decision is: %q\n", errClean, real.Output)
+
+	fmt.Println()
+	if adopted && refused && errClean == nil && real.Output == "denied" {
+		fmt.Println("attack blocked (the receipt): a naive resume trusts a forged checkpoint and reverses a decision; the hash chain refuses a tampered log and fails closed, while a clean log resumes with the real decision intact")
+	} else {
+		fmt.Println("a control did not hold")
+		os.Exit(1)
+	}
+}
+
+// ---- the workflow, the tamper, and what resume reads ----
+
 const session = "refund-session"
 
 // runWorkflow records three completed steps to a durable log on disk. The middle
@@ -67,40 +105,4 @@ func naiveResume(path string) string {
 		}
 	}
 	return approveDecision(steps)
-}
-
-func main() {
-	dir, _ := os.MkdirTemp("", "durable")
-	defer os.RemoveAll(dir)
-	path := filepath.Join(dir, "steps.log")
-
-	runWorkflow(path)
-	tamper(path) // an attacker flips the denial to an approval on disk
-
-	fmt.Println("== before: resume by trusting the log on disk ==")
-	decision := naiveResume(path)
-	adopted := decision == "approved"
-	fmt.Printf("  the resumed agent reads the approval decision as: %q\n", decision)
-	fmt.Printf("  it would issue the refund the human denied: %v\n", adopted)
-
-	fmt.Println("\n== after: resume-verify the hash chain ==")
-	_, err := durable.Open(path) // Open loads AND verifies the chain
-	refused := errors.Is(err, durable.ErrTampered)
-	fmt.Printf("  reopening the tampered log: %v\n", err)
-	fmt.Printf("  resume refused on a tampered checkpoint: %v\n", refused)
-
-	// A clean log of the same workflow still resumes, and the real decision stands.
-	clean := filepath.Join(dir, "clean.log")
-	runWorkflow(clean)
-	l, errClean := durable.Open(clean)
-	real, _ := l.Lookup(session, "approve")
-	fmt.Printf("  a clean log resumes (err=%v); the real decision is: %q\n", errClean, real.Output)
-
-	fmt.Println()
-	if adopted && refused && errClean == nil && real.Output == "denied" {
-		fmt.Println("attack blocked (the receipt): a naive resume trusts a forged checkpoint and reverses a decision; the hash chain refuses a tampered log and fails closed, while a clean log resumes with the real decision intact")
-	} else {
-		fmt.Println("a control did not hold")
-		os.Exit(1)
-	}
 }

@@ -25,6 +25,23 @@ import (
 	"github.com/t0ul/emaildrop/pkg/rag"
 )
 
+func main() {
+	path, cleanup := buildIndex()
+	defer cleanup()
+
+	undef := leakLandsUndefended(path)
+	def := aclScopesToAsker(path)
+	fmt.Println()
+	if undef && def {
+		fmt.Println("attack blocked (the receipt): an unscoped search hands Bob another household's private email; the agent's Query scopes to the asker, so Bob gets only his own and public documents while Alice still gets hers")
+	} else {
+		fmt.Println("a control did not hold")
+		os.Exit(1)
+	}
+}
+
+// ---- the index with two tenants ----
+
 // secret is the marker that must never cross households: a line in Alice's
 // private email. Bob asking about appointments must not see it.
 const secret = "therapy with Dr. Reyes"
@@ -137,6 +154,8 @@ func aclScopesToAsker(path string) bool {
 	return !bobLeak && bobSeesOwn && bobSeesPublic && aliceSeesOwn
 }
 
+// ---- helpers ----
+
 func anyContains(xs []string, sub string) bool {
 	for _, x := range xs {
 		if strings.Contains(x, sub) {
@@ -156,20 +175,5 @@ func b2i(b bool) int {
 func must(err error) {
 	if err != nil {
 		panic(err)
-	}
-}
-
-func main() {
-	path, cleanup := buildIndex()
-	defer cleanup()
-
-	undef := leakLandsUndefended(path)
-	def := aclScopesToAsker(path)
-	fmt.Println()
-	if undef && def {
-		fmt.Println("attack blocked (the receipt): an unscoped search hands Bob another household's private email; the agent's Query scopes to the asker, so Bob gets only his own and public documents while Alice still gets hers")
-	} else {
-		fmt.Println("a control did not hold")
-		os.Exit(1)
 	}
 }

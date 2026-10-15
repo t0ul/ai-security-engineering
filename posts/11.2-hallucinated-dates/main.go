@@ -30,73 +30,6 @@ import (
 	"github.com/t0ul/emaildrop/pkg/agent/schema"
 )
 
-const planner = "http://127.0.0.1:11435/v1/chat/completions"
-
-const year = 2026
-
-// email has exactly one written date, October 2nd. The Winter Gala has none. A
-// model asked for structured events, told every event needs a date, fills that
-// gap with a concrete date it made up.
-const email = "Upcoming events: Picture Day on October 2nd, and the Winter Gala."
-
-const llmPrompt = `You extract calendar events from a school newsletter. Return ONLY a JSON array; each item {"title":"...","date":"YYYY-MM-DD"}. EVERY event MUST have a date; if the email does not give one, estimate it. Use 2026 for the year.`
-
-// datesInText mirrors the reconciler's authority: the ISO dates the deterministic
-// parser actually finds in the raw email. An extracted date outside this set did
-// not come from the email.
-func datesInText(text string) map[string]bool {
-	set := map[string]bool{}
-	for _, line := range strings.Split(text, "\n") {
-		if dt := dateparse.ExtractDatetime(line, year); dt != nil {
-			set[dt.Start[:10]] = true
-		}
-	}
-	return set
-}
-
-// offText returns the events whose date is not written anywhere in the email.
-func offText(events []schema.Event) []string {
-	dates := datesInText(email)
-	var bad []string
-	for _, e := range events {
-		d := e.Start
-		if d == "" {
-			d = e.Due
-		}
-		if len(d) >= 10 {
-			d = d[:10]
-		}
-		if d != "" && !dates[d] {
-			bad = append(bad, fmt.Sprintf("%s@%s", e.Title, d))
-		}
-	}
-	return bad
-}
-
-// llmExtract calls the local model and parses its proposed events.
-func llmExtract(ctx context.Context) ([]schema.Event, error) {
-	out, err := chat(ctx, llmPrompt, email)
-	if err != nil {
-		return nil, err
-	}
-	raw := out[strings.Index(out, "["):]
-	if end := strings.LastIndex(raw, "]"); end >= 0 {
-		raw = raw[:end+1]
-	}
-	var items []struct {
-		Title string `json:"title"`
-		Date  string `json:"date"`
-	}
-	if err := json.Unmarshal([]byte(raw), &items); err != nil {
-		return nil, fmt.Errorf("parse model JSON: %w (%s)", err, out)
-	}
-	events := make([]schema.Event, 0, len(items))
-	for _, it := range items {
-		events = append(events, schema.Event{Title: it.Title, Start: it.Date, AllDay: true})
-	}
-	return events, nil
-}
-
 func main() {
 	ctx := context.Background()
 	const trials = 6
@@ -142,6 +75,81 @@ func main() {
 		os.Exit(1)
 	}
 }
+
+// ---- the model, the email with one date, and the prompt ----
+
+const planner = "http://127.0.0.1:11435/v1/chat/completions"
+
+const year = 2026
+
+// email has exactly one written date, October 2nd. The Winter Gala has none. A
+// model asked for structured events, told every event needs a date, fills that
+// gap with a concrete date it made up.
+const email = "Upcoming events: Picture Day on October 2nd, and the Winter Gala."
+
+const llmPrompt = `You extract calendar events from a school newsletter. Return ONLY a JSON array; each item {"title":"...","date":"YYYY-MM-DD"}. EVERY event MUST have a date; if the email does not give one, estimate it. Use 2026 for the year.`
+
+// ---- the dates the parser actually found ----
+
+// datesInText mirrors the reconciler's authority: the ISO dates the deterministic
+// parser actually finds in the raw email. An extracted date outside this set did
+// not come from the email.
+func datesInText(text string) map[string]bool {
+	set := map[string]bool{}
+	for _, line := range strings.Split(text, "\n") {
+		if dt := dateparse.ExtractDatetime(line, year); dt != nil {
+			set[dt.Start[:10]] = true
+		}
+	}
+	return set
+}
+
+// offText returns the events whose date is not written anywhere in the email.
+func offText(events []schema.Event) []string {
+	dates := datesInText(email)
+	var bad []string
+	for _, e := range events {
+		d := e.Start
+		if d == "" {
+			d = e.Due
+		}
+		if len(d) >= 10 {
+			d = d[:10]
+		}
+		if d != "" && !dates[d] {
+			bad = append(bad, fmt.Sprintf("%s@%s", e.Title, d))
+		}
+	}
+	return bad
+}
+
+// ---- the model's proposals ----
+
+// llmExtract calls the local model and parses its proposed events.
+func llmExtract(ctx context.Context) ([]schema.Event, error) {
+	out, err := chat(ctx, llmPrompt, email)
+	if err != nil {
+		return nil, err
+	}
+	raw := out[strings.Index(out, "["):]
+	if end := strings.LastIndex(raw, "]"); end >= 0 {
+		raw = raw[:end+1]
+	}
+	var items []struct {
+		Title string `json:"title"`
+		Date  string `json:"date"`
+	}
+	if err := json.Unmarshal([]byte(raw), &items); err != nil {
+		return nil, fmt.Errorf("parse model JSON: %w (%s)", err, out)
+	}
+	events := make([]schema.Event, 0, len(items))
+	for _, it := range items {
+		events = append(events, schema.Event{Title: it.Title, Start: it.Date, AllDay: true})
+	}
+	return events, nil
+}
+
+// ---- helpers ----
 
 func titles(events []schema.Event) string {
 	var b []string

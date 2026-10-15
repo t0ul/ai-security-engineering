@@ -27,6 +27,8 @@ set-up/vm-assets/vmlinuz-virt.gz
 set-up/vm-assets/llama-3.2-3b.gguf
 # Test binary, built with `go test -c`
 *.test
+# A lesson binary from `go build` in posts/<id>-<slug>/ is named after the folder
+posts/*/[0-9][0-9].[0-9]-*
 
 # Code coverage profiles and other test artifacts
 *.out
@@ -80,3 +82,6 @@ docs/course.txt
 
 # internal planning/course docs — not public
 docs/
+
+# the assembled and built book (scripts/book.sh)
+book/

@@ -24,6 +24,20 @@ import (
 	"github.com/t0ul/gledger"
 )
 
+func main() {
+	undef := swapLandsUndefended()
+	def := governedDefended()
+	fmt.Println()
+	if undef && def {
+		fmt.Println("attack blocked (the receipt): an ungoverned plane lets anyone own the agent by swapping its prompt; the governed plane applies a change only for a signed operator capability that covers it, refuses the app role, and records who changed what")
+	} else {
+		fmt.Println("a control did not hold")
+		os.Exit(1)
+	}
+}
+
+// ---- the prompts, and the plane ----
+
 const promptName = "chat"
 
 // A malicious new prompt that strips the data-channel rule the chat relies on.
@@ -109,17 +123,7 @@ func governedDefended() bool {
 	return errApp != nil && !safetyGone(p) && errOp == nil && v.Version == 1 && ok
 }
 
-func main() {
-	undef := swapLandsUndefended()
-	def := governedDefended()
-	fmt.Println()
-	if undef && def {
-		fmt.Println("attack blocked (the receipt): an ungoverned plane lets anyone own the agent by swapping its prompt; the governed plane applies a change only for a signed operator capability that covers it, refuses the app role, and records who changed what")
-	} else {
-		fmt.Println("a control did not hold")
-		os.Exit(1)
-	}
-}
+// ---- helpers ----
 
 func quietOpen(path, service string) (*gledger.AuditLog, error) {
 	old := os.Stdout
