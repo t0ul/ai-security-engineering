@@ -6,8 +6,11 @@ The post (posts/<id>-<slug>/index.md) is the source of truth for the body. The s
 carries the site-only fields such as weight and part. Site folders that differ from the
 post slug are listed in scripts/site-slugs.txt.
 
-    scripts/site-sync.py write     copy every post body over its site copy
-    scripts/site-sync.py check     exit 1 and name every site copy whose body differs
+    scripts/site-sync.py write [id ...]   copy every post body (or only these ids) over its site copy
+    scripts/site-sync.py check [id ...]   exit 1 and name every site copy whose body differs
+
+Run write from a branch that holds every chapter you mean to publish, or name the
+ids: a branch without the other chapters' edits would copy their older bodies over.
 
 The site repo is taken from $SITE (the content/blog directory), default
 /Users/t/Desktop/peter-lankton/t0ul.com/content/blog.
@@ -44,8 +47,11 @@ def main(argv):
     if argv[:1] not in (["write"], ["check"]):
         raise SystemExit(__doc__)
     mode = argv[0]
+    only = set(argv[1:])
     drift, missing = [], []
     for post, site in pairs():
+        if only and post.parent.name.split("-", 1)[0] not in only:
+            continue
         if not site.exists():
             missing.append(str(site.parent.name))
             continue
