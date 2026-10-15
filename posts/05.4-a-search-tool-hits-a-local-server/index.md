@@ -20,9 +20,131 @@ cd posts/05.4-a-search-tool-hits-a-local-server
 go run .
 ```
 
+The whole program is on this page, in the order it runs, so you can type it in instead of cloning. Make an empty folder, run `go mod init egress`, then `go get github.com/t0ul/emaildrop@` followed by the version on the `require` line below, and put the code in one file called `main.go`:
+
+<!-- listing: go.mod#all -->
+```
+module github.com/t0ul/ai-security-engineering/posts/05.4-a-search-tool-hits-a-local-server
+
+go 1.27.1
+
+// The agent's real egress guard. No overrides.
+require github.com/t0ul/emaildrop v0.0.0-20261011232453-771805568f76
+```
+<!-- /listing -->
+
+## The spine of the program
+
+The top of the file has a fixed resolver, so the demo is deterministic: the one search host resolves to a public address, a second allowlisted name resolves inward on purpose, and literal addresses resolve to themselves. Under it is the policy, the agent's egress guard with its allowlist and that resolver, and then `main`, which stands up an internal service on the agent's own machine, counts how often it is hit, and runs the naive tool and the gated tool against it.
+
+<!-- listing: main.go#head -->
+```go
+// Command main is the runnable demo for lesson 05.4, a web-search tool that hits a
+// local server.
+//
+// Run it with:
+//
+//	go run .
+//
+// The agent gains its first tool that reaches out on its own: a web search. A tool
+// that fetches any URL it is given is a server-side request forgery waiting to
+// happen, because the URL comes from the model, which read an untrusted email. This
+// demo points a naive fetcher at the agent's own machine and watches it comply,
+// then puts the real egress policy in front and watches it refuse, while still
+// allowing a legitimate search host. Everything is local; nothing leaves the
+// machine. Deterministic, no model.
+package main
+
+import (
+	"io"
+	"net"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"time"
+
+	"fmt"
+
+	"github.com/t0ul/emaildrop/pkg/netpolicy"
+)
+
+// resolve is a fixed resolver so the demo is deterministic: a real search host
+// resolves to a public address, and literal IPs resolve to themselves.
+func resolve(host string) ([]net.IP, error) {
+	if host == "search.example" {
+		return []net.IP{net.ParseIP("93.184.216.34")}, nil
+	}
+	if host == "rebind.example" {
+		return []net.IP{net.ParseIP("127.0.0.1")}, nil // on the allowlist, but points inward
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		return []net.IP{ip}, nil
+	}
+	return net.LookupIP(host)
+}
+
+// policy is the agent's egress guard: a default-deny allowlist that also refuses
+// any host resolving to a loopback, link-local, or private address.
+var policy = netpolicy.Policy{Allow: []string{"search.example", "rebind.example"}, Resolve: resolve}
+
+func main() {
+	// An internal service on the agent's own machine that must never be reachable
+	// through a tool, standing in for an admin API or the cloud-metadata endpoint.
+	var hits int
+	internal := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		hits++
+		io.WriteString(w, "INTERNAL-SECRET: admin-token")
+	}))
+	defer internal.Close()
+
+	landed := naiveReaches(internal.URL, &hits)
+	blocked := policyRefuses(internal.URL, &hits)
+
+	fmt.Println()
+	if landed && blocked {
+		fmt.Println("attack blocked (the receipt): the naive tool reaches inside; the gated tool refuses")
+	} else {
+		fmt.Println("a control did not hold")
+		os.Exit(1)
+	}
+}
+```
+<!-- /listing -->
+
 ## I. It fetches whatever you point it at
 
-Here is the search tool as you would first write it: given a URL, fetch it, return the body. Now a hostile email has aimed it not at the web but at the agent's own machine, at a loopback address where a private service is listening. The demo stands that service up and points the naive tool at it:
+Here is the search tool as you would first write it: given a URL, fetch it, return the body. Under it is the run that points it where a hostile email would, not at the web but at the agent's own machine, at a loopback address where a private service is listening:
+
+<!-- listing: main.go#before: a tool that fetches whatever it is given -->
+```go
+// ---- before: a tool that fetches whatever it is given ----
+
+// naiveFetch is the web-search tool I would write first: given a URL, fetch it.
+func naiveFetch(rawURL string) (string, error) {
+	resp, err := (&http.Client{Timeout: 5 * time.Second}).Get(rawURL)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	b, _ := io.ReadAll(resp.Body)
+	return string(b), nil
+}
+
+func naiveReaches(internalURL string, hits *int) bool {
+	fmt.Println("== before: the naive search tool ==")
+	*hits = 0
+	body, err := naiveFetch(internalURL)
+	if err != nil {
+		fmt.Println("  fetch error:", err)
+		return false
+	}
+	fmt.Printf("  asked to fetch %s\n  it returned:  %q (internal service hit %d time(s))\n", internalURL, body, *hits)
+	return *hits > 0 // SSRF: the tool reached the machine's own internal service
+}
+```
+<!-- /listing -->
+
+What comes back:
 
 ```
 == before: the naive search tool ==
@@ -38,7 +160,48 @@ The fix is to decide, in code, where the agent is allowed to reach, and to check
 
 ## III. Refused, including the clever one
 
-Put the policy in front of the same tool and aim the same attacks at it:
+Put the policy in front of the same tool, which is `gatedFetch`, one check before the fetch, and aim the same attacks at it, plus a legitimate search to show the policy is an allowlist and not a wall:
+
+<!-- listing: main.go#after: every fetch passes the egress policy first -->
+```go
+// ---- after: every fetch passes the egress policy first ----
+
+// gatedFetch checks the target against the egress policy before fetching, and
+// refuses anything the policy rejects.
+func gatedFetch(rawURL string) (string, error) {
+	if err := policy.Check(rawURL); err != nil {
+		return "", err
+	}
+	return naiveFetch(rawURL)
+}
+
+func policyRefuses(internalURL string, hits *int) bool {
+	fmt.Println("\n== after: the egress policy in front of the tool ==")
+	*hits = 0
+
+	// The same internal target the naive tool reached.
+	_, err := gatedFetch(internalURL)
+	fmt.Printf("  loopback %s\n    refused: %v (internal service hit %d time(s))\n", internalURL, err, *hits)
+
+	// The cloud-metadata address, the classic SSRF credential grab.
+	_, errMeta := gatedFetch("http://169.254.169.254/latest/meta-data/")
+	fmt.Printf("  metadata http://169.254.169.254/...\n    refused: %v\n", errMeta)
+
+	// An allowlisted NAME that resolves to an internal IP: DNS rebinding. The
+	// allowlist alone would pass it; resolving the host is what catches it.
+	_, errRebind := gatedFetch("http://rebind.example/")
+	fmt.Printf("  allowlisted-but-rebinding http://rebind.example/ -> 127.0.0.1\n    refused: %v\n", errRebind)
+
+	// A legitimate search host is still allowed: the policy is an allowlist, not a wall.
+	allowed := policy.Check("http://search.example/q=book+fair")
+	fmt.Printf("  allowlisted http://search.example/...\n    allowed: %v\n", allowed == nil)
+
+	return *hits == 0 && err != nil && errMeta != nil && errRebind != nil && allowed == nil
+}
+```
+<!-- /listing -->
+
+The run:
 
 ```
 == after: the egress policy in front of the tool ==
@@ -53,6 +216,64 @@ Put the policy in front of the same tool and aim the same attacks at it:
 ```
 
 The loopback address and the cloud-metadata address are both refused for not being on the allowlist, and the internal service is hit zero times. The third line is the one worth slowing down for. `rebind.example` is on the allowlist, so a naive allowlist that only checked the name would wave it through, but it resolves to `127.0.0.1`, and because the policy resolves the host as part of the check, it catches the switch and refuses. That is DNS rebinding, the standard way around a name-only allowlist, and it is closed here by construction. And the last line is the proof the guard is a gate and not a wall: the legitimate search host is allowed, so the tool still does its job.
+
+The one helper stands up the internal service for the tests:
+
+<!-- listing: main.go#helpers -->
+```go
+// ---- helpers ----
+
+// newInternal is the throwaway internal service used by the tests.
+func newInternal(hits *int) *httptest.Server {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		*hits++
+		io.WriteString(w, "INTERNAL-SECRET: admin-token")
+	}))
+}
+```
+<!-- /listing -->
+
+That is the whole program. Its tests run the attack both ways against a real local server, and check the policy's four answers directly. Put them next to `main.go` as `contract_test.go`:
+
+<!-- listing: contract_test.go#all -->
+```go
+package main
+
+import "testing"
+
+// Deterministic, no model. A naive fetch tool reaches the machine's own internal
+// service (SSRF lands); the egress policy refuses loopback and the metadata address
+// while still allowing a legitimate allowlisted host.
+
+func TestNaiveReachesInternalBlockedByPolicy(t *testing.T) {
+	var hits int
+	internal := newInternal(&hits)
+	defer internal.Close()
+
+	if !naiveReaches(internal.URL, &hits) {
+		t.Fatal("the naive tool should reach the internal service; otherwise there is nothing to fix")
+	}
+	if !policyRefuses(internal.URL, &hits) {
+		t.Fatal("the policy must refuse loopback and metadata while allowing the legit host")
+	}
+}
+
+func TestPolicyAllowsLegitBlocksInternal(t *testing.T) {
+	if policy.Check("http://search.example/q") != nil {
+		t.Fatal("an allowlisted public host must be permitted")
+	}
+	if policy.Check("http://127.0.0.1:9/x") == nil {
+		t.Fatal("loopback must be refused")
+	}
+	if policy.Check("http://169.254.169.254/latest/meta-data/") == nil {
+		t.Fatal("the cloud-metadata address must be refused")
+	}
+	if policy.Check("http://rebind.example/") == nil {
+		t.Fatal("an allowlisted host that resolves to loopback (DNS rebinding) must be refused")
+	}
+}
+```
+<!-- /listing -->
 
 ## Where this is going
 
