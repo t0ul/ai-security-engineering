@@ -33,6 +33,10 @@ One call, and the rule that held the entire retrieval surface closed is gone, re
 
 ## A signed capability to make the change
 
+![A governed control plane: changing a prompt needs a signed grant scoped to write on prompts, and every attempt is recorded.](control-plane.svg)
+
+*Changing the agent's instructions is a privileged action. A grant scoped to the data path cannot rewrite the brain, and both the refusal and the approval land on a tamper-evident record.*
+
 The fix is to treat changing a prompt as a privileged action and gate it the way the agent gates every other one, with the capability system from the agency chapter. An operator does not just call activate; they present a Grant, a short-lived token signed by the control plane that says this subject may write this resource. The agent verifies the grant covers write on the prompts resource before it applies anything.
 
 ```go

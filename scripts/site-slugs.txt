@@ -1,0 +1,15 @@
+# post id -> site folder under content/blog/, for the chapters whose site slug differs from the post slug
+00.0	handbook-start-here
+09.1	a-pinned-tool-catalog
+10.1	answering-what-is-on-this-month
+10.4	memory-poisoning-and-lifecycle
+12.3	honest-eval-methodology
+12.4	a-live-red-team-against-the-real-model
+13.1	a-full-chain-attack-contained
+13.3	my-week-at-a-glance
+14.1	a-governed-control-plane-and-operator-roles
+14.3	admin-audit-and-one-click-rollback
+15.1	durable-execution-and-resume-verify
+15.3	context-compaction-and-summarization-injection
+16.1	make-it-idiomatic-the-repo-refactor
+16.2	the-app-layer-red-team-gored
