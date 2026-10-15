@@ -63,10 +63,10 @@ func actNaive(url string) { vmFetch(url) }
 // then does the fetch run, inside the sandbox.
 func actGuarded(req hitl.Request, echoedNonce string, pol netpolicy.Policy, url string) (bool, string) {
 	if ok, err := req.Confirm(echoedNonce, true); !ok {
-		return false, "hitl: " + errStr(err)
+		return false, errStr(err) // the gate names itself in its error
 	}
 	if err := pol.Check(url); err != nil {
-		return false, "netpolicy: " + errStr(err)
+		return false, errStr(err) // so does the policy
 	}
 	vmFetch(url)
 	return true, "fetched in sandbox"
