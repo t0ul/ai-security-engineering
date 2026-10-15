@@ -82,3 +82,6 @@ docs/course.txt
 
 # internal planning/course docs — not public
 docs/
+
+# the assembled and built book (scripts/book.sh)
+book/
