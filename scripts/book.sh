@@ -70,6 +70,9 @@ done < posts/MANIFEST.md
 echo "assembled $count chapter(s) into $SRC, missing: $missing"
 [ "$missing" -eq 0 ] || exit 1
 
-npx -y honkit build "$SRC" "$BOOK/web"
-npx -y honkit epub "$SRC" "$BOOK/ai-security-engineering.epub"
+# honkit resolves a relative output path against the book root, so pass absolute ones.
+OUT=$(cd "$BOOK" && pwd)
+rm -rf "$OUT/web"
+npx -y honkit build "$SRC" "$OUT/web"
+npx -y honkit epub "$SRC" "$OUT/ai-security-engineering.epub"
 echo "built $BOOK/web and $BOOK/ai-security-engineering.epub"
