@@ -115,6 +115,8 @@ func executeAuthed(v *a2a.Verifier, h handoff) error {
 	return nil
 }
 
+// ---- three ways to forge a plan ----
+
 // spoofs builds the attacker's hand-offs. Each tries to get the executor to run
 // attackCmd, modeling a way a rogue agent forges the planner's control-flow
 // message. Together they exercise each layer of the real check.
@@ -138,6 +140,8 @@ func spoofs(planner *a2a.Signer) []struct {
 		{"plan-swapped", handoff{Plan: attackPlan, Sig: legit}},
 	}
 }
+
+// ---- helpers ----
 
 func contains(xs []string, want string) bool {
 	for _, x := range xs {
