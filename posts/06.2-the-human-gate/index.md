@@ -20,9 +20,100 @@ cd posts/06.2-the-human-gate
 go run .
 ```
 
+The whole program is on this page, in the order it runs, so you can type it in instead of cloning. Make an empty folder, run `go mod init gate`, then `go get github.com/t0ul/emaildrop@` followed by the version on the `require` line below, and put the code in one file called `main.go`:
+
+<!-- listing: go.mod#all -->
+```
+module github.com/t0ul/ai-security-engineering/posts/06.2-the-human-gate
+
+go 1.27.1
+
+// The agent's real human-approval primitive. No overrides.
+require github.com/t0ul/emaildrop v0.0.0-20261011232453-771805568f76
+```
+<!-- /listing -->
+
+## The spine of the program
+
+The calendar is the irreversible side the action touches, a slice we can inspect, and the event is the one a hostile email invented. `main` clears the calendar, runs the one-click accept, clears it again, and runs the gate.
+
+<!-- listing: main.go#head -->
+```go
+// Command main is the runnable demo for lesson 06.2, the human gate.
+//
+// Run it with:
+//
+//	go run .
+//
+// Some actions are irreversible: putting an event on your real calendar, acting on
+// a link. No scoped capability should grant those automatically; they need a human.
+// But a one-click "yes" can be forged, clickjacked, or rubber-stamped. This demo
+// runs a naive accept that acts on any approval, then the agent's real gate, which
+// acts only on an approval that echoes a nonce shown with the evidence, so a blind
+// or forged click cannot pass while a genuine human yes still can. Deterministic.
+package main
+
+import (
+	"fmt"
+	"os"
+
+	"github.com/t0ul/emaildrop/pkg/hitl"
+)
+
+// calendar is the irreversible side the action touches. In the real agent this is
+// your actual calendar; here it is a slice we can inspect.
+var calendar []string
+
+func addToCalendar(event string) { calendar = append(calendar, event) }
+
+const event = "Principal's Gala (Dec 25)"
+
+func main() {
+	calendar = nil
+	landed := naiveAcceptsAnything()
+
+	calendar = nil
+	held := gateHoldsButLetsRealThrough()
+
+	fmt.Println()
+	if landed && held {
+		fmt.Println("attack blocked (the receipt): a bare yes acts on the naive path, refused by the gate")
+	} else {
+		fmt.Println("a control did not hold")
+		os.Exit(1)
+	}
+}
+```
+<!-- /listing -->
+
 ## I. One click is not consent
 
-Here is the approval I would write first: if the request says approve, do the thing. The entire check is a single boolean. Now watch what a bare, forged approval does to it, nobody having seen or reviewed anything:
+Here is the approval I would write first: if the request says approve, do the thing. The entire check is a single boolean, and under it is a forged request, approval claimed with nobody having seen or reviewed anything:
+
+<!-- listing: main.go#before: one-click accept -->
+```go
+// ---- before: one-click accept ----
+
+// naiveAccept is the approval I would write first: if the request says approve, do
+// the thing. A single boolean is the entire check, which is what makes it forgeable.
+func naiveAccept(approve bool) {
+	if approve {
+		addToCalendar(event)
+	}
+}
+
+func naiveAcceptsAnything() bool {
+	fmt.Println("== before: a one-click accept ==")
+	// A forged request: approval claimed with nobody having seen anything.
+	naiveAccept(true)
+	landed := len(calendar) > 0
+	fmt.Printf("  a bare \"approve: true\" put it on the calendar: %v (calendar: %v)\n", landed, calendar)
+	return landed
+}
+```
+<!-- /listing -->
+
+What that does:
 
 ```
 == before: a one-click accept ==
@@ -37,7 +128,53 @@ A real approval has to prove two things the boolean cannot: that a human was sho
 
 ## III. The gate holds, and the real yes still works
 
-Put the same irreversible action behind the gate and aim three approvals at it: a forged one with no nonce, a clickjacked guess at the nonce, and a genuine one from a person who was shown the evidence and the nonce and echoed it back.
+Put the same irreversible action behind the gate and aim three approvals at it: a forged one with no nonce, a clickjacked guess at the nonce, and a genuine one from a person who was shown the evidence and the nonce and echoed it back. `actOn` at the bottom is the only path to the calendar, and it needs a confirmed approval:
+
+<!-- listing: main.go#after: evidence-first, nonce-bound approval -->
+```go
+// ---- after: evidence-first, nonce-bound approval ----
+
+func gateHoldsButLetsRealThrough() bool {
+	fmt.Println("\n== after: the evidence-first human gate ==")
+
+	// The agent issues a challenge: a summary, the evidence to review, and a nonce
+	// shown with them. Acting requires echoing THAT nonce back.
+	req := hitl.NewRequest(
+		"Add "+event+" to your calendar",
+		"source: newsletter.txt",
+		"this event's date is not written in the email body",
+	)
+
+	// A forged or blind approval: it says yes, but it cannot echo the nonce it
+	// never saw.
+	okForged, _ := req.Confirm("", true)
+	actOn(okForged)
+	fmt.Printf("  forged approval (no nonce):      confirmed=%v, calendar: %v\n", okForged, calendar)
+
+	// A clickjacked guess at the nonce: still wrong.
+	okGuess, _ := req.Confirm("not-the-real-nonce", true)
+	actOn(okGuess)
+	fmt.Printf("  guessed nonce:                   confirmed=%v, calendar: %v\n", okGuess, calendar)
+
+	// A genuine human, who was shown the evidence and the nonce, echoes it back.
+	okReal, _ := req.Confirm(req.Nonce(), true)
+	actOn(okReal)
+	fmt.Printf("  genuine approval (real nonce):   confirmed=%v, calendar: %v\n", okReal, calendar)
+
+	// The gate held against the forgeries and let the real yes through.
+	return !okForged && !okGuess && okReal && len(calendar) == 1
+}
+
+// actOn performs the irreversible action only when the approval was confirmed.
+func actOn(confirmed bool) {
+	if confirmed {
+		addToCalendar(event)
+	}
+}
+```
+<!-- /listing -->
+
+The run:
 
 ```
 == after: the evidence-first human gate ==
@@ -47,6 +184,45 @@ Put the same irreversible action behind the gate and aim three approvals at it: 
 ```
 
 The forged approval and the guess are both refused, and the calendar stays empty through both. Only the third, the real echo of the real nonce, is confirmed, and only then does the event land. That last line matters as much as the first two: the gate is deny-by-default and forgery-resistant, but it is still a gate and not a wall, so a genuine human yes goes through exactly as it should. A control that also blocked the real approval would not be a safer agent, just a broken one.
+
+That is the whole program. Its tests assert both halves and one more property, that an approval with no evidence to review cannot be confirmed at all. Put them next to `main.go` as `contract_test.go`:
+
+<!-- listing: contract_test.go#all -->
+```go
+package main
+
+import (
+	"testing"
+
+	"github.com/t0ul/emaildrop/pkg/hitl"
+)
+
+// Deterministic, no model. A bare approval acts on the naive path; the gate refuses
+// an approval that cannot echo the nonce, and only a genuine echo acts.
+
+func TestBareApprovalActsUndefended(t *testing.T) {
+	calendar = nil
+	if !naiveAcceptsAnything() {
+		t.Fatal("a one-click accept should act on a bare approval; otherwise there is nothing to fix")
+	}
+}
+
+func TestGateRefusesForgedAllowsReal(t *testing.T) {
+	calendar = nil
+	if !gateHoldsButLetsRealThrough() {
+		t.Fatal("the gate must refuse a nonce-less/forged approval and act only on a genuine echo")
+	}
+}
+
+func TestEvidenceIsRequired(t *testing.T) {
+	// An approval with no evidence to review cannot be confirmed at all.
+	req := hitl.NewRequest("do a thing") // no evidence
+	if ok, _ := req.Confirm(req.Nonce(), true); ok {
+		t.Fatal("an evidence-free approval must not be confirmable")
+	}
+}
+```
+<!-- /listing -->
 
 ## What it can and cannot do
 

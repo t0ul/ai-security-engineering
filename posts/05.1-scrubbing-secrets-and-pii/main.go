@@ -23,22 +23,23 @@ import (
 	"github.com/t0ul/goflage"
 )
 
+// leaky is the email full of secrets, read from attack/leaky.txt so what the
+// chapter prints is what gets indexed. There is no embedded copy to drift from it.
 func leaky() string {
-	if b, err := os.ReadFile("attack/leaky.txt"); err == nil {
-		return string(b)
+	b, err := os.ReadFile("attack/leaky.txt")
+	if err != nil {
+		panic(err)
 	}
-	return embedded
+	return string(b)
 }
 
-const embedded = "New parent contact: parent.contact@example.com. SSN 123-45-6789.\naws key AKIAIOSFODNN7EXAMPLE token ghp_abcdefghijklmnopqrstuvwxyz0123456789 billing sk-live-abc123DEF456ghi789"
-
-// recognized are the secrets goflage knows how to find. The control should keep
-// every one of these out of the corpus.
-var recognized = map[string]string{
-	"parent email": "parent.contact@example.com",
-	"SSN":          "123-45-6789",
-	"AWS key":      "AKIAIOSFODNN7EXAMPLE",
-	"GitHub token": "ghp_abcdefghijklmnopqrstuvwxyz0123456789",
+// recognized are the secrets goflage knows how to find, in the order the email
+// carries them. The control should keep every one of these out of the corpus.
+var recognized = []struct{ name, secret string }{
+	{"parent email", "parent.contact@example.com"},
+	{"SSN", "123-45-6789"},
+	{"AWS key", "AKIAIOSFODNN7EXAMPLE"},
+	{"GitHub token", "ghp_abcdefghijklmnopqrstuvwxyz0123456789"},
 }
 
 // unusual is a billing-key format goflage does not recognize. It is here to keep
@@ -87,9 +88,9 @@ func indexRaw(dir string) bool {
 	fmt.Println("== before: index the email as-is ==")
 	path := corpus(dir, leaky())
 	all := true
-	for name, secret := range recognized {
-		hit := onDisk(path, secret)
-		fmt.Printf("  %-13s on disk: %v\n", name, hit)
+	for _, r := range recognized {
+		hit := onDisk(path, r.secret)
+		fmt.Printf("  %-13s on disk: %v\n", r.name, hit)
 		all = all && hit
 	}
 	fmt.Println("  every secret the email carried is now in the searchable corpus, in the clear")
@@ -105,9 +106,9 @@ func indexScrubbed(dir string) bool {
 	path := corpus(dir, clean)
 
 	none := true
-	for name, secret := range recognized {
-		hit := onDisk(path, secret)
-		fmt.Printf("  %-13s on disk: %v\n", name, hit)
+	for _, r := range recognized {
+		hit := onDisk(path, r.secret)
+		fmt.Printf("  %-13s on disk: %v\n", r.name, hit)
 		none = none && !hit
 	}
 	fmt.Printf("  what the corpus holds instead: %s\n", firstLine(clean))

@@ -20,7 +20,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"strings"
 	"time"
 
 	"fmt"
@@ -139,4 +138,3 @@ func newInternal(hits *int) *httptest.Server {
 	}))
 }
 
-var _ = strings.TrimSpace
