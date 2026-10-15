@@ -21,6 +21,21 @@ import (
 	"github.com/t0ul/emaildrop/pkg/agent/dateparse"
 )
 
+func main() {
+	sort.Strings(items) // stable output
+	undef := misplacedUndefended()
+	def := placedByDateDefended()
+	fmt.Println()
+	if undef && def {
+		fmt.Println("attack blocked (the receipt): a stated weekday moves the item to the wrong day on the naive view; the agent places by the date it parsed, so the item lands on its real day and the lie is flagged")
+	} else {
+		fmt.Println("the view did not place as described")
+		os.Exit(1)
+	}
+}
+
+// ---- the items, and the crafted one ----
+
 // The week's items. One genuine, and one crafted to claim a weekday its date does
 // not fall on, so a naive view will file it on the wrong day.
 var items = []string{
@@ -93,6 +108,8 @@ func printWeek(week map[string][]string) {
 	}
 }
 
+// ---- the attack, against both placements ----
+
 func misplacedUndefended() bool {
 	fmt.Println("== before: place items by the weekday the email states ==")
 	w := naiveWeek()
@@ -121,17 +138,4 @@ func placedByDateDefended() bool {
 		fmt.Printf("  flagged: %s\n", f)
 	}
 	return onThursday && !onMonday && flagged
-}
-
-func main() {
-	sort.Strings(items) // stable output
-	undef := misplacedUndefended()
-	def := placedByDateDefended()
-	fmt.Println()
-	if undef && def {
-		fmt.Println("attack blocked (the receipt): a stated weekday moves the item to the wrong day on the naive view; the agent places by the date it parsed, so the item lands on its real day and the lie is flagged")
-	} else {
-		fmt.Println("the view did not place as described")
-		os.Exit(1)
-	}
 }

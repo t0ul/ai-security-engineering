@@ -22,6 +22,20 @@ import (
 	"github.com/t0ul/emaildrop/pkg/provenance"
 )
 
+func main() {
+	undef := ungovernedUndefended()
+	def := governedLayeredDefended()
+	fmt.Println()
+	if undef && def {
+		fmt.Println("attack blocked (the receipt): an ungoverned switch anyone can flip and only a full halt is its own incident; the governed switch refuses an unauthorized toggle, and its layered levels stop side effects while reads keep serving, escalating to a full halt only when warranted")
+	} else {
+		fmt.Println("a control did not hold")
+		os.Exit(1)
+	}
+}
+
+// ---- the authority, and the safety scope ----
+
 func newAuthority() (*controlplane.Authority, controlplane.Grant, controlplane.Grant) {
 	signer, pub, _ := provenance.NewSigner("control-plane")
 	authz := controlplane.NewAuthority(signer, provenance.NewVerifier().Trust("control-plane", pub))
@@ -92,21 +106,11 @@ func governedLayeredDefended() bool {
 	return errApp != nil && errOp == nil && toolBlocked && readAllowed && fullStop
 }
 
+// ---- helpers ----
+
 func yn(b bool, yes, no string) string {
 	if b {
 		return yes
 	}
 	return no
-}
-
-func main() {
-	undef := ungovernedUndefended()
-	def := governedLayeredDefended()
-	fmt.Println()
-	if undef && def {
-		fmt.Println("attack blocked (the receipt): an ungoverned switch anyone can flip and only a full halt is its own incident; the governed switch refuses an unauthorized toggle, and its layered levels stop side effects while reads keep serving, escalating to a full halt only when warranted")
-	} else {
-		fmt.Println("a control did not hold")
-		os.Exit(1)
-	}
 }

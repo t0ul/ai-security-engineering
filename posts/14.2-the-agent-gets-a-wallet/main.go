@@ -23,6 +23,20 @@ import (
 	"github.com/t0ul/emaildrop/pkg/provenance"
 )
 
+func main() {
+	undef := revokedStillWorksUndefended()
+	def := revocationHoldsDefended()
+	fmt.Println()
+	if undef && def {
+		fmt.Println("attack blocked (the receipt): an expiry-only check honors a revoked token until it times out; the agent's authority refuses a revoked grant the instant it is revoked, still honors a fresh one, and the kill switch revokes the whole wallet at once")
+	} else {
+		fmt.Println("a control did not hold")
+		os.Exit(1)
+	}
+}
+
+// ---- the capability, and the authority ----
+
 // want is the scope the agent's grant is checked against: permission to send email.
 var want = controlplane.Capability{Action: controlplane.ActionExport, Resource: "email", Tenant: "public"}
 
@@ -84,16 +98,4 @@ func revocationHoldsDefended() bool {
 	return errors.Is(errRevoked, controlplane.ErrGrantRevoked) &&
 		errFresh == nil &&
 		before == nil && errors.Is(after, controlplane.ErrGrantRevoked)
-}
-
-func main() {
-	undef := revokedStillWorksUndefended()
-	def := revocationHoldsDefended()
-	fmt.Println()
-	if undef && def {
-		fmt.Println("attack blocked (the receipt): an expiry-only check honors a revoked token until it times out; the agent's authority refuses a revoked grant the instant it is revoked, still honors a fresh one, and the kill switch revokes the whole wallet at once")
-	} else {
-		fmt.Println("a control did not hold")
-		os.Exit(1)
-	}
 }

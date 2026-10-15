@@ -68,6 +68,8 @@ func sanitizedFirst() bool {
 	return !present
 }
 
+// ---- helpers ----
+
 func firstImageLine(md string) string {
 	for _, l := range strings.Split(md, "\n") {
 		if strings.Contains(l, "BLOCKED") || strings.Contains(l, "![") || strings.Contains(l, "<http") {

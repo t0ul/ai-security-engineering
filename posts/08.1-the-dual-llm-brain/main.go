@@ -121,6 +121,8 @@ func twoBrainsKeepDataFromBecomingControl() bool {
 	return !attacked && len(executed) == 1
 }
 
+// ---- helpers ----
+
 func containsAttackerAction(actions []string) bool {
 	for _, a := range actions {
 		if strings.Contains(a, "exfiltrate") || strings.Contains(a, "attacker") {

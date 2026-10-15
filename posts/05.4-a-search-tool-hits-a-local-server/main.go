@@ -129,6 +129,8 @@ func policyRefuses(internalURL string, hits *int) bool {
 	return *hits == 0 && err != nil && errMeta != nil && errRebind != nil && allowed == nil
 }
 
+// ---- helpers ----
+
 // newInternal is the throwaway internal service used by the tests.
 func newInternal(hits *int) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

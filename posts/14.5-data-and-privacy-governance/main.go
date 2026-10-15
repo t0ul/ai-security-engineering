@@ -22,6 +22,18 @@ import (
 	"github.com/t0ul/emaildrop/pkg/provenance"
 )
 
+func main() {
+	g1 := datasetGate()
+	g2 := promotionGate()
+	fmt.Println()
+	if g1 && g2 {
+		fmt.Println("the receipt: a forged 'trusted' record is rejected at ingestion while unsigned data is merely contained; an unsafe change is refused at promotion while a reviewed one ships, both gates fail-closed")
+	} else {
+		fmt.Println("a gate did not hold")
+		os.Exit(1)
+	}
+}
+
 // ---- gate 1: dataset provenance at ingestion ----
 
 func datasetGate() bool {
@@ -74,16 +86,4 @@ func promotionGate() bool {
 	fmt.Printf("          a change that clears eval+ADD is promoted: %q (version %d)\n", plane2.Text("planner"), vClean.Version)
 
 	return plane.Text("planner") == "UNSAFE" && errUnsafe != nil && plane2.Text("planner") == "REVIEWED" && errClean == nil
-}
-
-func main() {
-	g1 := datasetGate()
-	g2 := promotionGate()
-	fmt.Println()
-	if g1 && g2 {
-		fmt.Println("the receipt: a forged 'trusted' record is rejected at ingestion while unsigned data is merely contained; an unsafe change is refused at promotion while a reviewed one ships, both gates fail-closed")
-	} else {
-		fmt.Println("a gate did not hold")
-		os.Exit(1)
-	}
 }

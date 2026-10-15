@@ -22,6 +22,20 @@ import (
 	"github.com/t0ul/emaildrop/pkg/agent/schema"
 )
 
+func main() {
+	undef := hiddenUndefended()
+	def := surfacedDefended()
+	fmt.Println()
+	if undef && def {
+		fmt.Println("attack blocked (the receipt): to-do framing hides a link in the task list on the naive classifier; the real classifier checks for a URL first, so the link is always a surfaced action, not a silent chore")
+	} else {
+		fmt.Println("the classifier did not behave as described")
+		os.Exit(1)
+	}
+}
+
+// ---- the email with a smuggled link ----
+
 const phishURL = "http://attacker.example/phish"
 
 // email has a genuine reminder (no link) and a smuggled action: a phishing link
@@ -55,6 +69,8 @@ func naiveClassify(text string) []schema.Event {
 	return out
 }
 
+// ---- the oracle: the item carrying the link ----
+
 // linkItem returns the classified item whose text carries the phishing link.
 func linkItem(items []schema.Event) (schema.Event, bool) {
 	for _, e := range items {
@@ -64,6 +80,8 @@ func linkItem(items []schema.Event) (schema.Event, bool) {
 	}
 	return schema.Event{}, false
 }
+
+// ---- the attack, against the naive classifier ----
 
 func hiddenUndefended() bool {
 	fmt.Println("== before: a classifier that files to-dos first ==")
@@ -76,6 +94,8 @@ func hiddenUndefended() bool {
 	fmt.Printf("  the phishing link is filed as a chore, no action flag, URL not surfaced: %v\n", hidden)
 	return hidden
 }
+
+// ---- after: the agent's real classifier checks for a link first ----
 
 func surfacedDefended() bool {
 	fmt.Println("\n== after: the agent's real classifier (URL-first) ==")
@@ -96,21 +116,11 @@ func surfacedDefended() bool {
 	return surfaced && genuineTask
 }
 
+// ---- helpers ----
+
 func trunc(s string) string {
 	if len(s) > 52 {
 		return s[:52] + "..."
 	}
 	return s
-}
-
-func main() {
-	undef := hiddenUndefended()
-	def := surfacedDefended()
-	fmt.Println()
-	if undef && def {
-		fmt.Println("attack blocked (the receipt): to-do framing hides a link in the task list on the naive classifier; the real classifier checks for a URL first, so the link is always a surfaced action, not a silent chore")
-	} else {
-		fmt.Println("the classifier did not behave as described")
-		os.Exit(1)
-	}
 }

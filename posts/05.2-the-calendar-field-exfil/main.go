@@ -88,6 +88,8 @@ func writerStrips() bool {
 	return !present
 }
 
+// ---- helpers ----
+
 func lines(text string, prefixes ...string) []string {
 	var out []string
 	for _, l := range strings.Split(text, "\r\n") {

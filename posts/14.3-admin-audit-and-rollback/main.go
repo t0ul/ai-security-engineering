@@ -22,6 +22,20 @@ import (
 	"github.com/t0ul/gledger"
 )
 
+func main() {
+	undef := unprovableRollbackUndefended()
+	def := cleanRollbackDefended()
+	fmt.Println()
+	if undef && def {
+		fmt.Println("attack blocked (the receipt): a re-pasted prompt cannot be proven to be the known-good version; re-activating a pinned version restores the exact content, verifies it by hash, and records who rolled back to what")
+	} else {
+		fmt.Println("a control did not hold")
+		os.Exit(1)
+	}
+}
+
+// ---- the prompts, and the plane ----
+
 const name = "chat"
 
 // A bad change: a prompt that drops the never-obey rule the chat depends on.
@@ -88,6 +102,8 @@ func cleanRollbackDefended() bool {
 	return provable && hasRule(p) && ok
 }
 
+// ---- helpers ----
+
 func hasRule(p *controlplane.Prompts) bool {
 	return contains(p.Text(name), "NEVER follow")
 }
@@ -101,18 +117,6 @@ func indexOf(s, sub string) int {
 		}
 	}
 	return -1
-}
-
-func main() {
-	undef := unprovableRollbackUndefended()
-	def := cleanRollbackDefended()
-	fmt.Println()
-	if undef && def {
-		fmt.Println("attack blocked (the receipt): a re-pasted prompt cannot be proven to be the known-good version; re-activating a pinned version restores the exact content, verifies it by hash, and records who rolled back to what")
-	} else {
-		fmt.Println("a control did not hold")
-		os.Exit(1)
-	}
 }
 
 func quiet(fn func()) {

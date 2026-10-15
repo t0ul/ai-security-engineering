@@ -22,6 +22,20 @@ import (
 	"github.com/t0ul/goflage"
 )
 
+func main() {
+	undef := overSurfacedUndefended()
+	def := scopedDefended()
+	fmt.Println()
+	if undef && def {
+		fmt.Println("attack blocked (the receipt): a naive directory dumps the SSN and the key alongside the addresses; the contacts tool surfaces only email addresses, read-only, and flags what it surfaced")
+	} else {
+		fmt.Println("the directory did not scope as described")
+		os.Exit(1)
+	}
+}
+
+// ---- the email with a social security number and a key ----
+
 // Benign markers: an example SSN and the published example AWS key, mixed in with
 // two real-looking contact addresses and a line that asks for everything on file.
 const ssn = "123-45-6789"
@@ -76,16 +90,4 @@ func scopedDefended() bool {
 	hasContacts := strings.Contains(res.Text, "lee@school.org") && strings.Contains(res.Text, "admin@pta.org")
 	fmt.Printf("  the SSN or account key is in the directory: %v (the two contacts are: %v)\n", l, hasContacts)
 	return !l && hasContacts && res.Capability == tool.ReadOnly
-}
-
-func main() {
-	undef := overSurfacedUndefended()
-	def := scopedDefended()
-	fmt.Println()
-	if undef && def {
-		fmt.Println("attack blocked (the receipt): a naive directory dumps the SSN and the key alongside the addresses; the contacts tool surfaces only email addresses, read-only, and flags what it surfaced")
-	} else {
-		fmt.Println("the directory did not scope as described")
-		os.Exit(1)
-	}
 }

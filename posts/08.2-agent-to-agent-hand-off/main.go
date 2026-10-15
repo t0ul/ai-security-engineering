@@ -24,6 +24,22 @@ import (
 	"github.com/t0ul/emaildrop/pkg/agent/a2a"
 )
 
+func main() {
+	undef := spoofLandsUndefended()
+	def := gateRefusesSpoofs()
+	legit := legitHandoffExecutes()
+	replay := replayRefused()
+	fmt.Println()
+	if undef && def && legit && replay {
+		fmt.Println("attack blocked (the receipt): every spoof detonates on the naive hand-off, every spoof is refused once the executor authenticates the planner, a genuine plan still runs, and a captured hand-off cannot be replayed")
+	} else {
+		fmt.Println("a control did not hold")
+		os.Exit(1)
+	}
+}
+
+// ---- the planner, the executor, and the hand-off ----
+
 const plannerID = "planner"
 
 var plannerKey = []byte("planner-signing-key")
@@ -132,6 +148,8 @@ func contains(xs []string, want string) bool {
 	return false
 }
 
+// ---- the attack, undefended and against the gate ----
+
 func spoofLandsUndefended() bool {
 	fmt.Println("== before: the executor trusts any message claiming to be the planner ==")
 	planner := a2a.NewSigner(plannerID, plannerKey)
@@ -191,18 +209,4 @@ func replayRefused() bool {
 	second := executeAuthed(v, h) // the same message, delivered again
 	fmt.Printf("  first delivery: err=%v | replayed delivery: err=%v\n", first, second)
 	return first == nil && errors.Is(second, a2a.ErrReplay) && len(executed) == 1
-}
-
-func main() {
-	undef := spoofLandsUndefended()
-	def := gateRefusesSpoofs()
-	legit := legitHandoffExecutes()
-	replay := replayRefused()
-	fmt.Println()
-	if undef && def && legit && replay {
-		fmt.Println("attack blocked (the receipt): every spoof detonates on the naive hand-off, every spoof is refused once the executor authenticates the planner, a genuine plan still runs, and a captured hand-off cannot be replayed")
-	} else {
-		fmt.Println("a control did not hold")
-		os.Exit(1)
-	}
 }

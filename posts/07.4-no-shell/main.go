@@ -124,6 +124,8 @@ func validatorBlocksBoth() bool {
 	return errInj != nil && noMarker && errTrav != nil && errOk == nil && strings.Contains(okOut, "root")
 }
 
+// ---- helpers ----
+
 func short(err error) string {
 	if err == nil {
 		return "ALLOWED (should not happen)"
