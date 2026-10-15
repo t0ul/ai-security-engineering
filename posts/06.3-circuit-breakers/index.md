@@ -18,9 +18,111 @@ cd posts/06.3-circuit-breakers
 go run .
 ```
 
+The whole program is on this page, in the order it runs, so you can type it in instead of cloning. Make an empty folder, run `go mod init breaker`, then `go get github.com/t0ul/gonductor@` followed by the version on the `require` line below, and put the code in one file called `main.go`:
+
+<!-- listing: go.mod#all -->
+```
+module github.com/t0ul/ai-security-engineering/posts/06.3-circuit-breakers
+
+go 1.27.1
+
+// The agent's real loop engine with its circuit breaker. No overrides.
+require github.com/t0ul/gonductor v0.0.0-20261006173449-0ff2040c669a
+```
+<!-- /listing -->
+
+## The spine of the program
+
+Two numbers at the top. The safety ceiling bounds the naive loop so this page cannot hang your machine; reaching it means the loop never terminated on its own. The cap is the engine's hard step limit for the defended run, set low so you can see it bite. `main` runs the loop both ways.
+
+<!-- listing: main.go#head -->
+```go
+// Command main is the runnable demo for lesson 06.3, circuit breakers and runaway
+// loops.
+//
+// Run it with:
+//
+//	go run .
+//
+// An agent loop that can cycle without reaching a finish is a denial-of-service
+// waiting to happen: each step is a model call that costs time and money, and a
+// cycle with no cap spins forever. This demo runs a two-node cycle with a naive
+// loop that has no limit, then through the agent's real loop engine, whose hard
+// step cap trips a circuit breaker and stops it. Deterministic, no model.
+//
+// Reader safety: the naive loop here is bounded by a ceiling so the demo cannot
+// actually hang your machine. In a real agent each iteration is a paid model call,
+// so "unbounded" is the whole danger; we show that it never stops on its own, then
+// stop it for real with the cap.
+package main
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"os"
+
+	"github.com/t0ul/gonductor"
+)
+
+// safetyCeiling bounds the naive loop so this demo cannot hang. It stands in for
+// "forever": reaching it means the loop never terminated on its own.
+const safetyCeiling = 100000
+
+// cap is the engine's hard step limit for the defended run.
+const cap = 8
+
+func main() {
+	ran := naiveSpinsForever()
+	tripped := breakerStops()
+
+	fmt.Println()
+	if ran && tripped {
+		fmt.Println("attack blocked (the receipt): the naive loop never stops itself; the breaker stops it at the cap")
+	} else {
+		fmt.Println("a control did not hold")
+		os.Exit(1)
+	}
+}
+```
+<!-- /listing -->
+
 ## I. A loop with no off switch
 
 Here is the loop the way you might first write it: go from plan to act and back, forever, with no condition that ever ends it. I am not going to actually run that forever, so the demo puts a ceiling on it purely so this page cannot hang your machine. Reaching the ceiling is the point: it means the loop never decided to stop on its own.
+
+<!-- listing: main.go#before: a loop with no limit -->
+```go
+// ---- before: a loop with no limit ----
+
+// naiveLoop walks the same two-step cycle the agent would (plan, act, plan, act),
+// with no condition that ever ends it. It stops only at the safety ceiling, which
+// is this demo refusing to actually run forever, not the loop deciding to.
+func naiveLoop() int {
+	steps := 0
+	node := "plan"
+	for steps < safetyCeiling {
+		steps++
+		if node == "plan" {
+			node = "act"
+		} else {
+			node = "plan"
+		}
+		// There is no `if done { break }` here, because nothing makes it done.
+	}
+	return steps
+}
+
+func naiveSpinsForever() bool {
+	fmt.Println("== before: a loop with no cap ==")
+	steps := naiveLoop()
+	hitCeiling := steps >= safetyCeiling
+	fmt.Printf("  the loop ran %d steps and still had not finished (stopped only by the demo's ceiling): %v\n", steps, hitCeiling)
+	fmt.Println("  in the real agent each step is a paid model call, so this is denial of wallet")
+	return hitCeiling // it never terminates on its own: the attack lands
+}
+```
+<!-- /listing -->
 
 ```
 == before: a loop with no cap ==
@@ -34,7 +136,41 @@ A hundred thousand steps and still going, stopped only because I refused to let 
 
 The agent does not run its loop by hand. It runs on `gonductor`, a small dependency-free engine that drives the multi-step plan-approve-act loop as a graph of nodes, and the engine owns the one thing a hand-written loop forgot: a hard limit on how many steps a single run may take. Exceeding it does not warn or slow down, it fails the run with a circuit-breaker error, so a routing cycle that would otherwise spin forever is stopped dead. It is defense in depth by design: the engine-level cap is the hard backstop, and a node can also watch its own step count and route to a graceful halt before the cap is reached. What it defends against is exactly the runaway above: no matter why the loop will not end, it cannot run more than the cap allows.
 
-Run the same endless cycle on the engine, with the cap set low so you can see it bite:
+Run the same endless cycle on the engine, with the cap set low so you can see it bite. The graph is two nodes and two edges, the second edge closing the cycle so it never routes to the end, and `MaxSteps` is the breaker:
+
+<!-- listing: main.go#after: the engine's hard step cap -->
+```go
+// ---- after: the engine's hard step cap ----
+
+// breakerStops builds the same never-ending cycle on the agent's real loop engine,
+// which enforces a hard maximum number of steps and fails the run when it is hit.
+func breakerStops() bool {
+	fmt.Println("\n== after: the loop engine's circuit breaker ==")
+
+	g := gonductor.New[int]()
+	g.AddNode("plan", func(_ *gonductor.Context, s int) (int, error) { return s + 1, nil })
+	g.AddNode("act", func(_ *gonductor.Context, s int) (int, error) { return s + 1, nil })
+	g.AddEdge("plan", "act")
+	g.AddEdge("act", "plan") // the cycle: it never routes to END
+	g.SetEntry("plan")
+	g.MaxSteps(cap)
+
+	compiled, err := g.Compile()
+	if err != nil {
+		panic(err)
+	}
+	final, runErr := compiled.Invoke(&gonductor.Context{Context: context.Background()}, 0)
+
+	tripped := errors.Is(runErr, gonductor.ErrCircuitBreaker)
+	fmt.Printf("  the same cycle, run with a hard cap of %d steps:\n", cap)
+	fmt.Printf("  it stopped after %d steps with: %v\n", final, runErr)
+	fmt.Printf("  circuit breaker tripped: %v\n", tripped)
+	return tripped && final <= cap
+}
+```
+<!-- /listing -->
+
+What happens:
 
 ```
 == after: the loop engine's circuit breaker ==
@@ -44,6 +180,53 @@ Run the same endless cycle on the engine, with the cap set low so you can see it
 ```
 
 Eight steps and then a clean stop with a circuit-breaker error. The loop that ran a hundred thousand steps without finishing is held to eight, because the limit lives in the engine and not in the hope that the loop will end itself. The denial-of-wallet attack has a ceiling now, and it is one you set.
+
+That is the whole program. Its tests assert both halves and that the breaker's error is the engine's own sentinel, so a caller can tell a trip from any other failure. Put them next to `main.go` as `contract_test.go`:
+
+<!-- listing: contract_test.go#all -->
+```go
+package main
+
+import (
+	"context"
+	"errors"
+	"testing"
+
+	"github.com/t0ul/gonductor"
+)
+
+// Deterministic, no model. The naive loop never terminates on its own (it reaches
+// the demo's safety ceiling); the engine's hard cap trips the circuit breaker and
+// stops the same cycle.
+
+func TestNaiveLoopNeverTerminates(t *testing.T) {
+	if !naiveSpinsForever() {
+		t.Fatal("the uncapped loop should run to the ceiling without finishing; otherwise there is nothing to fix")
+	}
+}
+
+func TestCircuitBreakerTrips(t *testing.T) {
+	if !breakerStops() {
+		t.Fatal("the engine's step cap must trip the circuit breaker on an endless cycle")
+	}
+}
+
+func TestBreakerErrorIsSentinel(t *testing.T) {
+	g := gonductor.New[int]()
+	g.AddNode("a", func(_ *gonductor.Context, s int) (int, error) { return s + 1, nil })
+	g.AddEdge("a", "a")
+	g.SetEntry("a")
+	g.MaxSteps(3)
+	c, err := g.Compile()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, runErr := c.Invoke(&gonductor.Context{Context: context.Background()}, 0); !errors.Is(runErr, gonductor.ErrCircuitBreaker) {
+		t.Fatalf("expected ErrCircuitBreaker, got %v", runErr)
+	}
+}
+```
+<!-- /listing -->
 
 ## The board, at the end of Part 3
 
