@@ -75,8 +75,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/t0ul/ai-security-engineering/pkg/agent/extractor"
-	"github.com/t0ul/ai-security-engineering/pkg/agent/schema"
+	"github.com/t0ul/emaildrop/pkg/agent/extractor"
+	"github.com/t0ul/emaildrop/pkg/agent/schema"
 )
 
 func main() {
