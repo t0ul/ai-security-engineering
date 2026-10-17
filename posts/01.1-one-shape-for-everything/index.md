@@ -13,7 +13,7 @@ _Part of my [AI Security Engineering](/blog/the-plan/) series, a local email-to-
 
 As promised at the end of [the last post](/blog/attack-driven-design-shown-once/), we rewind. No model, no defenses, nothing to attack yet. Part 1 is about building the boring core well enough that attacking it later actually means something.
 
-So here is the very first thing I wrote, before a parser, before a watcher, before a single line that reads an email. It is a struct. (If you are new to Go, a struct is just a named bundle of fields, a record with a fixed shape.) I wrote it on October 5 as a Python dataclass, eight fields with a comment each, and when I started porting the agent to Go the next day, the first file in the new tree was this same shape, sitting next to the date parser.
+So here is the very first thing I wrote, before a parser, before a watcher, before a single line that reads an email. It is a struct. (If you are new to Go, a struct is just a named bundle of fields, a record with a fixed shape.) I wrote it on October 5, eight fields with a comment each, before anything else existed; it was the first file in the tree, sitting next to the date parser.
 
 That order is not an accident. The agent is a pipeline: something reads the email, something pulls events out of it, something checks the dates, something writes the calendar file, something scores the result, and later a web page shows it all. Several of those stages will touch text I did not write and, soon, the output of a model that read that text. If every stage agrees on one typed record, then "what the model said" is never the data. The data is this struct, and only code gets to fill it in. That is a small decision, but every later post leans on it, so I want you to see it plainly before the stakes go up.
 
@@ -56,7 +56,7 @@ The five fields after the blank line (`Kind`, `Due`, `Notes`, `URL`, `Recur`) ar
 
 Two small things are worth noticing. The dates are strings, not Go's `time.Time`. That looks lazy until you see that the same string goes into the JSON on disk, gets compared by the eval, and gets formatted by the calendar writer: one representation, readable in a log line, and it never changes meaning crossing a boundary. And the tags in backticks fix the name every field has when it is written out as JSON, so a file written today reads the same next month. The `omitempty` on some of them means an empty field is left out of the output entirely rather than written as blank.
 
-The helpers are small. `New` builds an event with the confidence defaulted to 1.0 and an empty (but not missing) warnings list, the way the Python dataclass did. `NeedsReview` is true when the confidence is below 0.75 or there is any warning at all. (`ResolvedKind` only matters for the later fields: it treats an empty kind as a plain event.) A couple of posts from now, that one method decides what a human has to look at before anything reaches a calendar.
+The helpers are small. `New` builds an event with the confidence defaulted to 1.0 and an empty (but not missing) warnings list, so the JSON carries `[]` rather than `null` and nothing downstream has to special-case it. `NeedsReview` is true when the confidence is below 0.75 or there is any warning at all. (`ResolvedKind` only matters for the later fields: it treats an empty kind as a plain event.) A couple of posts from now, that one method decides what a human has to look at before anything reaches a calendar.
 
 ## II. What it looks like on the wire
 
